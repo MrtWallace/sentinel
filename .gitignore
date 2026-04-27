@@ -2,3 +2,19 @@ agent/venv/
 __pycache__/
 *.pyc
 .env
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.swp
+
+# Logs
+*.log
+
+# Node (前端将来需要)
+node_modules/
+.next/
