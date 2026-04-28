@@ -1,7 +1,7 @@
 # Sentinel - AI-Operated Smart Account
 Your AI co-pilot on-chain. Set rules in plain English, Sentinel executes within your limits — you stay in control.
 
-> **明天第一件事**：写 `SmartAccount.t.sol` 测试文件（阶段2）
+> **明天第一件事**：开始阶段3 — 搭 Python Agent 骨架，调通 Anthropic SDK 第一个调用
 
 ## Architecture
 
@@ -37,7 +37,7 @@ sentinel/
 ## Roadmap
 
 - [x] Phase 0 — Project skeleton & repo setup
-- [ ] Phase 1-2 — SmartAccount contract + Foundry tests
+- [X] Phase 1-2 — SmartAccount contract + Foundry tests
 - [ ] Phase 3 — Python agent (natural language → on-chain tx)
 - [ ] Phase 4 — Scaffold-ETH 2 frontend
 - [ ] Phase 5 — Sepolia deploy + Etherscan verified
