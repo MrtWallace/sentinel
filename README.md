@@ -1,7 +1,6 @@
 # Sentinel - AI-Operated Smart Account
 Your AI co-pilot on-chain. Set rules in plain English, Sentinel executes within your limits — you stay in control.
 
-> **明天第一件事**：开始阶段3 — 搭 Python Agent 骨架，调通 Anthropic SDK 第一个调用
 
 ## Architecture
 
