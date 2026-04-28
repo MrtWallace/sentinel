@@ -30,6 +30,7 @@ contract SmartAccount {
     }
 
     function setDailyLimit(uint256 newLimit) public onlyOwner {
+        require(newLimit > 0, "Limit must be greater than 0");
         dailyLimit = newLimit;
     }
 
