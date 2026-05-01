@@ -1,5 +1,7 @@
 # Sentinel Agent — main entry point
 # Phase 3 will implement the actual agent loop
+import json, os
+from web3 import Web3
 
 def main():
     print("Sentinel agent starting...")
@@ -22,5 +24,36 @@ def execute_transfer(w3, to, amount_eth, private_key):
     tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
     return tx_hash.hex()
 
+
+def execute_via_contract(w3, to, amount_eth, agent_private_key):
+    # 1. 加载 ABI
+    abi_path = os.path.join(os.path.dirname(__file__), 
+                 "../contracts/out/SmartAccount.sol/SmartAccount.json")
+    with open(abi_path) as f:
+        abi = json.load(f)["abi"]
+    
+    # 2. 创建合约实例
+    contract_address = os.getenv("CONTRACT_ADDRESS")
+    contract = w3.eth.contract(address=contract_address, abi=abi)
+    
+    # 3. agent 地址
+    agent_address = w3.eth.account.from_key(agent_private_key).address
+    
+    # 4. 构建调用 execute() 的交易
+    tx = contract.functions.execute(
+        to,
+        w3.to_wei(amount_eth, "ether")
+    ).build_transaction({
+        "from": agent_address,
+        "nonce": w3.eth.get_transaction_count(agent_address),
+        "maxFeePerGas": w3.to_wei(50, "gwei"),
+        "maxPriorityFeePerGas": w3.to_wei(2, "gwei"),
+    })
+    
+    # 5. agent 私钥签名并广播
+    signed = w3.eth.account.sign_transaction(tx, agent_private_key)
+    tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+    return tx_hash.hex()
+    
 if __name__ == "__main__":
     main()

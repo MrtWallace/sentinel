@@ -4,7 +4,7 @@ from web3 import Web3
 from dotenv import load_dotenv
 import os
 from intent import parse_intent
-from executor import execute_transfer
+from executor import execute_via_contract
 
 load_dotenv()
 
@@ -25,8 +25,8 @@ def main():
     intent = parse_intent(user_input)
     print(f"Parsed intent: {intent}")
     if intent.get("action") == "transfer":
-        private_key = os.getenv("PRIVATE_KEY")
-        tx_hash = execute_transfer(w3, intent["to"], intent["amount_eth"], private_key)
+        private_key = os.getenv("AGENT_PRIVATE_KEY")
+        tx_hash = execute_via_contract(w3, intent["to"], intent["amount_eth"], private_key)
         print(f"Transaction sent: https://sepolia.etherscan.io/tx/0x{tx_hash}")
     else:
         print("Could not parse intent.")
