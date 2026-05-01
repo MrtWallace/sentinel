@@ -1,4 +1,4 @@
-# Sentinel — AI-Operated Smart Account
+# Sentinel — AI Agent for DeFi Operations
 
 > 这是项目的核心上下文文档。Claude Code和其他AI助手在协助本项目时,应先读完此文档。
 
@@ -6,7 +6,9 @@
 
 ## 1. 项目一句话定位
 
-**Sentinel是用户的链上AI管家。** 用户用自然语言设置规则,AI agent在规则范围内自动执行链上操作,用户随时可一票否决。
+**Sentinel是AI驱动的DeFi执行层。** 用户用自然语言下达DeFi指令,AI agent在安全护栏内自动解析、构造交易、上链执行,用户随时可介入或撤销。
+
+> 定位调整说明(2026-05-01)：原定位"AI-Operated Smart Account"调整为"AI Agent for DeFi Operations"，以精准匹配Binance AI Agent Engineer岗位JD。合约代码无需改动，只影响README描述、Demo故事线和简历措辞。
 
 ---
 
@@ -45,7 +47,7 @@
 | 智能合约 | Solidity 0.8.20+ | 不要用旧版本 |
 | 合约工具链 | Foundry (forge/cast/anvil) | **不用Hardhat**,这是练习Foundry的项目 |
 | Agent | Python 3.11+ | 用web3.py + anthropic SDK |
-| AI模型 | Claude (anthropic API) | claude-sonnet-4-5 |
+| AI模型 | DeepSeek API | deepseek-chat；原计划Claude，因国内支付限制改用DeepSeek |
 | 前端 | Next.js 14 + Scaffold-ETH 2 | 不要从零搭Next |
 | 链交互 | wagmi v2 + viem | Scaffold-ETH 2自带 |
 | 部署链 | Sepolia testnet | 不要部署主网 |
@@ -70,14 +72,38 @@
 6. **Sepolia部署 + Etherscan verified**
 7. **2分钟Demo视频**(Loom)
 
+### 阶段3新增模块(2026-05-01更新)
+
+**A. DeFi Swap支持**（Day 6-8）
+- 支持Uniswap V3 swap指令："Swap 100 USDC to ETH"
+- Agent解析 → encode calldata → 调用execute() → Sepolia真实swap
+- 技术前提：execute()需要增加`bytes calldata data`参数（当前技术债）
+
+**B. Evaluation Framework**（Day 3-4，对应Binance JD"测试评估"）
+- 20个测试case：自然语言输入 → 期望解析结果
+- Python脚本批量跑，统计Claude API解析准确率
+- 目标输出："20/20 cases, 90%+ accuracy"
+
+**C. Guardrails**（Day 3-4，对应Binance JD"护栏"）
+- 危险地址blacklist（agent拒绝向这些地址转账）
+- 超阈值金额需用户输入"yes"二次确认
+
+**D. Latency/Cost Log**（Day 3-4，加分项）
+- 每次Claude API调用记录：延迟时间、token消耗
+- 面试可说出"avg 2.3s, ~$0.01/action"这种数据
+
+**执行顺序**：A基础转账(Day1-2) → B+C+D扩展(Day3-4) → Uniswap swap(Day5-6)
+
 ### MVP明确不包含(防止scope creep)
 - ❌ 复杂规则引擎(只支持daily limit)
 - ❌ 多agent管理
-- ❌ Token交易(只支持ETH转账)
 - ❌ 用户Override时间锁(MVP用直接撤销agent权限替代)
 - ❌ 多链
 - ❌ 美观UI
 - ❌ 真正的Account Abstraction (EIP-4337)
+
+### 已知技术债
+- `execute(address to, uint256 amount)` 缺少 `bytes calldata data` 参数，DeFi calldata无法传入。做Uniswap swap前必须补上，同时更新测试。
 
 ---
 
@@ -112,46 +138,48 @@ sentinel/
 
 ---
 
-## 7. 11天开发路线图
+## 7. 开发路线图(更新于2026-05-01)
 
-| 阶段 | 天数 | 任务 | 完成标志 |
-|------|:----:|------|---------|
-| 0 | 今晚 | 项目骨架 + GitHub | repo已push |
-| 1 | Day 1-2 | SmartAccount合约 + 限额机制 | `forge build`通过 |
-| 2 | Day 3-5 | Foundry测试套件 | `forge test`全绿,coverage>80% |
-| 3 | Day 6-8 | Python Agent | 终端输入"发0.001 ETH给X",真的执行 |
-| 4 | Day 9-10 | Scaffold-ETH 2前端 | 浏览器能看到合约状态 |
-| 5 | Day 11 | Sepolia部署 + Demo视频 | Etherscan verified + Loom链接 |
+| 阶段 | 任务 | 完成标志 | 状态 |
+|------|------|---------|------|
+| 0 | 项目骨架 + GitHub | repo已push | ✅ |
+| 1 | SmartAccount合约 + 限额机制 | `forge build`通过 | ✅ |
+| 2 | Foundry测试套件 | `forge test`全绿,coverage>80% | ✅ |
+| 3-Day1-2 | Python连接Sepolia + 基础ETH转账 | 终端打印余额；"发0.001 ETH"真实执行 | 进行中 |
+| 3-Day3-4 | Evaluation Framework + Guardrails + Cost Log | 20 cases准确率输出；危险地址被拦截 | 待做 |
+| 3-Day5-6 | Uniswap V3 Swap支持 | "Swap 100 USDC to ETH"Sepolia执行成功 | 待做 |
+| 4 | Scaffold-ETH 2前端 | 浏览器能看到合约状态 | 待做 |
+| 5 | Sepolia部署 + Demo视频 | Etherscan verified + Loom链接 | 待做 |
 
 ---
 
-## 8. 演示视频脚本(写给AI助手:做MVP时优先保证这些场景能演)
+## 8. 演示视频脚本(更新于2026-05-01)
 
 ```
-[0:00-0:15] 痛点
-"我每天花2小时盯crypto。我太累了。"
+[0:00-0:20] 痛点
+"DeFi操作复杂，普通人根本不会用Uniswap。"
 
-[0:15-0:30] 方案
-"Sentinel是你的链上AI管家。设置规则,AI执行,你随时可控。"
+[0:20-0:50] 方案
+"Sentinel = AI-driven DeFi assistant. 自然语言下指令，AI在护栏内执行。"
 
-[0:30-1:00] 演示1:自然语言转账
+[0:50-1:20] 演示1：自然语言Swap
 [终端]
-> What should I do?
-> Send 0.001 ETH to my friend at 0x742d...
-[Claude解析] → [Agent签名] → [Sepolia交易hash] → [Etherscan链接]
+> Swap 100 USDC to ETH
+[Claude解析] → [encode calldata] → [Sepolia执行]
+→ Etherscan显示Uniswap V3 swap成功
 
-[1:00-1:30] 演示2:限额保护
-[终端] 
-> Send 5 ETH to ...
-[Agent] ❌ Exceeds daily limit ($1000)
-[前端] 显示红色限额提示
-
-[1:30-1:50] 链上证据
-[Etherscan] 查看交易历史 + verified合约源码
+[1:20-1:50] 演示2：Guardrail保护
+[终端]
+> Send 10 ETH to 0x危险地址...
+[Agent] ❌ Blocked: address on blacklist
+> Send 5 ETH to 0x朋友...
+[Agent] ⚠️ Amount exceeds threshold. Confirm? (yes/no)
 
 [1:50-2:00] 收尾
-"Your AI co-pilot for the chain. Sepolia today. Mainnet soon."
+"From intent to execution. Sepolia today, mainnet next."
 ```
+
+**备用方案**（如Uniswap做不通）：改用自己部署的Mock DEX合约演示swap。故事和定位不降级，技术可简化。
 
 ---
 
@@ -196,10 +224,11 @@ sentinel/
 ## 10. 当前状态(每次更新)
 
 ```
-最后更新：2026-04-28
-当前阶段：阶段3（Python Agent）
-本日目标：Foundry 测试套件完成，11/11 通过，行覆盖率 100%
-卡点：无
+最后更新：2026-05-01
+当前阶段：阶段3-Day1（Python连接Sepolia）
+本日目标：pip install三个库，Python读取Sepolia钱包余额
+卡点：execute()缺data参数，Uniswap前必须补（暂不处理）
+作息：10:00-13:00 Deep Work（已调整，驾校16:00-20:00）
 ```
 
 ---
@@ -222,6 +251,24 @@ sentinel/
 - 美观的UI
 - 复杂的功能
 - "感觉很厉害"
+
+---
+
+## 12. 目标投递岗位(写给AI助手)
+
+主要目标：**Binance Applied AI Agent Developer (BAP)** / **Binance AI Agent Engineer**
+
+JD关键词 → Sentinel对应功能：
+| JD关键词 | Sentinel功能 |
+|---------|------------|
+| AI Agent工作流 | intent.py → executor.py 流水线 |
+| 工具集成 | web3.py + Anthropic SDK |
+| 测试评估 | Evaluation Framework（20 cases准确率） |
+| 护栏 | Guardrails（blacklist + 二次确认） |
+| 人工接管 | owner随时撤销agent权限 |
+| 延迟/成本 | Latency/Cost Log |
+
+**每个功能的README描述和Demo措辞都应能对应JD里的某个关键词。**
 
 ---
 
