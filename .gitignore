@@ -1,4 +1,5 @@
 agent/venv/
+agent/logs/
 notes/
 __pycache__/
 *.pyc
