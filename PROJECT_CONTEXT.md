@@ -92,7 +92,9 @@
 - 每次Claude API调用记录：延迟时间、token消耗
 - 面试可说出"avg 2.3s, ~$0.01/action"这种数据
 
-**执行顺序**：A基础转账(Day1-2) → B+C+D扩展(Day3-4) → Uniswap swap(Day5-6)
+**执行顺序**：A基础转账(Day1-2) → B+C+D扩展(Day3-4) → Mock DEX swap(Day5，降级方案)
+
+> ⚠️ Uniswap V3 直连方案调试失败（SmartAccount→Uniswap 路径有未知错误，直接调 Uniswap 成功但通过合约转发失败）。已切换 Mock DEX 方案，可在 v2 版本再攻 Uniswap。
 
 ### MVP明确不包含(防止scope creep)
 - ❌ 复杂规则引擎(只支持daily limit)
@@ -103,7 +105,8 @@
 - ❌ 真正的Account Abstraction (EIP-4337)
 
 ### 已知技术债
-- `execute(address to, uint256 amount)` 缺少 `bytes calldata data` 参数，DeFi calldata无法传入。做Uniswap swap前必须补上，同时更新测试。
+- Uniswap V3 通过 SmartAccount 调用失败，根本原因未查明。Mock DEX 可演示同等链路，Uniswap 集成留 v2。
+- execute(address,uint256,bytes) 已支持 calldata 转发，合约和测试均已更新。
 
 ---
 
@@ -224,11 +227,12 @@ sentinel/
 ## 10. 当前状态(每次更新)
 
 ```
-最后更新：2026-05-01
-当前阶段：阶段3-Day1（Python连接Sepolia）
-本日目标：pip install三个库，Python读取Sepolia钱包余额
-卡点：execute()缺data参数，Uniswap前必须补（暂不处理）
-作息：10:00-13:00 Deep Work（已调整，驾校16:00-20:00）
+最后更新：2026-05-02
+当前阶段：阶段3-Day3（Guardrails + Cost Log）
+本日目标：SmartAccount部署Sepolia成功，agent通过合约execute()发交易，Evaluation Framework 95%准确率
+卡点：无
+合约地址：0xbB5dA66c1D164050FaFf7A0165Cf7808e0C616DF（Sepolia）
+作息：10:00-13:00 Deep Work（驾校16:00-20:00）
 ```
 
 ---

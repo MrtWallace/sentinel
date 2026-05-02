@@ -73,14 +73,14 @@ contract SmartAccountTest is Test {
     // stranger 尝试 execute，应该 revert
         vm.prank(stranger);
         vm.expectRevert("Only agent can call this function");
-        smartAccount.execute(stranger, 1 ether);
+        smartAccount.execute(stranger, 1 ether, "");
     }
     function test_execute_revertsIfExceedsDailyLimit() public {
     // agent 尝试 execute 超过 daily limit，应该 revert
         uint256 dailyLimit = smartAccount.dailyLimit();
         vm.prank(agent);
         vm.expectRevert("Daily limit exceeded");
-        smartAccount.execute(stranger, dailyLimit + 1 ether);
+        smartAccount.execute(stranger, dailyLimit + 1 ether, "");
     }
     function test_execute_agentCanExecute() public {
     // agent 尝试 execute，应该成功
@@ -89,7 +89,7 @@ contract SmartAccountTest is Test {
         vm.deal(stranger, 0);
 
         vm.prank(agent);
-        smartAccount.execute(stranger, sendAmount);
+        smartAccount.execute(stranger, sendAmount, "");
         assertEq(address(smartAccount).balance, initialBalance - sendAmount);
         assertEq(smartAccount.dailySpent(), sendAmount);
         assertEq(stranger.balance, sendAmount);
@@ -99,11 +99,11 @@ contract SmartAccountTest is Test {
     // 然后时间前进一天，再执行一次，应该成功（因为 daily limit 已经重置了）
         uint256 sendAmount = 0.5 ether;
         vm.prank(agent);
-        smartAccount.execute(stranger, sendAmount);
+        smartAccount.execute(stranger, sendAmount, ""   );
         assertEq(smartAccount.dailySpent(), sendAmount);
         vm.warp(block.timestamp + 1 days);
         vm.prank(agent);
-        smartAccount.execute(stranger, sendAmount);
+        smartAccount.execute(stranger, sendAmount, "");
         assertEq(smartAccount.dailySpent(), sendAmount);
     }
     function testFuzz_execute_withinLimit(uint256 amount) public {
@@ -114,7 +114,7 @@ contract SmartAccountTest is Test {
         vm.deal(stranger, 0);
 
         vm.prank(agent);
-        smartAccount.execute(stranger, amount);
+        smartAccount.execute(stranger, amount, "");
         assertEq(address(smartAccount).balance, initialBalance - amount);
         assertEq(smartAccount.dailySpent(), amount);
         assertEq(stranger.balance, amount);
@@ -123,6 +123,6 @@ contract SmartAccountTest is Test {
         vm.assume(amount > smartAccount.dailyLimit());
         vm.prank(agent);
         vm.expectRevert("Daily limit exceeded");
-        smartAccount.execute(stranger, amount);
+        smartAccount.execute(stranger, amount, "");
     }
 }

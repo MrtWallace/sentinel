@@ -39,14 +39,14 @@ contract SmartAccount {
         require(success, "Transfer failed");
     }
 
-    function execute(address to, uint256 amount)public onlyAgent {
+    function execute(address to, uint256 amount, bytes calldata data)public onlyAgent {
         if(block.timestamp / 86400 > lastResetDay) {
             dailySpent = 0;
             lastResetDay = block.timestamp / 86400;
         }
         if(dailySpent + amount <= dailyLimit) {
             dailySpent += amount;
-            (bool success, ) = to.call{value: amount}("");
+            (bool success, ) = to.call{value: amount}(data);
             require(success, "Transfer failed");
         }else {
             revert("Daily limit exceeded");
