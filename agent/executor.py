@@ -33,7 +33,7 @@ def execute_via_contract(w3, to, amount_eth, agent_private_key):
         abi = json.load(f)["abi"]
     
     # 2. 创建合约实例
-    contract_address = os.getenv("CONTRACT_ADDRESS")
+    contract_address = Web3.to_checksum_address(os.getenv("CONTRACT_ADDRESS"))
     contract = w3.eth.contract(address=contract_address, abi=abi)
     
     # 3. agent 地址
@@ -76,23 +76,27 @@ ROUTER_ABI = [{
 }]
 
 def execute_swap(w3, from_token, to_token, amount_eth, agent_private_key):
-    contract_address = os.getenv("CONTRACT_ADDRESS")
-    
-    # 1. encode exactInputSingle calldata
-    router = w3.eth.contract(address=SWAP_ROUTER, abi=ROUTER_ABI)
-    calldata = router.encode_abi("exactInputSingle", args=[(
-        WETH,
-        USDC,
-        3000,
-        contract_address,
-        w3.to_wei(amount_eth, "ether"),
-        0,
-        0
-    )])
+    contract_address = Web3.to_checksum_address(os.getenv("CONTRACT_ADDRESS"))
+    mock_dex_address = Web3.to_checksum_address(os.getenv("MOCK_DEX_ADDRESS"))
+    MOCK_DEX_ABI = [{
+        "name": "swap",
+        "type": "function",
+        "inputs": [
+            {"name": "tokenOut", "type": "address"},
+            {"name": "amountOutMin", "type": "uint256"}
+        ],
+        "outputs": [],
+        "stateMutability": "payable"
+    }]   
+     # 1. encode swap calldata
+    mock_dex = w3.eth.contract(address=mock_dex_address, abi=MOCK_DEX_ABI)
+    calldata = mock_dex.encode_abi("swap", args=[
+        Web3.to_checksum_address("0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"),  # USDC address
+        0  # amountOutMin
+    ])
 
     
-    # 2. 调用 SmartAccount.execute(router, eth_amount, calldata)
-    # TODO: 参考 execute_via_contract，把 to 换成 SWAP_ROUTER，data 换成 calldata
+    # 2. 通过 SmartAccount.execute() 调用 MockDEX
     abi_path = os.path.join(os.path.dirname(__file__),
              "../contracts/out/SmartAccount.sol/SmartAccount.json")
     with open(abi_path) as f:
@@ -101,7 +105,7 @@ def execute_swap(w3, from_token, to_token, amount_eth, agent_private_key):
 
     agent_address = w3.eth.account.from_key(agent_private_key).address
     tx = contract.functions.execute(
-        SWAP_ROUTER,
+        mock_dex_address,
         w3.to_wei(amount_eth, "ether"),
         calldata
     ).build_transaction({
@@ -112,9 +116,9 @@ def execute_swap(w3, from_token, to_token, amount_eth, agent_private_key):
         "gas": 300000,  # swap 交易通常需要更多的 gas，设置一个较大的值
         "value":0,
     })
-    print(f"[DEBUG] agent_address: {agent_address}")
-    print(f"[DEBUG] tx value: {tx.get('value')}")
-    print(f"[DEBUG] tx from: {tx.get('from')}")
+    #print(f"[DEBUG] agent_address: {agent_address}")
+    #print(f"[DEBUG] tx value: {tx.get('value')}")
+    #print(f"[DEBUG] tx from: {tx.get('from')}")
 
     signed = w3.eth.account.sign_transaction(tx, agent_private_key)
     tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)

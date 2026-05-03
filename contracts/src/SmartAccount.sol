@@ -39,7 +39,7 @@ contract SmartAccount {
         require(success, "Transfer failed");
     }
 
-    function execute(address to, uint256 amount, bytes calldata data)public onlyAgent {
+    function execute(address to, uint256 amount, bytes memory data)public onlyAgent {
         if(block.timestamp / 86400 > lastResetDay) {
             dailySpent = 0;
             lastResetDay = block.timestamp / 86400;
