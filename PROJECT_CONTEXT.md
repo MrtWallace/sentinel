@@ -230,8 +230,8 @@ sentinel/
 最后更新：2026-05-02
 当前阶段：阶段3-Day3（Guardrails + Cost Log）
 本日目标：SmartAccount部署Sepolia成功，agent通过合约execute()发交易，Evaluation Framework 95%准确率
-卡点：无
-合约地址：0xbB5dA66c1D164050FaFf7A0165Cf7808e0C616DF（Sepolia）
+卡点：Uniswap通过SmartAccount调用失败，原因未明，见notes/2026-05-02-uniswap-debug.md
+合约地址：0xbB5dA66c1D164050FaFf7A0165Cf7808e0C616DF（Sepolia，含data参数）
 作息：10:00-13:00 Deep Work（驾校16:00-20:00）
 ```
 

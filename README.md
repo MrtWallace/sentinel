@@ -2,7 +2,7 @@
 
 Your AI-driven DeFi assistant. Describe what you want in plain English — Sentinel parses the intent, enforces guardrails, and executes on-chain.
 
-> **Now building**: Uniswap V3 swap support (started 2026-05-02)
+> **Tomorrow**: Write MockDEX contract, deploy, wire up swap flow end-to-end
 
 ## Architecture
 
