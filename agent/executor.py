@@ -77,23 +77,33 @@ ROUTER_ABI = [{
 
 def execute_swap(w3, from_token, to_token, amount_eth, agent_private_key):
     contract_address = Web3.to_checksum_address(os.getenv("CONTRACT_ADDRESS"))
-    mock_dex_address = Web3.to_checksum_address(os.getenv("MOCK_DEX_ADDRESS"))
-    MOCK_DEX_ABI = [{
-        "name": "swap",
-        "type": "function",
-        "inputs": [
-            {"name": "tokenOut", "type": "address"},
-            {"name": "amountOutMin", "type": "uint256"}
-        ],
-        "outputs": [],
-        "stateMutability": "payable"
-    }]   
+    #mock_dex_address = Web3.to_checksum_address(os.getenv("MOCK_DEX_ADDRESS")) #MockDEX 地址
+    # MOCK_DEX_ABI = [{
+    #     "name": "swap",
+    #     "type": "function",
+    #     "inputs": [
+    #         {"name": "tokenOut", "type": "address"},
+    #         {"name": "amountOutMin", "type": "uint256"}
+    #     ],
+    #     "outputs": [],
+    #     "stateMutability": "payable"
+    # }]   
      # 1. encode swap calldata
-    mock_dex = w3.eth.contract(address=mock_dex_address, abi=MOCK_DEX_ABI)
-    calldata = mock_dex.encode_abi("swap", args=[
-        Web3.to_checksum_address("0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"),  # USDC address
-        0  # amountOutMin
-    ])
+    # mock_dex = w3.eth.contract(address=mock_dex_address, abi=MOCK_DEX_ABI)
+    # calldata = mock_dex.encode_abi("swap", args=[
+    #     Web3.to_checksum_address("0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"),  # USDC address
+    #     0  # amountOutMin
+    # ])
+    router = w3.eth.contract(address=SWAP_ROUTER, abi=ROUTER_ABI)
+    calldata = router.encode_abi("exactInputSingle", args=[(
+        WETH,
+        USDC,
+        3000,
+        contract_address,
+        w3.to_wei(amount_eth, "ether"),
+        0,
+        0
+    )])
 
     
     # 2. 通过 SmartAccount.execute() 调用 MockDEX
@@ -105,7 +115,7 @@ def execute_swap(w3, from_token, to_token, amount_eth, agent_private_key):
 
     agent_address = w3.eth.account.from_key(agent_private_key).address
     tx = contract.functions.execute(
-        mock_dex_address,
+        SWAP_ROUTER,
         w3.to_wei(amount_eth, "ether"),
         calldata
     ).build_transaction({
