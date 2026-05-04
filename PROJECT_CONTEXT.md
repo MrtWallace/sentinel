@@ -148,10 +148,10 @@ sentinel/
 | 0 | 项目骨架 + GitHub | repo已push | ✅ |
 | 1 | SmartAccount合约 + 限额机制 | `forge build`通过 | ✅ |
 | 2 | Foundry测试套件 | `forge test`全绿,coverage>80% | ✅ |
-| 3-Day1-2 | Python连接Sepolia + 基础ETH转账 | 终端打印余额；"发0.001 ETH"真实执行 | 进行中 |
-| 3-Day3-4 | Evaluation Framework + Guardrails + Cost Log | 20 cases准确率输出；危险地址被拦截 | 待做 |
-| 3-Day5-6 | Uniswap V3 Swap支持 | "Swap 100 USDC to ETH"Sepolia执行成功 | 待做 |
-| 4 | Scaffold-ETH 2前端 | 浏览器能看到合约状态 | 待做 |
+| 3-Day1-2 | Python连接Sepolia + 基础ETH转账 | 终端打印余额；"发0.001 ETH"真实执行 | ✅ |
+| 3-Day3-4 | Evaluation Framework + Guardrails + Cost Log | 20 cases准确率输出；危险地址被拦截 | ✅ |
+| 3-Day5-6 | Uniswap V3 Swap支持 | "Swap 0.001 ETH to USDC"Sepolia执行成功，收到8.02 USDC | ✅ |
+| 4 | Scaffold-ETH 2前端 | 浏览器能看到合约状态 | ⬅️ 下一步 |
 | 5 | Sepolia部署 + Demo视频 | Etherscan verified + Loom链接 | 待做 |
 
 ---
@@ -227,11 +227,11 @@ sentinel/
 ## 10. 当前状态(每次更新)
 
 ```
-最后更新：2026-05-02
-当前阶段：阶段3-Day3（Guardrails + Cost Log）
-本日目标：SmartAccount部署Sepolia成功，agent通过合约execute()发交易，Evaluation Framework 95%准确率
-卡点：Uniswap通过SmartAccount调用失败，原因未明，见notes/2026-05-02-uniswap-debug.md
-合约地址：0xbB5dA66c1D164050FaFf7A0165Cf7808e0C616DF（Sepolia，含data参数）
+最后更新：2026-05-03
+当前阶段：阶段4（Scaffold-ETH 2前端）
+本日目标：阶段3全部完成，含真实Uniswap V3 swap（0.001 ETH→8.02 USDC on Sepolia）
+卡点：无
+合约地址：0xad7C1EBe561C9359C657FA36a156Cd213C8E6d7c（Sepolia，bytes memory版本）
 作息：10:00-13:00 Deep Work（驾校16:00-20:00）
 ```
 
