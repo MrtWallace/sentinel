@@ -22,25 +22,41 @@ def main():
     print(f"Connected: {w3.is_connected()}")
     print(f"Address: {wallet_address}")
     print(f"Balance: {w3.from_wei(balance, 'ether')} ETH")
-    user_input = input("What should I do? > ")
-    intent = parse_intent(user_input)
-    print(f"Parsed intent: {intent}")
-    if intent.get("action") == "transfer":
-        private_key = os.getenv("AGENT_PRIVATE_KEY")
-        allowed, reason = check(intent["to"], intent["amount_eth"])
-        if not allowed:
-            print(f"Transaction rejected: {reason}")
-            return
-        else:
-            tx_hash = execute_via_contract(w3, intent["to"], intent["amount_eth"], private_key)
-            print(f"Transaction sent: https://sepolia.etherscan.io/tx/0x{tx_hash}")
-    elif intent.get("action") == "swap":
-        from executor import execute_swap
-        private_key = os.getenv("AGENT_PRIVATE_KEY")
-        tx_hash = execute_swap(w3, intent["from_token"], intent["to_token"], intent["from_amount"], private_key)
-        print(f"Swap sent: https://sepolia.etherscan.io/tx/0x{tx_hash}")
-    else:
-        print("Could not parse intent.")
+    while True:
+        try:
+            user_input = input("\nWhat should I do? > ").strip()
+            if not user_input:
+                continue
+            if user_input.lower() in ("exit", "quit"):
+                print("Exiting.")
+                break
+
+            intent = parse_intent(user_input)
+            print(f"Parsed intent: {intent}")
+
+            if intent.get("action") == "transfer":
+                private_key = os.getenv("AGENT_PRIVATE_KEY")
+                allowed, reason = check(intent["to"], intent["amount_eth"])
+                if not allowed:
+                    print(f"❌ Blocked: {reason}")
+                else:
+                    tx_hash = execute_via_contract(w3, intent["to"], intent["amount_eth"], private_key)
+                    print(f"✅ Transaction sent: https://sepolia.etherscan.io/tx/0x{tx_hash}")
+
+            elif intent.get("action") == "swap":
+                from executor import execute_swap
+                private_key = os.getenv("AGENT_PRIVATE_KEY")
+                tx_hash = execute_swap(w3, intent["from_token"], intent["to_token"], intent["from_amount"], private_key)
+                print(f"✅ Swap sent: https://sepolia.etherscan.io/tx/0x{tx_hash}")
+
+            else:
+                print("⚠️  Could not parse intent. Please try again.")
+
+        except KeyboardInterrupt:
+            print("\nExiting.")
+            break
+        except Exception as e:
+            print(f"❌ Error: {e}")
 
 
 if __name__ == "__main__":

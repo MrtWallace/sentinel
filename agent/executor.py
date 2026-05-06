@@ -19,10 +19,13 @@ def execute_transfer(w3, to, amount_eth, private_key):
         'chainId': 11155111    # Sepolia 的 chain ID
     }
     # 2. 用私钥签名
-    signed = w3.eth.account.sign_transaction(tx, private_key)
-    # 3. 广播
-    tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-    return tx_hash.hex()
+    try:
+        signed = w3.eth.account.sign_transaction(tx, agent_private_key)
+        tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+        return tx_hash.hex()
+    except Exception as e:
+        raise RuntimeError(f"Transaction failed: {e}")
+
 
 
 def execute_via_contract(w3, to, amount_eth, agent_private_key):
@@ -42,7 +45,8 @@ def execute_via_contract(w3, to, amount_eth, agent_private_key):
     # 4. 构建调用 execute() 的交易
     tx = contract.functions.execute(
         to,
-        w3.to_wei(amount_eth, "ether")
+        w3.to_wei(amount_eth, "ether"),
+        b""
     ).build_transaction({
         "from": agent_address,
         "nonce": w3.eth.get_transaction_count(agent_address),
@@ -51,9 +55,13 @@ def execute_via_contract(w3, to, amount_eth, agent_private_key):
     })
     
     # 5. agent 私钥签名并广播
-    signed = w3.eth.account.sign_transaction(tx, agent_private_key)
-    tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-    return tx_hash.hex()
+    try:
+        signed = w3.eth.account.sign_transaction(tx, agent_private_key)
+        tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+        return tx_hash.hex()
+    except Exception as e:
+        raise RuntimeError(f"Transaction failed: {e}")
+
 
 SWAP_ROUTER = Web3.to_checksum_address("0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E")
 WETH        = Web3.to_checksum_address("0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14")
