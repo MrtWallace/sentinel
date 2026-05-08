@@ -104,9 +104,29 @@
 - ❌ 美观UI
 - ❌ 真正的Account Abstraction (EIP-4337)
 
+### 阶段6：面试前修复清单（下一阶段）
+
+**P1 必修（Bug）**
+- [x] `execute_via_contract` 缺第三个参数 `b""` → 已修复
+- [x] 错误处理/重试：`intent.py` + `executor.py` + `main.py` → 已完成
+- [ ] 合约缺 `setAgent()` — "owner随时撤销agent权限"在JD里是卖点
+
+**P2 值得加（下次部署一起做）**
+- [ ] 合约补全 `Executed` 事件（前端可展示历史记录）
+- [ ] `receive()` 函数（支持直接转账到合约）
+- [ ] 重部署后 re-verify + 更新前端合约地址
+
+**MVP最后一项**
+- [ ] Demo 视频（Loom，2分钟）→ 链接放入 README
+
+**P3 暂不做**
+- ENS 链上解析（DeepSeek能解析文本，但实际执行需接 ENS SDK）
+- 动态 gas 估算（Sepolia 硬编码够用）
+- pause 机制（v2 再加）
+
 ### 已知技术债
-- Uniswap V3 通过 SmartAccount 调用失败，根本原因未查明。Mock DEX 可演示同等链路，Uniswap 集成留 v2。
-- execute(address,uint256,bytes) 已支持 calldata 转发，合约和测试均已更新。
+- `bytes calldata` → `bytes memory` 是关键修复，详见 notes/2026-05-02-uniswap-debug.md
+- Uniswap V3 已通过 SmartAccount 成功执行（0.001 ETH → 8.02 USDC on Sepolia）✅
 
 ---
 
@@ -227,11 +247,11 @@ sentinel/
 ## 10. 当前状态(每次更新)
 
 ```
-最后更新：2026-05-03
-当前阶段：阶段4（Scaffold-ETH 2前端）
-本日目标：阶段3全部完成，含真实Uniswap V3 swap（0.001 ETH→8.02 USDC on Sepolia）
+最后更新：2026-05-07
+当前阶段：阶段6（合约最终版 + Demo视频）
+本日目标：合约补全(setAgent/receive/Executed) → 重部署 → re-verify → 录Demo视频
 卡点：无
-合约地址：0xad7C1EBe561C9359C657FA36a156Cd213C8E6d7c（Sepolia，bytes memory版本）
+合约地址：0xad7C1EBe561C9359C657FA36a156Cd213C8E6d7c（Sepolia，当前版本）
 作息：10:00-13:00 Deep Work（驾校16:00-20:00）
 ```
 
@@ -260,17 +280,26 @@ sentinel/
 
 ## 12. 目标投递岗位(写给AI助手)
 
-主要目标：**Binance Applied AI Agent Developer (BAP)** / **Binance AI Agent Engineer**
+**岗位：Pioneer Talent Program - AI Agent Developer（Binance Tech Seeds 2026）**
+链接：https://jobs.lever.co/binance/8a4660a3-28de-41e6-bcaf-ef404c481338
 
 JD关键词 → Sentinel对应功能：
 | JD关键词 | Sentinel功能 |
 |---------|------------|
-| AI Agent工作流 | intent.py → executor.py 流水线 |
-| 工具集成 | web3.py + Anthropic SDK |
-| 测试评估 | Evaluation Framework（20 cases准确率） |
-| 护栏 | Guardrails（blacklist + 二次确认） |
-| 人工接管 | owner随时撤销agent权限 |
-| 延迟/成本 | Latency/Cost Log |
+| AI agent workflows / LLM-powered systems | intent.py → guardrails.py → executor.py 流水线 |
+| Tool integration (APIs, services) | web3.py + DeepSeek API |
+| Testing, evaluation, iteration | Evaluation Framework（20 cases，95%准确率） |
+| Safety / guardrails | Guardrails（blacklist + 二次确认） |
+| Latency, reliability, cost | Latency/Cost Log（avg ~1.5s, ~$0.00004/action） |
+| Human handoff flows | owner随时撤销agent权限 / dailyLimit护栏 |
+| Backend + lightweight interfaces | Python agent + Scaffold-ETH 2前端 |
+| Prompt structures, orchestration | system prompt设计，intent解析链路 |
+
+**候选人加分项覆盖：**
+- ✅ Personal project involving AI agents（Sentinel就是）
+- ✅ Anthropic/DeepSeek API 使用经验
+- ✅ Backend systems（Python + web3.py）
+- ✅ Crypto/blockchain exposure（Solidity + Sepolia）
 
 **每个功能的README描述和Demo措辞都应能对应JD里的某个关键词。**
 

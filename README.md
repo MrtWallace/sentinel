@@ -2,71 +2,152 @@
 
 Your AI-driven DeFi assistant. Describe what you want in plain English — Sentinel parses the intent, enforces guardrails, and executes on-chain.
 
-> **Tomorrow**: Write MockDEX contract, deploy, wire up swap flow end-to-end
-
 ## Architecture
 
 ```
 User (natural language)
         ↓
-Python Agent (DeepSeek API — intent parsing)
+Python Agent (DeepSeek API — intent parsing + retry)
         ↓
 Guardrails (blacklist + confirmation threshold)
         ↓
 SmartAccount.sol (daily spend limit enforcement)
         ↓
-Sepolia Testnet (Uniswap V3 / ETH transfers)
+Sepolia Testnet — Uniswap V3 swap / ETH transfers
 ```
+
+## Agent Capabilities
+
+| Feature | JD Mapping | Status |
+|---------|-----------|--------|
+| Natural language ETH transfer | AI agent workflows | ✅ |
+| Uniswap V3 swap (real on-chain) | Tool integration | ✅ |
+| Daily spend limit (on-chain) | Safety / guardrails | ✅ |
+| Intent parsing — 20 cases, 95% accuracy | Testing & evaluation | ✅ |
+| Blacklist + confirmation threshold | Human handoff / safety | ✅ |
+| Latency / cost logging (~1.5s, ~$0.00004/call) | Observability | ✅ |
+| Error handling & retry | Reliability | ✅ |
+| Frontend dashboard (Scaffold-ETH 2) | Lightweight interface | ✅ |
+
+## Demo
+
+**Natural Language Swap**
+```
+> Swap 0.001 ETH to USDC
+→ DeepSeek parses intent
+→ SmartAccount.execute() → Uniswap V3 exactInputSingle
+→ 8.02 USDC received on Sepolia
+```
+
+**ETH Transfer**
+```
+> Send 0.001 ETH to 0x742d...
+→ Parsed → Guardrail check → SmartAccount.execute() → confirmed
+```
+
+**Guardrail Block**
+```
+> Send 5 ETH to 0xf39F...  (blacklisted address)
+→ ❌ Blocked: address on blacklist
+```
+
+**Threshold Confirmation**
+```
+> Send 0.05 ETH to 0x...   (exceeds threshold)
+→ ⚠️  Amount 0.05 ETH exceeds threshold. Confirm? (yes/no)
+```
+
+## Tech Stack
+
+| Layer | Tech |
+|-------|------|
+| Smart Contract | Solidity 0.8.20 + Foundry |
+| Agent | Python 3.11 + web3.py + DeepSeek API |
+| Frontend | Next.js 14 + Scaffold-ETH 2 + wagmi v2 |
+| Network | Sepolia Testnet |
+
+## Deployed Contract
+
+- **SmartAccount**: [`0xad7C1EBe561C9359C657FA36a156Cd213C8E6d7c`](https://sepolia.etherscan.io/address/0xad7C1EBe561C9359C657FA36a156Cd213C8E6d7c) — Etherscan verified ✅
 
 ## Project Structure
 
 ```
 sentinel/
-├── contracts/   Solidity smart contract (Foundry)
-├── agent/       Python AI agent (DeepSeek + web3.py)
-└── frontend/    Web UI (Scaffold-ETH 2) — coming Phase 4
+├── contracts/
+│   ├── src/SmartAccount.sol     # Core contract (owner + agent roles, daily limit)
+│   ├── src/MockDEX.sol          # Test DeFi contract
+│   ├── test/SmartAccount.t.sol  # Foundry tests (100% line coverage, 2 fuzz tests)
+│   └── script/Deploy.s.sol
+├── agent/
+│   ├── main.py                  # Main loop with error handling
+│   ├── intent.py                # DeepSeek intent parsing with retry
+│   ├── executor.py              # On-chain execution (ETH transfer + Uniswap V3)
+│   ├── guardrails.py            # Blacklist + confirmation threshold
+│   ├── eval.py                  # Evaluation framework (20 cases)
+│   └── requirements.txt
+└── frontend/
+    └── packages/nextjs/         # Scaffold-ETH 2 dashboard
 ```
-
-## Tech Stack
-
-| Layer     | Tech                              |
-|-----------|-----------------------------------|
-| Contract  | Solidity 0.8.20 + Foundry         |
-| Agent     | Python 3.11 + web3.py             |
-| AI Model  | DeepSeek API (deepseek-chat)      |
-| Frontend  | Next.js 14 + Scaffold-ETH 2       |
-| Network   | Sepolia Testnet                   |
-
-## Agent Capabilities
-
-| Feature | Status |
-|---------|--------|
-| Natural language ETH transfer | ✅ |
-| Daily spend limit (on-chain) | ✅ |
-| Intent parsing (20 cases, 95% accuracy) | ✅ |
-| Guardrails — blacklist | ✅ |
-| Guardrails — confirmation threshold | ✅ |
-| Latency / cost logging | ✅ |
-| Uniswap V3 swap | 🔨 |
-| Frontend dashboard | 📅 |
-
-## Deployed Contract
-
-- **Network**: Sepolia Testnet
-- **SmartAccount**: `0xbB5dA66c1D164050FaFf7A0165Cf7808e0C616DF`
 
 ## Getting Started
 
-> 🚧 WIP — Full setup guide coming after Phase 4
+### Prerequisites
+
+- Python 3.11+
+- Foundry (`foundryup`)
+- Node.js + yarn
+
+### Agent Setup
+
+```bash
+cd agent
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+
+cp .env.example .env
+# Fill in: RPC_URL, DEEPSEEK_API_KEY, WALLET_ADDRESS, AGENT_PRIVATE_KEY, CONTRACT_ADDRESS
+```
+
+### Run Agent
+
+```bash
+python main.py
+# > What should I do? Send 0.001 ETH to 0x...
+```
+
+### Run Evaluation
+
+```bash
+python eval.py
+# 19/20 passed (95% accuracy)
+```
+
+### Frontend
+
+```bash
+cd frontend
+yarn install
+yarn start
+# http://localhost:3000
+```
+
+### Contract Tests
+
+```bash
+cd contracts
+forge test
+# 11/11 passed, 100% line coverage
+```
 
 ## Roadmap
 
-- [x] Phase 0 — Project skeleton & repo setup
-- [x] Phase 1-2 — SmartAccount contract + Foundry tests (100% line coverage)
-- [x] Phase 3 — Python agent (natural language → on-chain tx, guardrails, eval)
-- [ ] Phase 3+ — Uniswap V3 swap support
-- [ ] Phase 4 — Scaffold-ETH 2 frontend
-- [ ] Phase 5 — Etherscan verified + demo video
+- [x] Phase 0 — Project skeleton
+- [x] Phase 1-2 — SmartAccount contract + Foundry tests
+- [x] Phase 3 — Python agent (ETH transfer, Uniswap V3, guardrails, eval, cost log)
+- [x] Phase 4 — Scaffold-ETH 2 frontend
+- [x] Phase 5 — Sepolia deploy + Etherscan verified
+- [ ] Demo video
 
 ## License
 
