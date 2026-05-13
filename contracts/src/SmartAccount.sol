@@ -9,6 +9,12 @@ contract SmartAccount {
     uint256 lastResetDay;
 
     event Deposited(address indexed sender, uint256 amount);
+    event Executed(address indexed to, uint256 amount, bool isSwap, bytes data);
+
+    receive() external payable {
+        emit Deposited(msg.sender, msg.value);
+    }
+
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Only owner can call this function");
@@ -48,8 +54,15 @@ contract SmartAccount {
             dailySpent += amount;
             (bool success, ) = to.call{value: amount}(data);
             require(success, "Transfer failed");
+            emit Executed(to, amount, data.length > 0, data);
+
         }else {
             revert("Daily limit exceeded");
         }
     }
+    function setAgent(address _newAgent) public onlyOwner {
+        require(_newAgent != address(0), "Invalid address");
+        agent = _newAgent;
+    }
+
 }

@@ -125,4 +125,33 @@ contract SmartAccountTest is Test {
         vm.expectRevert("Daily limit exceeded");
         smartAccount.execute(stranger, amount, "");
     }
+    function test_setAgent_onlyOwner() public {
+        address newAgent = makeAddr("newAgent");
+    
+    // stranger 不能调
+        vm.prank(stranger);
+        vm.expectRevert("Only owner can call this function");
+        smartAccount.setAgent(newAgent);
+    
+    // owner 可以调
+        vm.prank(owner);
+        smartAccount.setAgent(newAgent);
+        assertEq(smartAccount.agent(), newAgent);
+    }
+
+    function test_setAgent_revertsIfZeroAddress() public {
+        vm.prank(owner);
+        vm.expectRevert("Invalid address");
+        smartAccount.setAgent(address(0));
+    }
+
+    function test_receive_acceptsETH() public {
+        uint256 initialBalance = address(smartAccount).balance;
+        vm.deal(stranger, 1 ether);
+        vm.prank(stranger);
+        (bool success,) = address(smartAccount).call{value: 1 ether}("");
+        assertTrue(success);
+        assertEq(address(smartAccount).balance, initialBalance + 1 ether);
+    }
+
 }

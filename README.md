@@ -68,7 +68,7 @@ Sepolia Testnet — Uniswap V3 swap / ETH transfers
 
 ## Deployed Contract
 
-- **SmartAccount**: [`0xad7C1EBe561C9359C657FA36a156Cd213C8E6d7c`](https://sepolia.etherscan.io/address/0xad7C1EBe561C9359C657FA36a156Cd213C8E6d7c) — Etherscan verified ✅
+- **SmartAccount**: [`0x3350A693619209193B01399e78d5897766c44074`](https://sepolia.etherscan.io/address/0x3350A693619209193B01399e78d5897766c44074) — Etherscan verified ✅
 
 ## Project Structure
 
