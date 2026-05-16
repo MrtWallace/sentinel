@@ -90,6 +90,12 @@ sentinel/
     └── packages/nextjs/         # Scaffold-ETH 2 dashboard
 ```
 
+## Demo Video
+
+[![Sentinel Demo](https://img.shields.io/badge/Loom-Demo%20Video-blue)](https://www.loom.com/share/b8ebe76120e54a019d43fd9cd7ad92ef)
+
+> Watch: natural language → Uniswap V3 swap + guardrail block, live on Sepolia
+
 ## Getting Started
 
 ### Prerequisites
@@ -147,7 +153,7 @@ forge test
 - [x] Phase 3 — Python agent (ETH transfer, Uniswap V3, guardrails, eval, cost log)
 - [x] Phase 4 — Scaffold-ETH 2 frontend
 - [x] Phase 5 — Sepolia deploy + Etherscan verified
-- [ ] Demo video
+- [x] Demo video
 
 ## License
 
