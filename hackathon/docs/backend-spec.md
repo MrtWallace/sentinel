@@ -299,8 +299,31 @@ sentinel/
 
 ## 已知 Bug（需要修复）
 
-> TODO: 从 Sentinel 项目中列出 5 个已知 bug，需要在 Phase 5 修复。
-> 如果你能列出具体 bug，我可以帮你排优先级。
+### 已修复（不需要再处理）
+
+| # | 级别 | Bug | 状态 | Commit |
+|---|------|-----|------|--------|
+| P0 #1 | 🔴 | executor.py 缺第 3 参数 `b""` | ✅ 已修 | bffa86a |
+| P1 #2 | 🟠 | 合约缺 setAgent() 函数 | ✅ 已修 | c4e082d |
+| P1 #3 | 🟠 | execute_transfer() 变量名 NameError | ✅ 已修（函数已删除） | c8e8d29 |
+| P2 #4 | 🟡 | 合约缺 receive() | ✅ 已修 | c4e082d |
+
+### 待修复（Phase 6 处理）
+
+| # | 级别 | Bug | 修复方案 |
+|---|------|-----|----------|
+| P2 #5 | 🟡 | 合约缺 `Withdrawn`/`ConfigChanged` 事件 | 添加 event emit，forge test 验证 |
+| P2 #7 | 🟡 | gas 硬编码（50/2 gwei, 300k limit） | 改为动态获取 gas price，或用合理默认值 |
+| P2 #8 | 🟡 | guardrails 绕过 swap 操作 | **被新风控 Pipeline 直接覆盖** — Pipeline 对所有 action 类型统一检查 |
+| P2 #9 | 🟡 | input() 阻塞自动化环境 | **被新风控 Pipeline 直接覆盖** — DecisionEngine 用代码决策，不依赖 input() |
+
+### Bug 修复优先级
+
+1. **#8 + #9**: 不需要单独修，新 Pipeline 架构天然解决
+2. **#5**: 合约加 event，1h 内完成
+3. **#7**: gas 动态化，30min 完成
+
+实际 Phase 6 只需手动修 **#5 和 #7**，其余被新架构覆盖。
 
 ## 合约层增强详细设计
 
