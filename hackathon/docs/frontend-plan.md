@@ -138,6 +138,108 @@ Audit 展开区复用同一个 `DecisionChain` 组件，避免两套展示逻辑
 
 - 结果见 `hackathon/docs/frontend-checkpoint-0.md`。
 
+### Checkpoint 0.5：Stitch 风格 UI skeleton（视觉框架确认）
+
+目标：
+
+- 在正式接 API、类型和链上读取之前，先做一个静态 UI skeleton，用来确认视觉方向、信息架构和 demo 叙事是否成立。
+- 这个 checkpoint 是设计确认点，不是业务实现点。允许写前端页面和组件，但只使用页面内静态示例数据。
+- 完成后先给项目作者 review，再进入 Checkpoint 1 的类型、mock 数据和 API 封装。
+
+参考输入：
+
+- 参考目录：`hackathon/stitch_sentinel_defi_command_center/`
+- 视觉系统：`obsidian_emerald/DESIGN.md`
+- Console 参考图：`sentinel_console_optimized_sidebar_proportions/screen.png`
+- Audit 参考图：`sentinel_audit_optimized_sidebar_proportions/screen.png`
+
+采用方向：
+
+- 使用 **Obsidian Emerald Command Center** 作为视觉参考。
+- 保留深色 command center、muted emerald accent、monospace data、顶部状态栏、左侧窄导航、紧凑卡片和高密度表格风格。
+- 采用 Stitch 的整体信息密度和专业 DeFi 操作台气质，但页面语义必须服务 Sentinel 的 AI 风控执行流程。
+- Audit table 的表格密度、status badge、expanded row 风格可作为实现参考。
+
+后续 coding 产物：
+
+- `/` 首页静态框架：
+  - 左侧窄导航：只暴露 Execute / Audit 两个 demo 入口。
+  - 顶部状态栏：先用静态占位展示 Network、SmartAccount、Balance、Daily Limit、Daily Spent、Agent；真实读取留到 Checkpoint 2。
+  - Intent 区：自然语言输入框、Run 按钮、三个 demo preset。
+  - Decision Chain 区：用静态示例展示完整六段链路。
+  - Recent Decisions 区：只展示 3 条轻量记录，不放完整 audit table。
+- `/audit` 静态框架：
+  - 同一套 Sentinel shell。
+  - 高密度 audit table，占位列为 time、intent、status、reason、tx hash。
+  - 默认展示一条 expanded row 的视觉样式，占位内容复用 decision chain 结构。
+- 暂不做 `/frontend-map`；内部讲解页仍放在 Checkpoint 6。
+
+首页信息结构：
+
+- 第一层：顶部状态栏说明“当前被风控保护的 SmartAccount 状态”。
+- 第二层：左侧 intent 输入说明“用户想做什么 DeFi 操作”。
+- 第三层：右侧 decision chain 说明“AI 和规则如何判断这笔操作”。
+- 第四层：底部或侧边 recent decisions 说明“每次判断都会留下审计痕迹”。
+
+Decision chain skeleton 必须包含：
+
+- Agent A Proposal：action、amount、token pair、target contract、slippage、expected output。
+- Hard Rules：至少三条规则，展示 passed/rejected、rule name、reason。
+- Agent B Security Review：passed、risk level、findings、reasoning。
+- Agent C Risk Review：passed、risk level、findings、reasoning。
+- Final Decision：executed / rejected / confirm_needed / failed 的 badge 视觉。
+- Transaction / Audit Result：tx hash、simulation、explorer links 或 audit-only result。
+
+状态视觉规则：
+
+- `executed`：emerald / success，用于“检查通过并产生 tx hash”。
+- `rejected`：red / danger，用于“硬规则或 agent 审查明确拦截”。
+- `confirm_needed`：amber / warning，用于“需要用户二次确认”，必须预留风险说明和 Approve / Reject 按钮位置。
+- `failed`：rose 或 neutral danger，用于“网络、API、revert 等异常”，不要和业务拒绝混在一起。
+
+必须调整 Stitch 的地方：
+
+- 首页不要放完整 audit table，只保留轻量 recent decisions；完整日志放 `/audit`。
+- Preset 文案改为真实 demo：
+  - `Swap 0.01 ETH to USDC`
+  - `Swap 1 ETH to USDC`
+  - `Send 0.08 ETH to 0x742d...`
+- Decision chain 必须补齐 Sentinel 的真实审查层级，不沿用 Stitch 的泛化交易终端文案。
+- 不使用 `AUTO-EXECUTING / HALT EXECUTION` 作为默认语义；MVP 后端 `confirm_needed` 是终态，`/api/confirm` 只更新审计状态，不假设真实链上执行。
+- 顶部右侧移除容易误导的钱包产品元素，例如 portfolio value、wallet icon、power icon。
+- `confirm_needed` 不能只是黄色 badge，必须能看出后续会有 Approve / Reject 交互。
+
+实现原则：
+
+- Stitch HTML 只作为视觉参考，不直接复制到 Next.js。
+- 不引入 CDN Tailwind、Google Fonts runtime 或 Material Symbols 作为核心依赖。
+- 在 Scaffold-ETH 现有 Next.js / Tailwind / DaisyUI 结构里复刻必要的视觉语言。
+- 若需要图标，优先使用项目已有 icon 依赖或现有 Scaffold-ETH 组件，不为了视觉稿新增大依赖。
+- 卡片只用于独立信息块，不做卡片套卡片；页面区域用 full-width layout 或 grid，不包装成营销页。
+- UI 文案保持英文；本计划、checkpoint 汇报和内部学习文档保持中文。
+
+此 checkpoint 不做：
+
+- 不创建正式 `api.ts`、`types.ts`、`mockData.ts`。
+- 不调用 `executeIntent`、`confirmExecution`、`getAuditLog`。
+- 不读取真实链上数据。
+- 不实现 stagger reveal、confirm 按钮逻辑或错误处理逻辑。
+- 不改动合约、agent、backend 代码。
+
+审查重点：
+
+- 是否一眼能看出这是 Sentinel 的 AI 风控执行控制台，而不是普通钱包或投资组合 dashboard。
+- 首页是否能支撑 2-3 分钟 demo 的第一屏讲解。
+- `/audit` 是否能支撑“可审计”的叙事。
+- 四种状态颜色是否清晰，尤其是 `confirm_needed` 是否不会卡住评委理解。
+- 信息密度是否接近 Stitch，但没有牺牲可读性。
+
+学习点：
+
+- 为什么先做 UI skeleton：先确认页面承载的信息和叙事，再让数据层接入，避免后面边写业务边大改布局。
+- 为什么 skeleton 阶段只能用静态数据：这一阶段验证的是视觉和信息结构，不验证 API contract。
+- 为什么状态栏后续要接真链上数据，而 decision chain 第一版仍然可以来自 API-shaped mock。
+
 ### Checkpoint 1：类型、mock 数据、API 封装
 
 产物：
