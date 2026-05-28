@@ -4,29 +4,45 @@
 
 在现有 Sentinel 项目上增加**多 Agent 交叉审核风控层**，包括 Python Agent 后端和 Solidity 合约两部分。
 
-先读 `docs/backend-spec.md` 了解完整技术规格。
+## 语言约定
+
+- 后端/合约相关文档优先使用中文编写
+- 与用户讨论方案、计划、实现细节时优先使用中文回答
+- 代码、变量名、函数名、提交信息可继续使用英文，保持工程惯例
+
+## 协作方式
+
+- 采用“结对编程 + 教练模式”
+- 用户希望参与后端和合约核心代码编写，用这个项目积累求职可讲述的工程经验
+- 实现前先解释目标、输入输出、相关文件和关键概念
+- 适合练习的模块优先拆成小任务或 TODO，让用户先写关键逻辑
+- Codex 负责拆解、讲解、review、测试建议、排查 bug，并在卡住或时间紧时补齐代码
+
+先读：
+- `docs/backend-plan.md` 了解当前已确认方向、待讨论问题和执行计划
+- `docs/backend-spec.md` 了解完整技术规格
 
 ## 现有代码位置
 
-- Agent 代码: `sentinel/agent/` (intent.py, guardrails.py, executor.py, main.py)
-- 合约代码: `sentinel/contracts/` (Foundry, SmartAccount.sol)
-- 合约 ABI: `sentinel/contracts/out/SmartAccount.sol/SmartAccount.json`
-- 项目上下文: `sentinel/PROJECT_CONTEXT.md`
+- Agent 代码: `agent/` (intent.py, guardrails.py, executor.py, main.py)
+- 合约代码: `contracts/` (Foundry, SmartAccount.sol)
+- 合约 ABI: `contracts/out/SmartAccount.sol/SmartAccount.json`
+- 项目上下文: `PROJECT_CONTEXT.md`
 
 ## 开发顺序（严格按这个来，不要跳）
 
 ### Phase 1: Agent A 输出格式改造 (Day 1-2)
-- 改 `sentinel/agent/intent.py` 的 system prompt，输出结构化 JSON
+- 改 `agent/intent.py` 的 system prompt，输出结构化 JSON
 - 加 parse 和 validation
 
 ### Phase 2: 风控 Pipeline (Day 3-5)
-- 新建 `sentinel/agent/risk/` 目录
+- 新建 `agent/risk/` 目录
 - 实现 RiskRule 基类 + 5 条硬规则（slippage, amount, whitelist, frequency, approval）
 - Pipeline 串联逻辑
 
 ### Phase 3: 多 Agent 审查 (Day 5-7)
-- 新建 `sentinel/agent/security_auditor.py` (Agent B)
-- 新建 `sentinel/agent/risk_analyst.py` (Agent C)
+- 新建 `agent/security_auditor.py` (Agent B)
+- 新建 `agent/risk_analyst.py` (Agent C)
 - Agent B 和 C 用同一个 DeepSeek API，不同 system prompt，**并行调用**
 - DecisionEngine 投票逻辑（2/3 一致才执行）
 
@@ -66,8 +82,8 @@
 ## 合约相关注意事项
 
 - Foundry 项目，用 `forge build` 编译，`forge test` 测试
-- 部署脚本在 `sentinel/contracts/script/` 目录
-- ABI 输出到 `sentinel/contracts/out/`
+- 部署脚本在 `contracts/script/` 目录
+- ABI 输出到 `contracts/out/`
 - Python 通过 ABI 与合约交互（web3.py）
 
 ## 测试
