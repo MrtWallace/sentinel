@@ -20,3 +20,5 @@ Thumbs.db
 # Node (前端将来需要)
 node_modules/
 .next/
+# Generated output
+output/

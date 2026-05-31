@@ -1,0 +1,106 @@
+import { MOCK_AUDIT_LOG, MOCK_EXECUTE_RESPONSES, responseToAuditItem } from "~~/lib/sentinel/mockData";
+import type { AuditLogItem, ConfirmExecutionResponse, ExecuteResponse, IntentScenario } from "~~/lib/sentinel/types";
+
+const MOCK_LATENCY_MS = 350;
+
+// 这个函数是页面唯一需要依赖的执行入口；后端完成后只替换函数内部实现。
+export async function executeIntent(intent: string): Promise<ExecuteResponse> {
+  await waitForMockLatency();
+
+  const scenario = detectIntentScenario(intent);
+  const response = cloneResponse(MOCK_EXECUTE_RESPONSES[scenario]);
+
+  return {
+    ...response,
+    intent,
+  };
+}
+
+// MVP 的确认接口只记录用户选择，不假设会触发真实链上交易。
+export async function confirmExecution(txId: string, approved: boolean): Promise<ConfirmExecutionResponse> {
+  await waitForMockLatency();
+
+  const baseResponse = cloneResponse(MOCK_EXECUTE_RESPONSES.confirm_transfer);
+  const status = approved ? "executed" : "rejected";
+  const reason = approved ? "Operator approved. Audit state updated." : "Operator rejected. Audit state updated.";
+
+  return {
+    ...baseResponse,
+    approved,
+    txId,
+    status,
+    reason,
+    decisionChain: {
+      ...baseResponse.decisionChain,
+      finalDecision: status,
+      decisionReason: reason,
+      txHash: approved ? "0xsimulatedapproval000000000000000000000000000000000000000000000001" : null,
+      confirmation: {
+        required: false,
+        reason,
+        riskNote: "Confirmation was recorded by the mock API layer.",
+      },
+    },
+  };
+}
+
+export async function getAuditLog(): Promise<AuditLogItem[]> {
+  await waitForMockLatency();
+
+  return MOCK_AUDIT_LOG.map(item => {
+    const clonedItem = cloneAuditItem(item);
+
+    return {
+      txId: clonedItem.txId,
+      timestamp: clonedItem.timestamp,
+      intent: clonedItem.intent,
+      status: clonedItem.status,
+      reason: clonedItem.reason,
+      txHash: clonedItem.txHash,
+    };
+  });
+}
+
+export async function getAuditLogItem(txId: string): Promise<AuditLogItem> {
+  await waitForMockLatency();
+
+  const item = MOCK_AUDIT_LOG.find(auditItem => auditItem.txId === txId);
+
+  if (item) {
+    return cloneAuditItem(item);
+  }
+
+  return responseToAuditItem({
+    ...cloneResponse(MOCK_EXECUTE_RESPONSES.confirm_transfer),
+    txId,
+    reason: "Generated fallback audit record.",
+  });
+}
+
+function detectIntentScenario(intent: string): IntentScenario {
+  const normalizedIntent = intent.toLowerCase();
+
+  if (normalizedIntent.includes("swap 1 eth") || normalizedIntent.includes("1 eth to usdc")) {
+    return "blocked_swap";
+  }
+
+  if (normalizedIntent.includes("send") || normalizedIntent.includes("0.08 eth")) {
+    return "confirm_transfer";
+  }
+
+  return "safe_swap";
+}
+
+function waitForMockLatency(): Promise<void> {
+  return new Promise(resolve => {
+    globalThis.setTimeout(resolve, MOCK_LATENCY_MS);
+  });
+}
+
+function cloneResponse(response: ExecuteResponse): ExecuteResponse {
+  return JSON.parse(JSON.stringify(response)) as ExecuteResponse;
+}
+
+function cloneAuditItem(item: AuditLogItem): AuditLogItem {
+  return JSON.parse(JSON.stringify(item)) as AuditLogItem;
+}

@@ -1,5 +1,7 @@
 # Sentinel 前端 MVP 更新计划
 
+> 最后更新：2026-06-01 05:37
+
 ## 总结
 
 前端做成 **AI 风控执行控制台**：打开页面后直接演示自然语言意图如何经过 AI 提案、硬规则、Agent 审查、确认/执行/拦截，并留下审计记录。
@@ -7,6 +9,12 @@
 同时新增一个专门的 **前端理解层**：让项目作者能讲清楚每个组件在干什么、接口传什么数据、数据如何从 API 变成页面展示。这个部分用于内部学习和项目介绍，不进入评委 demo 主流程。
 
 给项目作者看的开发计划和文档用中文；前端 UI 和对外 demo 文案用英文。
+
+## 进度记录
+
+前端实时进度、checkpoint 时间戳、测试结果和当前阻塞统一记录在 `hackathon/docs/frontend-progress.md`。
+
+本文件只记录相对稳定的前端目标、范围、接口和 checkpoint 定义。除非计划本身变化，否则后续 checkpoint 默认只更新 `frontend-progress.md`，减少上下文和 token 消耗。
 
 ## 核心页面
 
@@ -138,7 +146,7 @@ Audit 展开区复用同一个 `DecisionChain` 组件，避免两套展示逻辑
 
 - 结果见 `hackathon/docs/frontend-checkpoint-0.md`。
 
-### Checkpoint 0.5：Stitch 风格 UI skeleton（视觉框架确认）
+### Checkpoint 0.5：Stitch 风格 UI skeleton（视觉框架确认，已完成）
 
 目标：
 
@@ -240,42 +248,101 @@ Decision chain skeleton 必须包含：
 - 为什么 skeleton 阶段只能用静态数据：这一阶段验证的是视觉和信息结构，不验证 API contract。
 - 为什么状态栏后续要接真链上数据，而 decision chain 第一版仍然可以来自 API-shaped mock。
 
-### Checkpoint 1：类型、mock 数据、API 封装
+### Checkpoint 1：类型、mock 数据、API 封装（已完成，待审查）
 
 产物：
 
-- 新增前端类型文件，例如 `lib/sentinel/types.ts`。
-- 新增 mock 数据文件，例如 `lib/sentinel/mockData.ts`。
-- 新增 API 封装文件，例如 `lib/sentinel/api.ts`。
+- 新增前端类型文件：`frontend/packages/nextjs/lib/sentinel/types.ts`。
+- 新增 mock 数据文件：`frontend/packages/nextjs/lib/sentinel/mockData.ts`。
+- 新增 API 封装文件：`frontend/packages/nextjs/lib/sentinel/api.ts`。
 - 实现 `executeIntent`、`confirmExecution`、`getAuditLog`、`getAuditLogItem` 的 mock 版本。
+
+当前实现说明：
+
+- `types.ts` 定义前端与后端/API 之间的 contract，包括 `ExecutionStatus`、`ExecuteResponse`、`DecisionChain`、`RuleCheck`、`AgentReview`、`AuditLogItem`。
+- `mockData.ts` 提供四类 demo 数据：`executed` 成功 swap、`rejected` 被硬规则拦截的大额 swap、`confirm_needed` 需要确认的转账、`failed` API 超时示例。
+- `api.ts` 是页面未来唯一应该直接依赖的数据入口；后端完成后优先只替换这里的内部实现，页面组件不直接写 mock 逻辑。
+- `confirmExecution` 遵守后端 MVP 语义：记录用户 Approve / Reject 的审计状态，不默认假设真实链上执行。
 
 审查重点：
 
 - 每个接口传什么、返回什么。
 - `DecisionChain` 的字段能不能对应 demo 叙事。
 - mock 数据是否覆盖 executed、rejected、confirm_needed 三种场景。
+- `confirmExecution` 的文案和返回值是否不会误导为真实链上执行。
+- Audit 列表摘要是否和单条详情区分清楚：`getAuditLog()` 返回轻量列表，`getAuditLogItem(txId)` 返回完整 `decisionChain`。
+
+验收口径：
+
+- Checkpoint 1 是数据 contract 层，本身不可视化；项目作者不需要通过阅读 TypeScript 代码来判断实现是否正确。
+- Codex 负责保证类型检查和 lint 通过，并解释 mock 场景和接口语义。
+- 项目作者只需要确认三条 demo 场景和接口语义是否符合项目叙事。
+- 真正的体验验收放到 Checkpoint 3：页面接入 mock API 后，可以直接在浏览器点击 preset 检查成功、拦截、确认三条路径。
+- 不建议等完整后端完成再继续前端；前端先用 API-shaped mock 做可点击 demo，后端只要对齐同一套 API contract，之后替换 `api.ts` 内部实现即可。
+
+审查方法：
+
+1. 先看 `types.ts`，确认这些类型能支撑你讲清楚前端数据流：
+   - `ExecuteResponse` 是一次 intent 执行的总结果。
+   - `DecisionChain` 是页面右侧审查链的核心数据。
+   - `RuleCheck` 对应硬规则。
+   - `AgentReview` 对应 Agent B / Agent C 审查。
+   - `AuditLogItem` 对应 Audit 表格的一行。
+2. 再看 `mockData.ts`，按三条 demo intent 检查叙事是否成立：
+   - `Swap 0.01 ETH to USDC` 应该走 `executed`。
+   - `Swap 1 ETH to USDC` 应该走 `rejected`，并且在硬规则阶段结束。
+   - `Send 0.08 ETH to 0x742d...` 应该走 `confirm_needed`，并保留确认原因和风险说明。
+3. 最后看 `api.ts`，确认页面以后只需要调用函数，不需要知道 mock 数据在哪里：
+   - `executeIntent(intent)`：自然语言 intent -> `ExecuteResponse`。
+   - `confirmExecution(txId, approved)`：确认选择 -> 新的终态结果。
+   - `getAuditLog()`：Audit 表格摘要。
+   - `getAuditLogItem(txId)`：展开某一条时拿完整详情。
+
+建议验收命令：
+
+```bash
+yarn workspace @se-2/nextjs check-types
+yarn workspace @se-2/nextjs lint
+```
+
+已执行结果：
+
+- `yarn workspace @se-2/nextjs check-types` 通过。
+- `yarn workspace @se-2/nextjs lint` 通过。
+- 已尝试启动本地 Next dev server 验证页面，但当前环境中 server 监听 `0.0.0.0:3000` 后请求持续超时；临时移除新状态栏引用后仍复现，因此暂按环境/dev server 问题记录，不作为 Checkpoint 2 代码阻断。
 
 学习点：
 
 - “API contract first” 是什么意思。
 - 为什么页面只依赖 `api.ts`，后端 ready 后只换这一层。
 
-### Checkpoint 2：Sentinel demo 外壳与状态栏
+### Checkpoint 2：真实链上状态栏接入（已完成）
 
 产物：
 
-- 替换 Scaffold-ETH 默认 Header/Footer 为 Sentinel demo shell。
-- 新增顶部状态栏组件。
-- 状态栏使用真实链上数据：
+- Sentinel demo shell 已在 Checkpoint 0.5 完成；本 checkpoint 不再重做页面外壳。
+- 将 Checkpoint 0.5 顶部状态栏中的静态占位替换为真实链上数据：
   - `useBalance` 读 SmartAccount ETH balance。
   - `useScaffoldReadContract` 读 `owner`、`agent`、`dailyLimit`、`dailySpent`。
   - 合约地址从 Scaffold-ETH contract config 获取，不再硬编码。
 
+当前实现说明：
+
+- 新增 `frontend/packages/nextjs/components/sentinel/SmartAccountStatusBar.tsx`，集中处理链上状态栏读取。
+- `SentinelShell` 只负责全局布局和导航；链上读取逻辑不散落到 `/` 或 `/audit` 页面里。
+- 状态栏展示 Network、Smart Account、Balance、Daily Limit、Spent、Agent、Owner。
+- 如果 RPC 或合约读取出错，右侧状态从 `PROTECTED` 切换为 `RPC CHECK`，但不阻塞页面主体 demo。
+
 审查重点：
 
-- 页面是否去掉无关的 wallet/debug/footer 噪音。
-- 状态栏是否只展示 demo 需要的信息。
+- 状态栏是否只展示 demo 需要的信息，不恢复无关 wallet/debug/footer 噪音。
 - 是否仍保留开发时需要的最小导航：Execute / Audit。
+- 合约地址是否统一来自 Scaffold-ETH contract config。
+
+已执行结果：
+
+- `yarn workspace @se-2/nextjs check-types` 通过。
+- `yarn workspace @se-2/nextjs lint` 通过。
 
 学习点：
 

@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Sentinel - AI Agent DeFi Execution System</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=JetBrains+Mono:wght@500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "surface-container-lowest": "#0c0e12",
+                "tertiary-fixed": "#d3e4fe",
+                "surface-container-high": "#282a2e",
+                "secondary-fixed": "#d8e3fb",
+                "on-background": "#e2e2e8",
+                "outline": "#89938d",
+                "on-tertiary": "#213145",
+                "surface-container-highest": "#333539",
+                "tertiary-fixed-dim": "#b7c8e1",
+                "surface-tint": "#88d6b6",
+                "surface-bright": "#37393e",
+                "tertiary-container": "#8292aa",
+                "on-tertiary-container": "#1a2b3e",
+                "surface-variant": "#333539",
+                "surface-container": "#1e2024",
+                "on-error-container": "#ffdad6",
+                "surface-container-low": "#1a1c20",
+                "inverse-primary": "#156b51",
+                "on-secondary-fixed-variant": "#3c475a",
+                "surface-dim": "#111318",
+                "on-primary-fixed": "#002116",
+                "error": "#ffb4ab",
+                "on-secondary-fixed": "#111c2d",
+                "background": "#111318",
+                "primary": "#88d6b6",
+                "outline-variant": "#3f4944",
+                "on-secondary-container": "#aeb9d0",
+                "on-primary-container": "#003122",
+                "tertiary": "#b7c8e1",
+                "on-error": "#690005",
+                "on-primary": "#003828",
+                "on-primary-fixed-variant": "#00513c",
+                "secondary-container": "#3e495d",
+                "error-container": "#93000a",
+                "primary-fixed-dim": "#88d6b6",
+                "secondary-fixed-dim": "#bcc7de",
+                "on-tertiary-fixed-variant": "#38485d",
+                "secondary": "#bcc7de",
+                "primary-fixed": "#a4f3d1",
+                "on-surface": "#e2e2e8",
+                "surface": "#111318",
+                "inverse-on-surface": "#2f3035",
+                "primary-container": "#529f82",
+                "on-tertiary-fixed": "#0b1c30",
+                "on-surface-variant": "#bec9c2",
+                "inverse-surface": "#e2e2e8",
+                "on-secondary": "#263143"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.125rem",
+                "lg": "0.25rem",
+                "xl": "0.5rem",
+                "full": "0.75rem"
+        },
+        "spacing": {
+                "unit": "4px",
+                "margin": "24px",
+                "container-padding": "12px",
+                "gutter": "16px",
+                "status_bar_height": "48px",
+                "panel_padding": "16px",
+                "sidebar_width": "72px",
+                "stack_gap": "8px"
+        },
+        "fontFamily": {
+                "label-md": [
+                        "JetBrains Mono"
+                ],
+                "headline-md": [
+                        "Geist"
+                ],
+                "body-md": [
+                        "Geist"
+                ],
+                "body-lg": [
+                        "Geist"
+                ],
+                "label-sm": [
+                        "JetBrains Mono"
+                ],
+                "headline-sm": [
+                        "Geist"
+                ],
+                "headline-lg": [
+                        "Geist"
+                ],
+                "data-mono": ["JetBrains Mono"],
+                "status-sm": ["JetBrains Mono"],
+                "display-lg": ["Geist"],
+                "label-caps": ["JetBrains Mono"]
+        },
+        "fontSize": {
+                "label-md": [
+                        "12px",
+                        {
+                                "lineHeight": "16px",
+                                "letterSpacing": "0.05em",
+                                "fontWeight": "500"
+                        }
+                ],
+                "headline-md": [
+                        "24px",
+                        {
+                                "lineHeight": "32px",
+                                "letterSpacing": "-0.01em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "body-md": [
+                        "14px",
+                        {
+                                "lineHeight": "20px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "body-lg": [
+                        "16px",
+                        {
+                                "lineHeight": "24px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "label-sm": [
+                        "10px",
+                        {
+                                "lineHeight": "14px",
+                                "letterSpacing": "0.05em",
+                                "fontWeight": "500"
+                        }
+                ],
+                "headline-sm": [
+                        "20px",
+                        {
+                                "lineHeight": "28px",
+                                "fontWeight": "500"
+                        }
+                ],
+                "headline-lg": [
+                        "32px",
+                        {
+                                "lineHeight": "40px",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "data-mono": ["13px", {"lineHeight": "18px", "fontWeight": "500"}],
+                "status-sm": ["10px", {"lineHeight": "12px", "fontWeight": "700"}],
+                "display-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                "label-caps": ["11px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}]
+        }
+},
+    },
+  }
+</script>
+<style>
+        body { background-color: theme('colors.background'); color: theme('colors.on-background'); overflow: hidden; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .material-symbols-outlined.fill { font-variation-settings: 'FILL' 1; }
+        
+        /* Pulse Animation for Agent Blip */
+        @keyframes pulse-green {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        .agent-blip { animation: pulse-green 1.5s infinite ease-in-out; }
+
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(136, 214, 182, 0.4); }
+            50% { box-shadow: 0 0 0 6px rgba(136, 214, 182, 0); }
+        }
+        .active-node { animation: pulse-glow 2s infinite ease-in-out; border-color: theme('colors.primary'); }
+    </style>
+</head>
+<body class="flex flex-col h-screen antialiased selection:bg-primary-container selection:text-on-primary-container text-body-md font-body-md">
+<!-- Top App Bar Shared Component -->
+<header class="fixed top-0 w-full h-[48px] z-50 bg-surface-container-lowest dark:bg-surface-container-lowest border-b border-outline-variant flex justify-between items-center px-panel_padding">
+<div class="flex items-center gap-4">
+<span class="font-headline-md text-headline-md font-bold tracking-tighter text-primary dark:text-primary">SENTINEL.AI</span>
+<!-- SmartAccount Status Cluster -->
+<div class="hidden md:flex items-center gap-4 border-l border-outline-variant pl-4 ml-4">
+<div class="flex items-center gap-2">
+<span class="font-label-caps text-label-caps text-on-surface-variant">BALANCE:</span>
+<span class="font-data-mono text-data-mono text-on-surface">12.45 ETH</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="font-label-caps text-label-caps text-on-surface-variant">DAILY LIMIT:</span>
+<span class="font-data-mono text-data-mono text-on-surface">5.0 ETH</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="font-label-caps text-label-caps text-on-surface-variant">SPENT:</span>
+<span class="font-data-mono text-data-mono text-secondary">0.85 ETH</span>
+</div>
+</div>
+</div>
+<nav class="flex items-center gap-6">
+<div class="flex gap-4">
+<span class="text-on-surface-variant font-data-mono hover:bg-surface-container-high transition-colors px-2 py-1 flex items-center gap-2 rounded-xl">
+<span class="w-1.5 h-1.5 bg-primary rounded-full agent-blip"></span>
+                    SEP_NET_LIVE
+                </span>
+<span class="text-on-surface-variant font-data-mono hover:bg-surface-container-high transition-colors px-2 py-1 rounded-xl">0x4A2...1E9B</span>
+<span class="text-on-surface-variant font-data-mono hover:bg-surface-container-high transition-colors px-2 py-1 rounded-xl">$12,450.80</span>
+</div>
+<div class="flex items-center gap-3">
+<button class="text-primary hover:bg-surface-container-high p-1 transition-colors rounded-xl"><span class="material-symbols-outlined">notifications_active</span></button>
+<button class="text-primary hover:bg-surface-container-high p-1 transition-colors rounded-xl"><span class="material-symbols-outlined">account_balance_wallet</span></button>
+<button class="text-primary hover:bg-surface-container-high p-1 transition-colors rounded-xl"><span class="material-symbols-outlined">power_settings_new</span></button>
+</div>
+</nav>
+</header>
+<div class="flex flex-1 mt-[48px] h-[calc(100vh-48px)]">
+<!-- Side Navigation Shared Component (Intent Console Mode) -->
+<aside class="fixed left-0 top-[48px] w-[72px] h-[calc(100vh-48px)] bg-surface-container dark:bg-surface-container border-r border-outline-variant flex flex-col items-center py-4 z-40">
+<!-- Navigation Links -->
+<nav class="flex-1 flex flex-col gap-4 w-full mt-4 items-center">
+<a class="relative text-primary bg-surface-variant w-12 h-12 flex items-center justify-center rounded-xl transition-all duration-200 group" href="/">
+<div class="absolute left-[-12px] top-1/2 -translate-y-1/2 w-1 h-8 bg-primary rounded-r-md"></div>
+<span class="material-symbols-outlined">terminal</span>
+<span class="absolute left-14 bg-surface-container-highest text-on-surface font-label-caps text-label-caps px-2 py-1 rounded-xl opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity">Terminal</span>
+</a>
+<a class="text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest w-12 h-12 flex items-center justify-center rounded-xl transition-all duration-200 group relative" href="/audit">
+<span class="material-symbols-outlined">analytics</span>
+<span class="absolute left-14 bg-surface-container-highest text-on-surface font-label-caps text-label-caps px-2 py-1 rounded-xl opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity">Agent Logs</span>
+</a>
+</nav>
+<!-- CTA -->
+<div class="w-full flex justify-center mb-4 px-2">
+<button class="w-12 h-12 bg-primary text-on-primary flex items-center justify-center hover:bg-primary-fixed transition-colors border border-primary rounded-xl group relative">
+<span class="material-symbols-outlined">add</span>
+<span class="absolute left-14 bg-surface-container-highest text-on-surface font-label-caps text-label-caps px-2 py-1 rounded-xl opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity">New Intent</span>
+</button>
+</div>
+<!-- Footer Links -->
+<div class="w-full pt-4 border-t border-outline-variant flex flex-col gap-4 items-center mb-4">
+<a class="text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest w-10 h-10 flex items-center justify-center rounded-xl transition-colors group relative" href="#">
+<span class="material-symbols-outlined text-[20px]">menu_book</span>
+<span class="absolute left-14 bg-surface-container-highest text-on-surface font-label-caps text-label-caps px-2 py-1 rounded-xl opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity">Docs</span>
+</a>
+<a class="text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest w-10 h-10 flex items-center justify-center rounded-xl transition-colors group relative" href="#">
+<span class="material-symbols-outlined text-[20px]">developer_board</span>
+<span class="absolute left-14 bg-surface-container-highest text-on-surface font-label-caps text-label-caps px-2 py-1 rounded-xl opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity">Status</span>
+</a>
+</div>
+</aside>
+<!-- Main Execution Canvas -->
+<main class="ml-[72px] flex-1 bg-background p-panel_padding overflow-y-auto flex flex-col gap-gutter">
+<!-- Top Controls Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+<!-- Intent Input Panel -->
+<div class="lg:col-span-2 bg-surface-container-low border border-outline-variant p-4 flex flex-col gap-3 relative rounded-xl">
+<div class="flex justify-between items-center mb-2">
+<span class="font-label-caps text-label-caps text-on-surface-variant">NATURAL LANGUAGE INPUT</span>
+<span class="font-status-sm text-status-sm text-primary">AWAITING_INPUT</span>
+</div>
+<textarea class="w-full h-24 bg-surface-container-lowest border-b-2 border-outline-variant text-on-surface font-data-mono text-data-mono p-3 focus:outline-none focus:border-primary resize-none rounded-t-xl" placeholder="&gt; Enter intent here (e.g., 'Swap 1 ETH for USDC if slippage &lt; 0.5%')"></textarea>
+<div class="mt-2">
+<span class="font-label-caps text-label-caps text-on-surface-variant block mb-2">PRESETS</span>
+<div class="flex flex-wrap gap-2">
+<button class="font-data-mono text-status-sm text-primary border border-outline-variant px-3 py-1 hover:bg-surface-container transition-colors rounded-xl">Flash Loan Arb</button>
+<button class="font-data-mono text-status-sm text-primary border border-outline-variant px-3 py-1 hover:bg-surface-container transition-colors rounded-xl">Liquidity Migration</button>
+<button class="font-data-mono text-status-sm text-primary border border-outline-variant px-3 py-1 hover:bg-surface-container transition-colors rounded-xl">Stop-Loss Trigger</button>
+</div>
+</div>
+</div>
+<!-- Active Controls (Section 2) -->
+<div class="bg-surface-container-low border border-primary/30 p-4 flex flex-col justify-center gap-4 relative rounded-xl overflow-hidden shadow-[0_0_20px_rgba(136,214,182,0.05)]">
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl"></div>
+<div class="text-center mb-2 relative z-10">
+<span class="font-label-caps text-label-caps text-primary animate-pulse flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[16px]">auto_mode</span>
+                        AUTO-EXECUTING
+                    </span>
+<h3 class="font-headline-md text-headline-md text-on-surface mt-1">PROCESSING</h3>
+<p class="font-status-sm text-status-sm text-on-surface-variant mt-2">Awaiting parallel consensus from Agent B &amp; C</p>
+</div>
+<div class="w-full bg-surface-variant h-1 rounded-full overflow-hidden relative z-10">
+<div class="bg-primary h-full w-[75%] rounded-full relative">
+<div class="absolute top-0 right-0 bottom-0 w-8 bg-gradient-to-r from-transparent to-white opacity-50 animate-pulse"></div>
+</div>
+</div>
+<button class="w-full bg-transparent text-error border border-error font-label-caps text-label-caps py-3 hover:bg-error/10 transition-colors flex justify-center items-center gap-2 rounded-xl relative z-10 mt-2">
+<span class="material-symbols-outlined text-[16px]">cancel</span>
+                    HALT EXECUTION
+                </button>
+</div>
+</div>
+<!-- Decision Chain (Section 1) -->
+<div class="bg-surface-container-low border border-outline-variant p-4 rounded-xl relative overflow-hidden">
+<div class="flex justify-between items-center mb-4 relative z-10">
+<span class="font-label-caps text-label-caps text-on-surface-variant">DECISION FLOW_</span>
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 bg-primary rounded-full agent-blip"></span>
+<span class="font-status-sm text-status-sm text-primary">SCAN IN PROGRESS</span>
+</div>
+</div>
+<div class="relative z-10 flex items-center justify-center w-full mx-auto gap-4 py-2 overflow-x-auto">
+<!-- Node 1 -->
+<div class="bg-surface-container p-2 border border-outline-variant min-w-[120px] text-center rounded-xl flex flex-col justify-center shrink-0">
+<div class="font-status-sm text-status-sm text-on-surface-variant mb-1">INTENT</div>
+<div class="font-data-mono text-data-mono text-on-surface text-xs">User Request</div>
+</div>
+<span class="material-symbols-outlined text-outline-variant shrink-0">arrow_right_alt</span>
+<!-- Node 2 -->
+<div class="bg-surface-container p-2 border border-outline-variant min-w-[130px] text-center rounded-xl relative flex flex-col justify-center shrink-0">
+<div class="font-status-sm text-status-sm text-on-surface-variant mb-1">RULES</div>
+<div class="font-data-mono text-data-mono text-on-surface text-xs">Protocol Constraints</div>
+</div>
+<span class="material-symbols-outlined text-outline-variant shrink-0">arrow_right_alt</span>
+<!-- Node 3L: Security Scan (Agent B) -->
+<div class="min-w-[140px] bg-surface-container border active-node p-2 text-center rounded-xl relative shadow-[0_0_10px_rgba(136,214,182,0.15)] flex flex-col justify-center shrink-0">
+<div class="absolute -top-2 -right-2 bg-primary text-on-primary font-status-sm text-status-sm px-1.5 py-0.5 rounded-xl shadow">B</div>
+<div class="font-data-mono text-data-mono text-on-surface text-xs flex items-center justify-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-primary animate-spin">radar</span> Security Scan
+                    </div>
+</div>
+<span class="material-symbols-outlined text-outline-variant shrink-0">add</span>
+<!-- Node 3R: Risk Analysis (Agent C) -->
+<div class="min-w-[140px] bg-surface-container border active-node p-2 text-center rounded-xl relative shadow-[0_0_10px_rgba(136,214,182,0.15)] flex flex-col justify-center shrink-0">
+<div class="absolute -top-2 -right-2 bg-primary text-on-primary font-status-sm text-status-sm px-1.5 py-0.5 rounded-xl shadow">C</div>
+<div class="font-data-mono text-data-mono text-on-surface text-xs flex items-center justify-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-primary">monitoring</span> Risk Analysis
+                    </div>
+</div>
+<span class="material-symbols-outlined text-outline-variant shrink-0">arrow_right_alt</span>
+<!-- Final Node -->
+<div class="min-w-[120px] bg-surface-container p-2 border border-outline-variant border-dashed text-center opacity-70 relative z-20 rounded-xl flex flex-col justify-center shrink-0">
+<div class="font-status-sm text-status-sm text-on-surface-variant mb-1">DECISION</div>
+<div class="font-data-mono text-data-mono text-on-surface-variant text-[10px]">Awaiting Consensus</div>
+</div>
+</div>
+</div>
+<!-- Audit Logs (Section 3) -->
+<div class="bg-surface-container-low border border-outline-variant flex-1 overflow-hidden flex flex-col rounded-xl">
+<div class="p-3 border-b border-outline-variant flex justify-between items-center bg-surface-container-highest/50">
+<span class="font-label-caps text-label-caps text-on-surface-variant">EXECUTION LOGS</span>
+<button class="font-data-mono text-status-sm text-primary flex items-center gap-1 hover:underline rounded-xl">
+<span class="material-symbols-outlined text-[14px]">download</span> EXPORT CSV
+                    </button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-outline-variant bg-surface-container">
+<th class="p-2 font-label-caps text-status-sm text-on-surface-variant font-normal">ID</th>
+<th class="p-2 font-label-caps text-status-sm text-on-surface-variant font-normal">TIMESTAMP</th>
+<th class="p-2 font-label-caps text-status-sm text-on-surface-variant font-normal">INTENT</th>
+<th class="p-2 font-label-caps text-status-sm text-on-surface-variant font-normal">STATUS</th>
+<th class="p-2 font-label-caps text-status-sm text-on-surface-variant font-normal">TX HASH</th>
+</tr>
+</thead>
+<tbody class="font-data-mono text-data-mono">
+<tr class="border-b border-outline-variant hover:bg-surface-container-high transition-colors">
+<td class="p-2 text-on-surface-variant">REQ-8092</td>
+<td class="p-2 text-on-surface-variant">14:02:11.004Z</td>
+<td class="p-2 text-on-surface truncate max-w-[200px]">Bridge 500 USDC to Arbitrum</td>
+<td class="p-2"><span class="px-2 py-0.5 bg-primary/10 text-primary text-status-sm rounded-xl border border-primary/30">EXECUTED</span></td>
+<td class="p-2 text-primary hover:underline cursor-pointer">0x9f8c...2b1a</td>
+</tr>
+<!-- Expanded Row -->
+<tr class="bg-surface-container-high border-b border-outline-variant">
+<td class="p-2 text-on-surface-variant border-l-2 border-primary">REQ-8093</td>
+<td class="p-2 text-on-surface-variant">14:15:42.120Z</td>
+<td class="p-2 text-on-surface">Swap 1 ETH for USDC</td>
+<td class="p-2"><span class="px-2 py-0.5 bg-primary/10 text-primary text-status-sm rounded-xl border border-primary/30">PROCESSING</span></td>
+<td class="p-2 text-on-surface-variant">--</td>
+</tr>
+<tr class="bg-surface-container border-b border-outline-variant">
+<td class="p-0" colspan="5">
+<div class="p-4 pl-8 border-l-2 border-primary bg-surface-container-lowest flex flex-col md:flex-row gap-4">
+<div class="flex-1 bg-surface-container rounded-xl border border-outline-variant p-3 relative">
+<div class="font-status-sm text-status-sm text-primary mb-2 flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px]">policy</span> AGENT B: SECURITY REVIEW
+                                        </div>
+<pre class="font-data-mono text-status-sm text-on-surface-variant whitespace-pre-wrap overflow-x-auto"><code>{
+  "scan_id": "sec_scan_99x2",
+  "target": "0x68b3...5Fc45",
+  "status": "SCANNING",
+  "findings": [
+    {
+      "level": "INFO",
+      "rule": "Slippage Check",
+      "detail": "Req 0.5%, Market 0.2%"
+    }
+  ]
+}</code></pre>
+</div>
+<div class="flex-1 bg-surface-container rounded-xl border border-outline-variant p-3 relative">
+<div class="font-status-sm text-status-sm text-primary mb-2 flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px]">query_stats</span> AGENT C: RISK ANALYSIS
+                                        </div>
+<pre class="font-data-mono text-status-sm text-on-surface-variant whitespace-pre-wrap overflow-x-auto"><code>{
+  "risk_id": "risk_eval_88a1",
+  "status": "EVALUATING",
+  "threat_level": "ELEVATED",
+  "findings": [
+    {
+      "level": "WARNING",
+      "rule": "High Value TX",
+      "detail": "Exceeds auto-exec (1.0 ETH)"
+    }
+  ]
+}</code></pre>
+</div>
+</div>
+</td>
+</tr>
+<tr class="border-b border-outline-variant hover:bg-surface-container-high transition-colors">
+<td class="p-2 text-on-surface-variant">REQ-8091</td>
+<td class="p-2 text-on-surface-variant">13:45:00.992Z</td>
+<td class="p-2 text-on-surface truncate max-w-[200px]">Stake 1000 LINK in Aave</td>
+<td class="p-2"><span class="px-2 py-0.5 bg-error/10 text-error text-status-sm rounded-xl border border-error/30">REJECTED</span></td>
+<td class="p-2 text-on-surface-variant">--</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</main>
+</div>
+</body></html>

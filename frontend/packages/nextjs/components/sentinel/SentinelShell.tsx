@@ -1,23 +1,12 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { ChartBarSquareIcon, CommandLineIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
+import { SmartAccountStatusBar } from "~~/components/sentinel/SmartAccountStatusBar";
 
 type SentinelShellProps = {
   active: "execute" | "audit";
   children: ReactNode;
 };
-
-const statusItems = [
-  ["NETWORK", "SEP_NET_LIVE"],
-  ["SMART ACCOUNT", "0x3350...4074"],
-  ["BALANCE", "0.0000 ETH"],
-  ["DAILY LIMIT", "0.1000 ETH"],
-  ["SPENT", "0.0000 ETH"],
-  ["AGENT", "0x6F8a...A119"],
-] as const;
-
-const primaryStatusItems = statusItems.slice(0, 4);
-const secondaryStatusItems = statusItems.slice(4);
 
 const navItems = [
   {
@@ -37,34 +26,12 @@ const navItems = [
 export const SentinelShell = ({ active, children }: SentinelShellProps) => {
   return (
     <div className="min-h-screen bg-[#0c0e12] text-[#e2e2e8]">
-      <header className="flex h-12 items-center justify-between border-b border-white/10 bg-[#0c0e12] px-4">
-        <div className="flex min-w-0 items-center gap-4">
-          <Link className="flex items-center gap-2 text-[#88d6b6]" href="/">
-            <ShieldCheckIcon className="h-5 w-5" />
-            <span className="text-lg font-bold">SENTINEL.AI</span>
-          </Link>
-          <div className="hidden min-w-0 items-center gap-4 border-l border-white/10 pl-4 lg:flex">
-            {primaryStatusItems.map(([label, value]) => (
-              <div className="flex items-center gap-2" key={label}>
-                <span className="font-mono text-[10px] text-[#89938d]">{label}</span>
-                <span className="font-mono text-xs text-[#e2e2e8]">{value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="hidden items-center gap-3 xl:flex">
-          {secondaryStatusItems.map(([label, value]) => (
-            <div className="flex items-center gap-2 opacity-65" key={label}>
-              <span className="font-mono text-[10px] text-[#68726d]">{label}</span>
-              <span className="font-mono text-xs text-[#89938d]">{value}</span>
-            </div>
-          ))}
-          <div className="flex items-center gap-2 rounded-md border border-[#88d6b6]/30 bg-[#88d6b6]/10 px-2 py-1 font-mono text-xs text-[#a4f3d1]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#88d6b6]" />
-            PROTECTED
-          </div>
-        </div>
+      <header className="flex h-12 items-center gap-4 border-b border-white/10 bg-[#0c0e12] px-4">
+        <Link className="flex shrink-0 items-center gap-2 text-[#88d6b6]" href="/">
+          <ShieldCheckIcon className="h-5 w-5" />
+          <span className="text-lg font-bold">SENTINEL.AI</span>
+        </Link>
+        <SmartAccountStatusBar />
       </header>
 
       <div className="flex min-h-[calc(100vh-48px)]">
