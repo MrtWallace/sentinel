@@ -5,6 +5,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 import os, json, re, time
 from datetime import datetime
+from models import TxProposal
 
 
 load_dotenv()
@@ -56,6 +57,57 @@ def _log(user_input, latency, usage):
     }
     with open("logs/cost_log.jsonl", "a") as f:
         f.write(json.dumps(entry) + "\n")
+
+def parse_tx_proposal(user_input: str, retries: int = 1) -> TxProposal:
+    raw_intent = parse_intent(user_input, retries)
+    return proposal_from_dict(raw_intent)
+
+def proposal_from_dict(data: dict) -> TxProposal:
+    action = data.get("action", "unknown")
+    
+    if action == "swap":
+        amount = data.get("amount") or data.get("from_amount")
+        from_token = data.get("from_token")
+        to_token = data.get("to_token")
+        if from_token and to_token and amount:
+            return TxProposal(
+                action="swap",
+                amount=str(amount),
+                from_token=str(from_token).upper(),
+                to_token=str(to_token).upper(),
+                to_contract=data.get("to_contract"),
+                slippage=data.get("slippage"),
+                expected_output=data.get("expected_output"),
+                deadline=data.get("deadline"),
+                reasoning=data.get("reasoning"),
+            )
+        return TxProposal(
+            action="unknown",
+            amount="0",
+            reasoning="Missing fields for swap",
+        )
+    elif action == "transfer":
+        recipient = data.get("recipient") or data.get("to")
+        amount = data.get("amount") or data.get("amount_eth")
+        if recipient and amount:
+            return TxProposal(
+                action="transfer",
+                amount=str(amount),
+                recipient=recipient,
+                reasoning=data.get("reasoning"),
+            )
+
+        return TxProposal(
+            action="unknown",
+            amount="0",
+            reasoning="Missing fields for transfer",
+        )
+
+    return TxProposal(
+        action="unknown",
+        amount="0",
+        reasoning="Unknown action",
+    )
 
 if __name__ == "__main__":
     result = parse_intent("Send 0.001 ETH to 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")
