@@ -1,7 +1,7 @@
 # Sentinel Hackathon — 后端 & 合约进度
 
 > 目的：只记录短期状态，包括 checkpoint 进度表、当前阻塞、最近完成项。
-> 最后更新：2026-06-01 06:48
+> 最后更新：2026-06-02 00:13
 > 稳定方向和 checkpoint 定义见 `hackathon/docs/backend-plan.md`。
 
 ## 更新约定
@@ -18,18 +18,36 @@
 | CP1 | 数据模型 + Agent A parser/validator | 3-4h | 2026-05-31（未记录分钟） | 2026-05-31（未记录分钟） | Done | 6 个 intent 单元测试通过 |
 | CP2 | RiskPipeline 骨架 + AmountRule | 2-3h | 2026-06-01（未记录分钟） | 2026-06-01 05:12 | Done | 19 个 agent 单元测试通过，包含 stop-on-reject 测试 |
 | CP3 | 剩余硬规则：Slippage / Whitelist / Approval / Frequency | 4-6h | 2026-06-01 05:12 | 2026-06-01 06:48 | Done | 37 个 risk/pipeline 单元测试通过 |
-| CP4 | DecisionEngine + Agent B/C mock | 4-6h | 待开始 | 待开始 | Todo | 先 mock，再接真实 DeepSeek |
-| CP5 | AuditLogger + FastAPI mock API | 5-8h | 待开始 | 待开始 | Todo | 前端联调关键节点 |
-| CP6 | DeepSeek Agent B/C + simulator / dry-run / real-tx 开关 | 5-8h | 待开始 | 待开始 | Todo | LLM 输出必须 parse + validate |
+| CP4 | DecisionEngine + Agent B/C mock + suggestions | 4-6h | 2026-06-02 00:13 | 待完成 | In Progress | 第一步：Suggestion 模型 + suggestions 字段 |
+| CP5 | AuditLogger + FastAPI mock API + attempts[] | 5-8h | 待开始 | 待开始 | Todo | 前端联调关键节点，支撑 agent retry 展示 |
+| CP6 | CAW Execution Backend + Simulator | 5-8h | 待开始 | 待开始 | Todo | CAW 为 Cobo demo 主执行路径，local executor 保留 fallback |
 | CP7 | 合约事件 + Foundry 测试 | 2-4h | 待开始 | 待开始 | Todo | 最小改动，不改 `execute` 核心逻辑 |
 | CP8 | E2E Demo：safe / reject / confirm / transfer | 3-5h | 待开始 | 待开始 | Todo | 后端 demo 验收 |
 
 ## 当前阻塞
 
 - 无明确外部阻塞。
-- 下一步：进入 CP4，先实现 `DecisionEngine` + Agent B/C mock。
+- 当前进行：CP4，第一步补 `Suggestion` 数据模型，不写 `DecisionEngine`。
+- Cobo 赛道新增工作量约 8-14h：agent retry、attempts audit、CAW executor、CAW 展示和 policy denied demo。
+- 前端需要后续同步：DecisionChain 支持 attempts；状态栏从 SmartAccount 主视角调整为 CAW wallet / pact 主视角；Audit 展示 CAW request id、policy result、tx hash。
 
 ## 最近完成项
+
+### 2026-06-02 后端计划更新：Agent 化 + CAW 主执行路径
+
+- 已将 Cobo 赛道主线并入 `backend-plan.md`：
+  - 选择 `04｜Autonomous Trading`。
+  - CAW 作为 Cobo demo 主执行路径。
+  - `SmartAccount.sol` 保留为 baseline / fallback / 技术展示。
+  - Pact 在 demo 前预先审批，运行时在 active pact 范围内执行。
+- 已将 agent 化并入后续 checkpoint：
+  - CP4：DecisionEngine + Agent B/C mock + suggestions。
+  - CP5：AuditLogger + FastAPI mock API + attempts[]。
+  - CP6：CAW Execution Backend + Simulator。
+- 当前判断：
+  - 最小可演示版新增约 6-8h。
+  - 完整 Cobo demo 新增约 12-18h。
+  - 为控制风险，先保证 CAW `transfer_tokens` + policy denied demo，`contract_call` swap 作为 stretch goal。
 
 ### 2026-06-01 后端编码 Checkpoint 3（完成）
 
@@ -114,6 +132,6 @@ PYTHONPATH=agent python3 -m unittest agent/test_intent.py
 
 ## 当前整体判断
 
-- 后端/合约 MVP 约完成 35%-40%。
+- 后端/合约 MVP 约完成 30%-35%，因为 Cobo 赛道主路径和 agent retry 增加了新范围。
 - 当前速度：CP3 在教练模式下完成，核心硬规则已有单测保护。
-- 剩余后端/合约预计有效工时：约 16-24h；若 LLM / FastAPI / web3 联调卡住，可能到 28h+。
+- 剩余后端/合约预计有效工时：约 24-34h；若 CAW 环境、Pact 审批、web3 / FastAPI 联调卡住，可能到 36h+。
