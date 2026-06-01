@@ -1,6 +1,6 @@
 # Sentinel 前端进度记录
 
-> 最后更新：2026-06-01 05:37
+> 最后更新：2026-06-01 18:52
 
 ## 进度记录约定
 
@@ -20,7 +20,7 @@
 | CP0.5 | Stitch 风格 UI skeleton | 2-4h | 2026-05-31（规则建立前未记录分钟） | 2026-06-01（规则建立前未记录分钟） | Done | 已合并到本地 `main`，提交 `59f6ef0 feat(frontend): add sentinel UI skeleton` |
 | CP1 | 类型、mock 数据、API 封装 | 1-2h | 2026-06-01（规则建立前未记录分钟） | 2026-06-01（规则建立前未记录分钟） | Done | 数据层位于 `frontend/packages/nextjs/lib/sentinel/`；体验验收后移到 CP3 |
 | CP2 | 真实链上状态栏接入 | 1-2h | 2026-06-01（规则建立前未记录分钟） | 2026-06-01（规则建立前未记录分钟） | Code Done / QA Pending | 类型检查和 lint 通过；用户浏览器已能加载页面，仍需补一次状态栏视觉确认 |
-| CP3 | 首页执行控制台接入 mock API | 2-4h | 待开始 | 待开始 | Todo | 让成功、拦截、确认路径可以在浏览器里点击验证 |
+| CP3 | 首页执行控制台接入 mock API | 2-4h | 2026-06-01 16:44 | 2026-06-01 16:56 | Code Done / Auto Screenshot Passed / User QA Pending | `executeIntent` 已接入；成功、拦截、确认状态可点击触发；WSL Playwright 截图可用，Codex in-app browser 仍受本地 sandbox 影响 |
 | CP4 | `confirm_needed` 与错误态 | 2-3h | 待开始 | 待开始 | Todo | Approve / Reject 和异常提示 |
 | CP5 | Audit 页接入 mock API | 2-3h | 待开始 | 待开始 | Todo | 点击行展开完整 decision chain |
 | CP6 | 前端理解层 | 2-4h | 待开始 | 待开始 | Todo | `frontend-implementation-guide.md` + `/frontend-map` |
@@ -30,7 +30,7 @@
 
 - 前端 MVP 约完成 35%-45%，视觉骨架和数据 contract 已完成，真实链上状态栏代码已接入。
 - 本地 dev server 之前出现过监听后 `curl` timeout，但用户侧浏览器现已能加载页面。
-- 下一步可以进入 CP3，但开始时需要先更新本文件的 CP3 开始时间和状态。
+- CP3 代码层已完成。当前需要用户在浏览器中手动点击三个 preset，确认 decision chain 是否按预期切换。
 
 ## 当前进度详情
 
@@ -89,7 +89,7 @@ yarn workspace @se-2/nextjs lint
 当前测试结果：
 
 ```text
-check-types: passed
+check-types: passed, exit 0
 lint: passed, no ESLint warnings or errors
 ```
 
@@ -98,3 +98,45 @@ lint: passed, no ESLint warnings or errors
 - 后台 dev server 已启动并监听 `0.0.0.0:3000`。
 - CLI 侧 `curl http://127.0.0.1:3000` 曾持续 timeout，但用户侧浏览器已经加载成功。
 - CP2 代码层验证已完成；视觉验收可在浏览器页面中补看顶部状态栏。
+
+### 2026-06-01 前端 Checkpoint 3：首页执行控制台接入 mock API
+
+- 已新增 `frontend/packages/nextjs/components/sentinel/DecisionChain.tsx`：
+  - 接收 `ExecuteResponse` 并动态展示 Agent A proposal、Hard Rules、Agent B、Agent C、Final Decision、Transaction / Audit Result。
+  - 运行中展示 loading skeleton。
+  - API 返回后按步骤 stagger reveal，模拟“逐步检查”的演示效果。
+  - 有 tx hash 时展示 Sepolia Etherscan 和 Blockscout 链接。
+  - `confirm_needed` 状态只展示确认原因和占位按钮；真实 Approve / Reject 交互留到 CP4。
+- 已更新 `frontend/packages/nextjs/app/page.tsx`：
+  - 首页改为 client component。
+  - textarea 改为受控输入。
+  - 三个 preset 点击后直接调用 `executeIntent` mock。
+  - Run 按钮调用当前输入内容。
+  - Recent Decisions 会把最新执行结果插到顶部。
+  - 基础异常 catch 显示 `Connection failed. Try again.`。
+
+验证命令：
+
+```bash
+yarn workspace @se-2/nextjs check-types
+yarn workspace @se-2/nextjs lint
+```
+
+当前测试结果：
+
+```text
+check-types: passed
+lint: passed, no ESLint warnings or errors
+```
+
+当前验收状态：
+
+- Codex in-app browser 插件连接失败，错误来自本地 Windows sandbox，不是项目代码错误。
+- `curl.exe -I http://localhost:3000` 已返回 `200 OK`；此前 `500` 根因是 `frontend/packages/nextjs/lib/sentinel/` 数据层文件缺失，已恢复。
+- WSL 侧 Playwright 截图链路已恢复：
+  - 命令：`npx playwright screenshot --wait-for-timeout=5000 http://127.0.0.1:3000 /home/admini/sentinel/output/playwright/sentinel-cp3-autocheck.png`
+  - 结果：截图生成成功，可作为后续视觉验收路径。
+- CP3 仍建议用户在浏览器中手动检查三个 preset：
+  - `Safe swap` -> `EXECUTED`
+  - `Blocked swap` -> `REJECTED`
+  - `Manual review` -> `CONFIRM NEEDED`
