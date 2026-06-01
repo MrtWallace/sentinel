@@ -1,7 +1,7 @@
 # Sentinel Hackathon — 后端 & 合约进度
 
 > 目的：只记录短期状态，包括 checkpoint 进度表、当前阻塞、最近完成项。
-> 最后更新：2026-06-02 00:13
+> 最后更新：2026-06-02 07:54
 > 稳定方向和 checkpoint 定义见 `hackathon/docs/backend-plan.md`。
 
 ## 更新约定
@@ -18,7 +18,7 @@
 | CP1 | 数据模型 + Agent A parser/validator | 3-4h | 2026-05-31（未记录分钟） | 2026-05-31（未记录分钟） | Done | 6 个 intent 单元测试通过 |
 | CP2 | RiskPipeline 骨架 + AmountRule | 2-3h | 2026-06-01（未记录分钟） | 2026-06-01 05:12 | Done | 19 个 agent 单元测试通过，包含 stop-on-reject 测试 |
 | CP3 | 剩余硬规则：Slippage / Whitelist / Approval / Frequency | 4-6h | 2026-06-01 05:12 | 2026-06-01 06:48 | Done | 37 个 risk/pipeline 单元测试通过 |
-| CP4 | DecisionEngine + Agent B/C mock + suggestions | 4-6h | 2026-06-02 00:13 | 待完成 | In Progress | 第一步：Suggestion 模型 + suggestions 字段 |
+| CP4 | DecisionEngine + Agent B/C mock + suggestions | 4-6h | 2026-06-02 00:13 | 待完成 | In Progress | 暂停休息；睡醒继续 mock Agent B/C |
 | CP5 | AuditLogger + FastAPI mock API + attempts[] | 5-8h | 待开始 | 待开始 | Todo | 前端联调关键节点，支撑 agent retry 展示 |
 | CP6 | CAW Execution Backend + Simulator | 5-8h | 待开始 | 待开始 | Todo | CAW 为 Cobo demo 主执行路径，local executor 保留 fallback |
 | CP7 | 合约事件 + Foundry 测试 | 2-4h | 待开始 | 待开始 | Todo | 最小改动，不改 `execute` 核心逻辑 |
@@ -27,11 +27,34 @@
 ## 当前阻塞
 
 - 无明确外部阻塞。
-- 当前进行：CP4，第一步补 `Suggestion` 数据模型，不写 `DecisionEngine`。
+- 当前进行：CP4，`Suggestion` 模型与 `DecisionEngine` skeleton 已完成并提交；睡醒后继续补 `agent/reviewers.py` 和 `agent/test_reviewers.py`。
 - Cobo 赛道新增工作量约 8-14h：agent retry、attempts audit、CAW executor、CAW 展示和 policy denied demo。
 - 前端需要后续同步：DecisionChain 支持 attempts；状态栏从 SmartAccount 主视角调整为 CAW wallet / pact 主视角；Audit 展示 CAW request id、policy result、tx hash。
 
 ## 最近完成项
+
+### 2026-06-02 CP4 中途收尾
+
+- 已完成并提交：
+  - `Suggestion` 数据模型。
+  - `AgentResult.suggestions` 与 `DecisionResult.suggestions`。
+  - `DecisionEngine` skeleton。
+  - `agent/test_decision.py` 组合测试。
+- 当前验证：
+
+```bash
+PYTHONPATH=agent python3 -m unittest agent/test_decision.py agent/test_intent.py agent/test_risk_rules.py agent/test_pipeline.py
+```
+
+```text
+Ran 49 tests
+OK
+```
+
+- 睡醒后下一步：
+  - 新增 `agent/reviewers.py`。
+  - 新增 `agent/test_reviewers.py`。
+  - mock `MockSecurityAuditor` / `MockRiskAnalyst`，先支持 `safe` 和 `high_risk` 两种模式。
 
 ### 2026-06-02 后端计划更新：Agent 化 + CAW 主执行路径
 
