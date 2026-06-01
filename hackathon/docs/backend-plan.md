@@ -253,6 +253,44 @@ PYTHONPATH=agent python3 -m unittest agent/test_intent.py
 - 边界 swap：返回 `confirm_needed`，前端按钮调用 `/api/confirm` 更新审计状态。
 - 普通 transfer：通过基础安全链路，证明普通转账未缺失。
 
+### Phase 9：Agent 特性改造（区分 Workflow vs Agent）
+
+> **目标**：让 Sentinel 从 "带 LLM 的 pipeline" 升级为真正的 agent 架构。
+> 预估 3-4h，紧接 Phase 4 一起做（DecisionEngine 完成后顺手加重试循环）。
+
+#### 9a. Agent B/C 输出建议（不只是 pass/reject）
+
+- Agent B (Security Auditor) 和 Agent C (Risk Analyst) 的 prompt 增加：
+  - 如果审查结果为拒绝或高风险，**必须输出可执行的修改建议** (`suggestions`)。
+  - 建议结构化：`{"field": "slippage", "suggested_value": 3, "reason": "..."}`。
+- `AgentResult` 数据模型增加 `suggestions: list[Suggestion]` 字段。
+- 学习切片：prompt engineering 中如何引导 LLM 输出 actionable feedback 而非泛泛而谈。
+
+#### 9b. Agent A 自动重试循环
+
+- 当 DecisionEngine 判定 `reject` 且 Agent B/C 有 `suggestions` 时：
+  1. 将 suggestions 注入 Agent A 的下一轮 prompt。
+  2. Agent A 重新生成 `TxProposal`，调整被建议的参数。
+  3. 重新走 RiskPipeline + Agent B/C 审查。
+  4. 最多重试 **2 次**，防止无限循环。
+- 实现：在 DecisionEngine 外层包一个 `while` 循环 + feedback 注入。
+- 新增 `AgenticLoop` 类或函数，接收 max_retries 参数。
+- 每次重试的中间结果写入审计日志（保留完整决策链路，demo 时可展示重试过程）。
+
+#### 9c. Demo 场景：展示 agent 行为
+
+- **成功重试**："Swap 0.5 ETH to USDC" → Agent B 建议降 slippage → Agent A 重试 → confirm_needed。
+- **重试失败**："Swap 5 ETH to USDC" → Agent B 建议降 amount → 仍超限 → 最终 reject。
+- 前端 DecisionChain 组件需要能展示重试轮次（`attempt 1/3`）。
+- 这是面试/评委提问时的核心卖点：**"为什么不直接 reject？因为 agent 会自主调整参数重试。"**
+
+#### 验收标准
+
+- Agent B/C reject 时必有 suggestions 字段（测试验证）。
+- AgenticLoop 最多重试 2 次（测试验证）。
+- 重试中间结果在审计日志中可见。
+- Demo 能跑通 "成功重试" 和 "重试仍失败" 两条路径。
+
 ## 测试计划
 
 ### Python 单元测试
@@ -261,6 +299,8 @@ PYTHONPATH=agent python3 -m unittest agent/test_intent.py
 - 每条 RiskRule 的 pass/confirm/reject 边界。
 - DecisionEngine 组合测试。
 - AuditLogger 写入和按 `tx_id` 查询。
+- Agent B/C reject 时必须包含 suggestions 字段。
+- AgenticLoop 最多重试 2 次，重试中间结果可追溯。
 
 ### FastAPI 接口测试
 
@@ -281,6 +321,8 @@ PYTHONPATH=agent python3 -m unittest agent/test_intent.py
 - 边界金额 swap：返回 `confirm_needed`。
 - 普通 `transfer`：基础链路可用。
 - `ENABLE_REAL_TX` 未开启时不会真实发交易。
+- `Swap 0.5 ETH to USDC`：Agent B 建议降 slippage → Agent A 重试 → confirm_needed（agent 重试成功）。
+- `Swap 5 ETH to USDC`：重试后仍超限 → 最终 reject（agent 重试失败但展示了调整过程）。
 
 ## v1.1 / 后续问题
 
