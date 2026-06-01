@@ -1,11 +1,19 @@
 import { MOCK_AUDIT_LOG, MOCK_EXECUTE_RESPONSES, responseToAuditItem } from "~~/lib/sentinel/mockData";
-import type { AuditLogItem, ConfirmExecutionResponse, ExecuteResponse, IntentScenario } from "~~/lib/sentinel/types";
+import type {
+  ApiError,
+  AuditLogItem,
+  ConfirmExecutionResponse,
+  ExecuteResponse,
+  IntentScenario,
+} from "~~/lib/sentinel/types";
 
 const MOCK_LATENCY_MS = 350;
 
 // 这个函数是页面唯一需要依赖的执行入口；后端完成后只替换函数内部实现。
 export async function executeIntent(intent: string): Promise<ExecuteResponse> {
   await waitForMockLatency();
+
+  maybeThrowMockError(intent);
 
   const scenario = detectIntentScenario(intent);
   const response = cloneResponse(MOCK_EXECUTE_RESPONSES[scenario]);
@@ -34,7 +42,7 @@ export async function confirmExecution(txId: string, approved: boolean): Promise
       ...baseResponse.decisionChain,
       finalDecision: status,
       decisionReason: reason,
-      txHash: approved ? "0xsimulatedapproval000000000000000000000000000000000000000000000001" : null,
+      txHash: null,
       confirmation: {
         required: false,
         reason,
@@ -42,6 +50,36 @@ export async function confirmExecution(txId: string, approved: boolean): Promise
       },
     },
   };
+}
+
+function maybeThrowMockError(intent: string): void {
+  const normalizedIntent = intent.toLowerCase();
+
+  if (normalizedIntent.includes("network")) {
+    throwApiError({
+      kind: "network",
+      message: "Connection failed. Try again.",
+    });
+  }
+
+  if (normalizedIntent.includes("timeout")) {
+    throwApiError({
+      kind: "timeout",
+      message: "Request timed out.",
+    });
+  }
+
+  if (normalizedIntent.includes("revert") || normalizedIntent.includes("daily limit")) {
+    throwApiError({
+      kind: "execution_failed",
+      message: "Contract execution failed.",
+      parsedReason: "daily limit exceeded",
+    });
+  }
+}
+
+function throwApiError(error: ApiError): never {
+  throw error;
 }
 
 export async function getAuditLog(): Promise<AuditLogItem[]> {
@@ -79,8 +117,9 @@ export async function getAuditLogItem(txId: string): Promise<AuditLogItem> {
 
 function detectIntentScenario(intent: string): IntentScenario {
   const normalizedIntent = intent.toLowerCase();
+  const swapEthAmount = getEthToUsdcSwapAmount(normalizedIntent);
 
-  if (normalizedIntent.includes("swap 1 eth") || normalizedIntent.includes("1 eth to usdc")) {
+  if (swapEthAmount !== null && swapEthAmount >= 1) {
     return "blocked_swap";
   }
 
@@ -89,6 +128,18 @@ function detectIntentScenario(intent: string): IntentScenario {
   }
 
   return "safe_swap";
+}
+
+function getEthToUsdcSwapAmount(normalizedIntent: string): number | null {
+  const match = normalizedIntent.match(/\bswap\s+([0-9]+(?:\.[0-9]+)?)\s+eth\s+to\s+usdc\b/);
+
+  if (!match?.[1]) {
+    return null;
+  }
+
+  const amount = Number(match[1]);
+
+  return Number.isFinite(amount) ? amount : null;
 }
 
 function waitForMockLatency(): Promise<void> {

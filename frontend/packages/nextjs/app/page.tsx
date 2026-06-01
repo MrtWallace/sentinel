@@ -12,8 +12,8 @@ import {
 import { DecisionChain } from "~~/components/sentinel/DecisionChain";
 import { SentinelShell } from "~~/components/sentinel/SentinelShell";
 import { StatusBadge } from "~~/components/sentinel/StatusBadge";
-import { executeIntent } from "~~/lib/sentinel/api";
-import type { ExecuteResponse, ExecutionStatus } from "~~/lib/sentinel/types";
+import { confirmExecution, executeIntent } from "~~/lib/sentinel/api";
+import type { ApiError, ExecuteResponse, ExecutionStatus } from "~~/lib/sentinel/types";
 
 const presets = [
   {
@@ -65,17 +65,22 @@ type RecentDecision = {
   time: string;
 };
 
+type ConfirmationAction = "approve" | "reject";
+
 const Home: NextPage = () => {
   const [intent, setIntent] = useState("Send 0.08 ETH to 0x742d... after AI risk review");
   const [execution, setExecution] = useState<ExecuteResponse | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [decisionItems, setDecisionItems] = useState<RecentDecision[]>([...recentDecisions]);
+  const [pendingConfirmationAction, setPendingConfirmationAction] = useState<ConfirmationAction | null>(null);
+
+  const isBusy = isExecuting || pendingConfirmationAction !== null;
 
   const runIntent = async (nextIntent = intent) => {
     const trimmedIntent = nextIntent.trim();
 
-    if (!trimmedIntent || isExecuting) {
+    if (!trimmedIntent || isBusy) {
       return;
     }
 
@@ -88,10 +93,33 @@ const Home: NextPage = () => {
 
       setExecution(result);
       setDecisionItems(currentItems => [responseToRecentDecision(result), ...currentItems].slice(0, 5));
-    } catch {
-      setErrorMessage("Connection failed. Try again.");
+    } catch (error) {
+      setExecution(null);
+      setErrorMessage(toExecutionErrorMessage(error));
     } finally {
       setIsExecuting(false);
+    }
+  };
+
+  const handleConfirm = async (approved: boolean) => {
+    if (!execution || execution.status !== "confirm_needed" || pendingConfirmationAction) {
+      return;
+    }
+
+    const action = approved ? "approve" : "reject";
+
+    setPendingConfirmationAction(action);
+    setErrorMessage(null);
+
+    try {
+      const result = await confirmExecution(execution.txId, approved);
+
+      setExecution(result);
+      setDecisionItems(currentItems => [responseToRecentDecision(result), ...currentItems].slice(0, 5));
+    } catch (error) {
+      setErrorMessage(toExecutionErrorMessage(error));
+    } finally {
+      setPendingConfirmationAction(null);
     }
   };
 
@@ -127,7 +155,7 @@ const Home: NextPage = () => {
                       ? "border-[#88d6b6]/70 bg-[#88d6b6]/10"
                       : "border-white/10 bg-[#1a1c20] hover:border-[#88d6b6]/50 hover:bg-[#1e2024]"
                   }`}
-                  disabled={isExecuting}
+                  disabled={isBusy}
                   key={preset.intent}
                   onClick={() => runIntent(preset.intent)}
                   type="button"
@@ -153,7 +181,7 @@ const Home: NextPage = () => {
 
             <button
               className="flex h-11 items-center justify-center gap-2 rounded-lg border border-[#88d6b6] bg-[#88d6b6] px-4 text-sm font-semibold text-[#003828] transition hover:bg-[#a4f3d1]"
-              disabled={isExecuting || !intent.trim()}
+              disabled={isBusy || !intent.trim()}
               onClick={() => runIntent()}
               type="button"
             >
@@ -170,7 +198,13 @@ const Home: NextPage = () => {
         </section>
 
         <section className="h-[calc(100vh-80px)] min-h-[560px] overflow-hidden rounded-lg border border-white/10 bg-[#111318]">
-          <DecisionChain isLoading={isExecuting} response={execution} />
+          <DecisionChain
+            actionError={execution?.status === "confirm_needed" ? errorMessage : null}
+            isLoading={isExecuting}
+            onConfirm={handleConfirm}
+            pendingConfirmationAction={pendingConfirmationAction}
+            response={execution}
+          />
         </section>
 
         <aside className="flex min-h-[560px] flex-col rounded-lg border border-white/10 bg-[#111318] lg:col-span-2 xl:col-span-1">
@@ -264,4 +298,30 @@ function infoPanelBody(response: ExecuteResponse | null): string {
   }
 
   return response.reason;
+}
+
+function toExecutionErrorMessage(error: unknown): string {
+  if (!isApiError(error)) {
+    return "Connection failed. Try again.";
+  }
+
+  if (error.kind === "timeout") {
+    return "Request timed out.";
+  }
+
+  if (error.kind === "execution_failed") {
+    return error.parsedReason ?? error.message;
+  }
+
+  return "Connection failed. Try again.";
+}
+
+function isApiError(error: unknown): error is ApiError {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const maybeError = error as Partial<ApiError>;
+
+  return maybeError.kind === "network" || maybeError.kind === "timeout" || maybeError.kind === "execution_failed";
 }

@@ -1,6 +1,6 @@
 # Sentinel 前端进度记录
 
-> 最后更新：2026-06-01 18:52
+> 最后更新：2026-06-02 05:10
 
 ## 进度记录约定
 
@@ -21,7 +21,7 @@
 | CP1 | 类型、mock 数据、API 封装 | 1-2h | 2026-06-01（规则建立前未记录分钟） | 2026-06-01（规则建立前未记录分钟） | Done | 数据层位于 `frontend/packages/nextjs/lib/sentinel/`；体验验收后移到 CP3 |
 | CP2 | 真实链上状态栏接入 | 1-2h | 2026-06-01（规则建立前未记录分钟） | 2026-06-01（规则建立前未记录分钟） | Code Done / QA Pending | 类型检查和 lint 通过；用户浏览器已能加载页面，仍需补一次状态栏视觉确认 |
 | CP3 | 首页执行控制台接入 mock API | 2-4h | 2026-06-01 16:44 | 2026-06-01 16:56 | Code Done / Auto Screenshot Passed / User QA Pending | `executeIntent` 已接入；成功、拦截、确认状态可点击触发；WSL Playwright 截图可用，Codex in-app browser 仍受本地 sandbox 影响 |
-| CP4 | `confirm_needed` 与错误态 | 2-3h | 待开始 | 待开始 | Todo | Approve / Reject 和异常提示 |
+| CP4 | `confirm_needed` 与错误态 | 2-3h | 2026-06-02 04:44 | 2026-06-02 04:58 | Code Done / User QA Pending | Approve / Reject mock 确认流已接入；网络、超时、执行失败错误文案已分类处理；已修复 safe swap 被误判为 blocked 的 QA bug |
 | CP5 | Audit 页接入 mock API | 2-3h | 待开始 | 待开始 | Todo | 点击行展开完整 decision chain |
 | CP6 | 前端理解层 | 2-4h | 待开始 | 待开始 | Todo | `frontend-implementation-guide.md` + `/frontend-map` |
 | CP7 | 验证与小修 | 1-3h | 待开始 | 待开始 | Todo | 类型检查、lint、关键路径手动验收 |
@@ -31,6 +31,7 @@
 - 前端 MVP 约完成 35%-45%，视觉骨架和数据 contract 已完成，真实链上状态栏代码已接入。
 - 本地 dev server 之前出现过监听后 `curl` timeout，但用户侧浏览器现已能加载页面。
 - CP3 代码层已完成。当前需要用户在浏览器中手动点击三个 preset，确认 decision chain 是否按预期切换。
+- CP4 代码层已完成。当前需要用户在浏览器中手动检查 Manual review 的 Approve / Reject 两条路径，以及输入 `timeout`、`network`、`daily limit` 关键词时的错误文案。
 
 ## 当前进度详情
 
@@ -140,3 +141,59 @@ lint: passed, no ESLint warnings or errors
   - `Safe swap` -> `EXECUTED`
   - `Blocked swap` -> `REJECTED`
   - `Manual review` -> `CONFIRM NEEDED`
+
+### 2026-06-02 前端 Checkpoint 4：`confirm_needed` 与错误态
+
+- 已更新 `frontend/packages/nextjs/app/page.tsx`：
+  - 接入 `confirmExecution(txId, approved)`。
+  - `Manual review` 进入 `CONFIRM NEEDED` 后，Approve / Reject 会更新主 decision chain 和 Recent Decisions。
+  - 执行错误按 `network`、`timeout`、`execution_failed` 分类展示：
+    - `network` -> `Connection failed. Try again.`
+    - `timeout` -> `Request timed out.`
+    - `execution_failed` -> 展示 parsed reason，例如 `daily limit exceeded`
+- 已更新 `frontend/packages/nextjs/components/sentinel/DecisionChain.tsx`：
+  - Confirm action bar 的 Approve / Reject 从 disabled 占位按钮改为可点击按钮。
+  - 按钮 pending 时显示 `Approving` / `Rejecting`。
+  - Approve 后展示 audit-only 结果，不伪造真实链上 tx hash。
+- 已更新 `frontend/packages/nextjs/lib/sentinel/api.ts`：
+  - `executeIntent` mock 增加错误触发分支：输入包含 `network`、`timeout`、`daily limit` / `revert`。
+  - `confirmExecution` mock 只记录确认状态，不暗示真实链上执行。
+
+验证命令：
+
+```bash
+yarn workspace @se-2/nextjs check-types
+yarn workspace @se-2/nextjs lint
+curl.exe --max-time 60 -I http://localhost:3000
+npx playwright screenshot --wait-for-timeout=3000 http://127.0.0.1:3000 /home/admini/sentinel/output/playwright/sentinel-cp4-page.png
+```
+
+当前测试结果：
+
+```text
+check-types: passed, exit 0
+lint: passed, no ESLint warnings or errors
+curl: HTTP/1.1 200 OK
+playwright screenshot: passed, screenshot generated
+```
+
+当前验收状态：
+
+- 自动点击验收未完成：临时 Playwright test 受缺少 `@playwright/test` 影响，Codex wrapper 受 WSL 内缺少系统 Chrome 影响。
+- 页面截图已生成：`/home/admini/sentinel/output/playwright/sentinel-cp4-page.png`。
+- 需要用户手动检查：
+  - `Manual review` -> `CONFIRM NEEDED` -> `Approve` -> `EXECUTED` / audit-only confirmation result。
+  - `Manual review` -> `CONFIRM NEEDED` -> `Reject` -> `REJECTED` / operator rejected reason。
+  - 在 textarea 输入包含 `timeout`、`network`、`daily limit` 的 intent，分别检查错误文案。
+
+QA 修复：
+
+- 时间：2026-06-02 05:10。
+- 问题：点击 `Safe swap` 后中间 decision chain 显示 `REJECTED`。
+- 根因：旧 mock 分类逻辑使用 `includes("1 eth to usdc")`，`Swap 0.01 ETH to USDC` 中的 `0.01 ETH to USDC` 也包含这个子串。
+- 修复：`executeIntent` 的 mock 分类改为先解析 `swap <amount> ETH to USDC` 的数值，再用 `amount >= 1` 判断 blocked swap。
+- 验证：
+  - `Swap 0.01 ETH to USDC` -> amount `0.01`，不触发 blocked。
+  - `Swap 1 ETH to USDC` -> amount `1`，触发 blocked。
+  - `check-types` passed。
+  - `lint` passed, no ESLint warnings or errors。

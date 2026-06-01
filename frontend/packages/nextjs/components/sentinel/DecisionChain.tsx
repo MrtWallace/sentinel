@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
+  ArrowPathIcon,
   CheckCircleIcon,
   ClockIcon,
   ExclamationTriangleIcon,
@@ -12,13 +13,24 @@ import { StatusBadge } from "~~/components/sentinel/StatusBadge";
 import type { AgentReview, ExecuteResponse, ExecutionStatus, RuleCheck, TxProposal } from "~~/lib/sentinel/types";
 
 type DecisionChainProps = {
+  actionError?: string | null;
   isLoading: boolean;
+  onConfirm?: (approved: boolean) => void;
+  pendingConfirmationAction?: ConfirmationAction | null;
   response: ExecuteResponse | null;
 };
 
+type ConfirmationAction = "approve" | "reject";
+
 const STEP_COUNT = 6;
 
-export const DecisionChain = ({ isLoading, response }: DecisionChainProps) => {
+export const DecisionChain = ({
+  actionError,
+  isLoading,
+  onConfirm,
+  pendingConfirmationAction,
+  response,
+}: DecisionChainProps) => {
   const [visibleSteps, setVisibleSteps] = useState(response ? STEP_COUNT : 0);
 
   useEffect(() => {
@@ -101,7 +113,12 @@ export const DecisionChain = ({ isLoading, response }: DecisionChainProps) => {
         )}
       </div>
 
-      <DecisionActionBar status={response.status} />
+      <DecisionActionBar
+        actionError={actionError}
+        onConfirm={onConfirm}
+        pendingConfirmationAction={pendingConfirmationAction}
+        response={response}
+      />
     </div>
   );
 };
@@ -123,7 +140,7 @@ const DecisionHeader = ({ response }: { response: ExecuteResponse }) => {
 
 const DecisionSummary = ({ response }: { response: ExecuteResponse }) => {
   const risk = getRiskLabel(response);
-  const nextAction = getNextAction(response.status);
+  const nextAction = getNextAction(response);
 
   return (
     <div className="border-b border-white/10 bg-[#0c0e12] px-4 py-2.5">
@@ -251,6 +268,19 @@ const AuditResult = ({ response }: { response: ExecuteResponse }) => {
     );
   }
 
+  if (response.status === "executed") {
+    return (
+      <div className="grid gap-2 md:grid-cols-2">
+        <DataPoint label="Simulation" value={simulationLabel(decisionChain.simulation)} />
+        <DataPoint label="TX Hash" value="Audit update only" />
+        <div className="rounded-lg border border-[#88d6b6]/25 bg-[#88d6b6]/10 p-3 text-sm leading-6 text-[#d8f8e8] md:col-span-2">
+          Operator approval was recorded by the mock confirmation API. No on-chain transaction hash is emitted in MVP
+          confirmation mode.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-lg border border-[#ffb4ab]/25 bg-[#ffb4ab]/10 p-3 text-sm text-[#ffdad6]">
       Execution skipped. The rejected decision and rule reason remain available in the audit log.
@@ -258,8 +288,22 @@ const AuditResult = ({ response }: { response: ExecuteResponse }) => {
   );
 };
 
-const DecisionActionBar = ({ status }: { status: ExecutionStatus }) => {
+const DecisionActionBar = ({
+  actionError,
+  onConfirm,
+  pendingConfirmationAction,
+  response,
+}: {
+  actionError?: string | null;
+  onConfirm?: (approved: boolean) => void;
+  pendingConfirmationAction?: ConfirmationAction | null;
+  response: ExecuteResponse;
+}) => {
+  const status = response.status;
+
   if (status === "confirm_needed") {
+    const isPending = Boolean(pendingConfirmationAction);
+
     return (
       <div className="border-t border-amber-300/20 bg-[#0c0e12]/95 px-4 py-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -269,21 +313,27 @@ const DecisionActionBar = ({ status }: { status: ExecutionStatus }) => {
               <span className="text-sm font-semibold text-amber-100">Operator confirmation required</span>
             </div>
             <p className="m-0 mt-1 text-xs leading-5 text-amber-100/75">
-              Confirmation action wiring is handled in Checkpoint 4.
+              Approve or reject records the operator decision in the mock audit state. It does not imply real on-chain
+              execution.
             </p>
+            {actionError && <p className="m-0 mt-2 text-xs leading-5 text-[#ffb4ab]">{actionError}</p>}
           </div>
           <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
             <button
-              className="h-10 rounded-lg border border-white/10 px-4 text-sm font-semibold text-[#89938d]"
-              disabled
+              className="flex h-10 items-center justify-center gap-2 rounded-lg border border-[#88d6b6]/35 bg-[#88d6b6]/10 px-4 text-sm font-semibold text-[#a4f3d1] transition hover:border-[#88d6b6] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-[#89938d]"
+              disabled={!onConfirm || isPending}
+              onClick={() => onConfirm?.(true)}
             >
-              Approve
+              {pendingConfirmationAction === "approve" && <ArrowPathIcon className="h-4 w-4 animate-spin" />}
+              {pendingConfirmationAction === "approve" ? "Approving" : "Approve"}
             </button>
             <button
-              className="h-10 rounded-lg border border-white/10 px-4 text-sm font-semibold text-[#89938d]"
-              disabled
+              className="flex h-10 items-center justify-center gap-2 rounded-lg border border-[#ffb4ab]/35 bg-[#ffb4ab]/10 px-4 text-sm font-semibold text-[#ffdad6] transition hover:border-[#ffb4ab] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-[#89938d]"
+              disabled={!onConfirm || isPending}
+              onClick={() => onConfirm?.(false)}
             >
-              Reject
+              {pendingConfirmationAction === "reject" && <ArrowPathIcon className="h-4 w-4 animate-spin" />}
+              {pendingConfirmationAction === "reject" ? "Rejecting" : "Reject"}
             </button>
           </div>
         </div>
@@ -295,7 +345,7 @@ const DecisionActionBar = ({ status }: { status: ExecutionStatus }) => {
     <div className="border-t border-white/10 bg-[#0c0e12]/95 px-4 py-3">
       <div className="flex items-center gap-2">
         <StatusBadge status={status} />
-        <span className="text-sm text-[#bec9c2]">{getActionBarText(status)}</span>
+        <span className="text-sm text-[#bec9c2]">{getActionBarText(response)}</span>
       </div>
     </div>
   );
@@ -456,6 +506,10 @@ function tokenPairFromProposal(proposal: TxProposal): string {
 
 function getRiskLabel(response: ExecuteResponse): string {
   if (response.status === "executed") {
+    if (!response.decisionChain.txHash) {
+      return "Medium";
+    }
+
     return "Low";
   }
 
@@ -466,28 +520,36 @@ function getRiskLabel(response: ExecuteResponse): string {
   return response.status === "failed" ? "Unknown" : "High";
 }
 
-function getNextAction(status: ExecutionStatus): string {
-  if (status === "executed") {
+function getNextAction(response: ExecuteResponse): string {
+  if (response.status === "executed") {
+    if (!response.decisionChain.txHash) {
+      return "Audit state updated";
+    }
+
     return "View transaction links";
   }
 
-  if (status === "confirm_needed") {
-    return "Checkpoint 4 confirmation";
+  if (response.status === "confirm_needed") {
+    return "Await operator decision";
   }
 
-  if (status === "failed") {
+  if (response.status === "failed") {
     return "Retry request";
   }
 
   return "Review audit reason";
 }
 
-function getActionBarText(status: ExecutionStatus): string {
-  if (status === "executed") {
+function getActionBarText(response: ExecuteResponse): string {
+  if (response.status === "executed") {
+    if (!response.decisionChain.txHash) {
+      return "Operator decision recorded in audit state.";
+    }
+
     return "Transaction and audit links are ready.";
   }
 
-  if (status === "failed") {
+  if (response.status === "failed") {
     return "The failed request can be retried after reviewing the error.";
   }
 
