@@ -164,7 +164,17 @@ Cobo 赛道核心要求：**Agent 在受控边界内参与经济活动**。
 
 **叙事角度**: Sentinel 让 AI Agent **安全地参与**链上经济活动。风控是手段，让 Agent 自主执行经济活动才是目的。
 
-## 10. 技术栈
+## 10. 评审维度对照
+
+| 维度 | 分值 | Sentinel 得分点 |
+|------|------|----------------|
+| **Innovation 创新性** | 10 | 多 Agent 风控 + CAW 双层防护 + Bounded AgenticLoop（LLM 想 + 代码验的 MutationGuard）。不是单 LLM 多 prompt，而是 Agent 审查 → 建议 → 自动修正 → 代码验证的完整闭环 |
+| **Technical Execution 技术实现** | 10 | 后端 49+ 单元测试（intent/risk/pipeline/decision）、合约 14 Foundry 测试、Sepolia 真实部署 + 验证、FastAPI 4 API、CAW 真实集成。核心功能全部可运行 |
+| **User Experience 用户体验** | 10 | NL 输入 → Agent 推理可视化 → 决策链路展示 → 审计日志。用户路径清晰：输入意图 → 看到 Agent 如何决策 → 理解为什么通过/拒绝 → 查看链上证据 |
+| **Ecosystem Impact 生态影响** | 10 | Sentinel 定义了"AI Agent 安全参与链上经济活动"的基础设施范式。后续可扩展：多链支持、更多 DeFi 协议、DAO 金库自动化、Agent 市场准入标准 |
+| **Demo Quality 演示质量** | 10 | 三个场景完整覆盖：✅ 正常执行（低风险 swap 自动完成）→ 🚫 风控拦截（超限额被拒 + Agent 给出修正建议）→ ⚠️ CAW 双层防护（Sentinel 通过但 CAW Pact 拒绝）|
+
+## 11. 技术栈
 
 - **AI**: DeepSeek API (多 Agent 同 LLM 不同 Prompt)
 - **后端**: Python + FastAPI + Pydantic
