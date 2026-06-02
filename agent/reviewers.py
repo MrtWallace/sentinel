@@ -18,6 +18,7 @@ class MockSecurityAuditor:
                         field="slippage",
                         suggested_value=0.01,
                         reason="Reduce slippage to lower execution risk.",
+                        rejection_code="slippage_too_high",
                     )
                 ],
             )
@@ -48,6 +49,7 @@ class MockRiskAnalyst:
                         field="amount",
                         suggested_value="0.01",
                         reason="Reduce amount to lower exposure.",
+                        rejection_code="amount_too_high",
                     )
                 ],
             )

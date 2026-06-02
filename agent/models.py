@@ -7,6 +7,7 @@ class Suggestion:
     field: str
     suggested_value: str | float | int
     reason: str
+    rejection_code: Optional[str] = None
 
 @dataclass
 class TxProposal:

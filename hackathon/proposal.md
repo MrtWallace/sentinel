@@ -48,7 +48,7 @@ Sentinel = **AI 风控层** + **Cobo Agentic Wallet (CAW)**，实现受控边界
 ```
 
 **Demo 展示三个场景：**
-1. ✅ **正常执行**: 低风险 swap，通过所有检查，CAW 自动执行
+1. ✅ **正常执行**: 低风险 transfer/swap，通过所有检查，至少一条 safe transfer 通过 CAW 真实执行
 2. 🚫 **被拦截**: 高滑点/超限额交易，被硬规则或 Agent 审查拒绝
 3. ⚠️ **人工确认**: 中风险交易，等待用户确认后执行
 
@@ -107,6 +107,7 @@ Sentinel = **AI 风控层** + **Cobo Agentic Wallet (CAW)**，实现受控边界
 - **Fallback / 技术展示**: SmartAccount.sol (ERC-4337) — Foundry 测试 + Sepolia 部署
 - Uniswap V3 exactInputSingle 作为 swap 执行
 - CAW Pact 在 demo 前预先提交并由 owner 审批
+- Cobo demo 至少展示一条真实 CAW `transfer_tokens` request/transaction id，mock/simulator 只作为开发 fallback
 
 ### 风控层
 - **硬规则** (代码，零 LLM 成本): 滑点/金额/白名单/频率
@@ -134,17 +135,17 @@ Sentinel = **AI 风控层** + **Cobo Agentic Wallet (CAW)**，实现受控边界
 | Agent A (Intent Parser) | ✅ 完成 | 结构化 JSON 输出 + 6 个 intent 测试 |
 | RiskPipeline 硬规则 | ✅ 完成 | 5 条规则 + 37 个单元测试 |
 | DecisionEngine | 🔨 进行中 | skeleton 完成，正在补 Agent B/C mock |
-| CAW 集成 | ⏳ 待开始 | CP6，预计 5-8h |
-| FastAPI 后端 | ⏳ 待开始 | CP5，4 个 API |
+| CAW 集成 | ⏳ 待开始 | CP6，预计 6-10h，真实 `transfer_tokens` 是 Cobo MVP gate |
+| FastAPI 后端 | ⏳ 待开始 | CP5，先做 minimal `/api/execute` + audit detail |
 | 前端 UI | 🔨 进行中 | 独立 worktree 开发中 |
 | E2E Demo | ⏳ 待开始 | CP8 |
 
-**测试覆盖**: 49 个单元测试通过 (intent + risk rules + pipeline + decision)
+**测试覆盖**: 53 个单元测试通过 (intent + risk rules + pipeline + decision + mock reviewers)
 
 ## 8. 验证方式
 
-- 测试网交易记录：≥5 笔正常 swap + ≥3 笔被风控拦截
-- CAW Pact 演示：展示 pact 预设 → 运行时执行 → policy denied 场景
+- 测试网交易记录：至少 1 笔 CAW 真实 safe transfer + 若时间允许补 swap tx
+- CAW Pact 演示：展示 pact 预设 → 真实 CAW transfer → policy denied 场景
 - Demo 视频：完整展示"正常执行"、"被拦截"、"人工确认"三个场景
 - Repo：README 说明架构、部署步骤、风控逻辑、CAW 集成
 - 审计日志：每笔交易的完整决策链路（intent → rules → agents → decision → execution）
@@ -157,7 +158,7 @@ Cobo 赛道核心要求：**Agent 在受控边界内参与经济活动**。
 |----------|---------------|
 | Agent 资金操作流程 | 完整链路：意图 → 解析 → 风控 → CAW 执行 → 审计 |
 | 权限边界 + 安全控制 | Sentinel 硬规则 + Agent 审查 + CAW Pact 资金约束 |
-| 链上或测试网证据 | Sepolia 部署 + CAW tx hash + Etherscan 验证 |
+| 链上或测试网证据 | Sepolia 部署 + CAW request/transaction id + 时间允许补 Etherscan 验证 |
 | 用户理解和复现 | 审计日志 + 前端决策链路展示 + README 部署文档 |
 
 **最对口方向**: 「自主交易 / 资金调度」+「安全控制」
@@ -169,10 +170,10 @@ Cobo 赛道核心要求：**Agent 在受控边界内参与经济活动**。
 | 维度 | 分值 | Sentinel 得分点 |
 |------|------|----------------|
 | **Innovation 创新性** | 10 | 多 Agent 风控 + CAW 双层防护 + Bounded AgenticLoop（LLM 想 + 代码验的 MutationGuard）。不是单 LLM 多 prompt，而是 Agent 审查 → 建议 → 自动修正 → 代码验证的完整闭环 |
-| **Technical Execution 技术实现** | 10 | 后端 49+ 单元测试（intent/risk/pipeline/decision）、合约 14 Foundry 测试、Sepolia 真实部署 + 验证、FastAPI 4 API、CAW 真实集成。核心功能全部可运行 |
+| **Technical Execution 技术实现** | 10 | 后端 53+ 单元测试（intent/risk/pipeline/decision/reviewers）、合约 14 Foundry 测试、Sepolia 真实部署 + 验证、Minimal FastAPI、CAW 真实 `transfer_tokens` 集成。核心 demo 功能全部可运行 |
 | **User Experience 用户体验** | 10 | NL 输入 → Agent 推理可视化 → 决策链路展示 → 审计日志。用户路径清晰：输入意图 → 看到 Agent 如何决策 → 理解为什么通过/拒绝 → 查看链上证据 |
 | **Ecosystem Impact 生态影响** | 10 | Sentinel 定义了"AI Agent 安全参与链上经济活动"的基础设施范式。后续可扩展：多链支持、更多 DeFi 协议、DAO 金库自动化、Agent 市场准入标准 |
-| **Demo Quality 演示质量** | 10 | 三个场景完整覆盖：✅ 正常执行（低风险 swap 自动完成）→ 🚫 风控拦截（超限额被拒 + Agent 给出修正建议）→ ⚠️ CAW 双层防护（Sentinel 通过但 CAW Pact 拒绝）|
+| **Demo Quality 演示质量** | 10 | 三个场景完整覆盖：✅ 正常执行（低风险 CAW safe transfer）→ 🚫 风控拦截（超限额被拒 + Agent 给出修正建议）→ ⚠️ CAW 双层防护（Sentinel 通过但 CAW Pact 拒绝）|
 
 ## 11. 技术栈
 
@@ -182,7 +183,7 @@ Cobo 赛道核心要求：**Agent 在受控边界内参与经济活动**。
 - **钱包**: Cobo Agentic Wallet (CAW) — Pact + MPC
 - **前端**: Next.js + Scaffold-ETH 2 hooks (Claude Code 生成)
 - **DeFi**: Uniswap V3 (Sepolia)
-- **测试**: pytest (49 tests) + Foundry (14 tests)
+- **测试**: pytest (53 tests) + Foundry (14 tests)
 
 ---
 

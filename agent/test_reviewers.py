@@ -18,6 +18,7 @@ class TestReviewers(unittest.TestCase):
         self.assertEqual(result.risk_level, "high")
         self.assertEqual(len(result.suggestions), 1)
         self.assertEqual(result.suggestions[0].field, "amount")
+        self.assertEqual(result.suggestions[0].rejection_code, "amount_too_high")
 
     def test_decision_engine_rejects_high_risk_transaction(self):
         tx = TxProposal(action="swap", amount="1000")
@@ -41,3 +42,4 @@ class TestReviewers(unittest.TestCase):
         self.assertEqual(result.risk_level, "high")
         self.assertEqual(len(result.suggestions), 1)
         self.assertEqual(result.suggestions[0].field, "slippage")
+        self.assertEqual(result.suggestions[0].rejection_code, "slippage_too_high")
