@@ -1,7 +1,7 @@
 # Sentinel Hackathon — 后端 & 合约进度
 
 > 目的：只记录短期状态，包括 checkpoint 进度表、当前阻塞、最近完成项。
-> 最后更新：2026-06-02 21:41
+> 最后更新：2026-06-03 21:17
 > 稳定方向和 checkpoint 定义见 `hackathon/docs/backend-plan.md`。
 
 ## 更新约定
@@ -18,22 +18,41 @@
 | CP1 | 数据模型 + Agent A parser/validator | 3-4h | 2026-05-31（未记录分钟） | 2026-05-31（未记录分钟） | Done | 6 个 intent 单元测试通过 |
 | CP2 | RiskPipeline 骨架 + AmountRule | 2-3h | 2026-06-01（未记录分钟） | 2026-06-01 05:12 | Done | 19 个 agent 单元测试通过，包含 stop-on-reject 测试 |
 | CP3 | 剩余硬规则：Slippage / Whitelist / Approval / Frequency | 4-6h | 2026-06-01 05:12 | 2026-06-01 06:48 | Done | 37 个 risk/pipeline 单元测试通过 |
-| CP4 | DecisionEngine + Agent B/C mock + suggestions | 4-6h | 2026-06-02 00:13 | 待完成 | In Progress | `rejection_code` 已补齐；下一步 ReproposalAgent + MutationGuard |
-| CP5 | Minimal FastAPI mock API + AuditLogger + attempts[] | 3-5h | 待开始 | 待开始 | Todo | 先给前端 `/api/execute` + attempts shape，API surface 可后补 |
-| CP6 | CAW Execution Backend + Real Transfer | 6-10h | 待开始 | 待开始 | Todo | Cobo 硬门槛：至少一条真实 CAW `transfer_tokens` |
-| CP7 | 合约事件 + Foundry 测试 | 2-4h | 待开始 | 待开始 | Todo | 最小改动，不改 `execute` 核心逻辑 |
-| CP8 | E2E Demo：safe / reject / confirm / transfer | 3-5h | 待开始 | 待开始 | Todo | 后端 demo 验收 |
+| CP4a | DecisionEngine + Agent B/C mock + suggestions | 已完成 | 2026-06-02 00:13 | 2026-06-02 21:41 | Done | 53 个单元测试通过 |
+| CP4b | ReproposalAgent + MutationGuard | 1.5-2.5h | 待开始 | 待完成 | Todo | 下一步；按 `rejection_code` 生成 revised proposal 并验证 |
+| CP4c | AgenticLoop + in-memory attempts | 1.5-2.5h | 待开始 | 待完成 | Todo | 最多 2 次 retry，attempts 先存在返回值 |
+| CP4.5 | CAW Setup Spike | 1-3h | 待开始 | 待完成 | Todo | P0：CLI/SDK/wallet/pact 提前验通 |
+| CP5 | Minimal FastAPI mock API + AuditLogger + attempts[] | 2-3h | 待开始 | 待完成 | Todo | 先给前端 `/api/execute` + attempts/execution shape |
+| CP6 | CAW Execution Backend + Real Transfer | 6-10h | 待开始 | 待完成 | Todo | Cobo 硬门槛：至少一条真实 CAW `transfer_tokens` |
+| CP7 | Demo Evidence + README + Script | 2-4h | 待开始 | 待完成 | Todo | CAW evidence checklist + 3-5 分钟 demo script |
+| CP8 | Stretch：合约事件 / contract_call swap / polish | 2-5h | 待开始 | 待完成 | Stretch | 时间允许再做，不阻塞 Cobo MVP |
 
 ## 当前阻塞
 
 - 无明确外部阻塞。
-- 当前进行：CP4，`Suggestion.rejection_code`、`DecisionEngine` skeleton、mock Agent B/C 已完成；下一步补 `MockReproposalAgent`、`MutationGuard`、`AgenticLoop`。
+- 当前进行：CP4a 已完成；下一步进入 CP4b，补 `MockReproposalAgent` 和 `MutationGuard`。
 - Cobo 赛道新增工作量约 10-16h；其中真实 CAW setup + `transfer_tokens` 是硬门槛，不能用 mock/simulator 替代。
 - agentic 优化新增约 3-5h，主要集中在 ReproposalAgent、MutationGuard 和 loop 测试。
-- 提交截止：2026-06-13 12:00。当前判断仍可完成，但必须把 CP5 缩成最小 API，把 `contract_call` swap、tool_calls/observations、多笔拆单降为 stretch / v1.1。
+- 提交截止：2026-06-13 12:00。当前判断仍可完成；执行顺序调整为 CP4b -> CP4c -> CP4.5 CAW setup -> CP5 minimal API -> CP6 real transfer -> CP7 evidence/script。
 - 前端需要后续同步：DecisionChain 支持 attempts；状态栏从 SmartAccount 主视角调整为 CAW wallet / pact 主视角；Audit 展示 CAW request id、policy result、tx hash。
 
 ## 最近完成项
+
+### 2026-06-03 Solo MVP 计划重排
+
+- 已将后续工作按 solo + Cobo 硬规则重新编排：
+  - CP4a：DecisionEngine + Agent B/C mock + suggestions，已完成。
+  - CP4b：ReproposalAgent + MutationGuard。
+  - CP4c：AgenticLoop + in-memory attempts。
+  - CP4.5：CAW Setup Spike，提前验证 CLI/SDK/wallet/pact。
+  - CP5：Minimal `/api/execute` + attempts/execution shape。
+  - CP6：真实 CAW `transfer_tokens`。
+  - CP7：CAW evidence checklist + README + demo script。
+  - CP8：contract_call swap / 合约事件 / polish，全部降为 stretch。
+- 优先级确认：
+  - P0：CAW setup、transfer-first、CAW evidence checklist。
+  - P1：minimal API、demo script、SmartAccount 明确降级。
+  - P2：DeepSeek Agent B/C 后移、失败预案、前端证据展示。
 
 ### 2026-06-02 CP4 Step 1：rejection_code 补齐
 
