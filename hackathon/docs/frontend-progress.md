@@ -1,6 +1,6 @@
 # Sentinel 前端进度记录
 
-> 最后更新：2026-06-02 05:10
+> 最后更新：2026-06-05 01:47
 
 ## 进度记录约定
 
@@ -22,18 +22,118 @@
 | CP2 | 真实链上状态栏接入 | 1-2h | 2026-06-01（规则建立前未记录分钟） | 2026-06-01（规则建立前未记录分钟） | Code Done / QA Pending | 类型检查和 lint 通过；用户浏览器已能加载页面，仍需补一次状态栏视觉确认 |
 | CP3 | 首页执行控制台接入 mock API | 2-4h | 2026-06-01 16:44 | 2026-06-01 16:56 | Code Done / Auto Screenshot Passed / User QA Pending | `executeIntent` 已接入；成功、拦截、确认状态可点击触发；WSL Playwright 截图可用，Codex in-app browser 仍受本地 sandbox 影响 |
 | CP4 | `confirm_needed` 与错误态 | 2-3h | 2026-06-02 04:44 | 2026-06-02 04:58 | Code Done / User QA Pending | Approve / Reject mock 确认流已接入；网络、超时、执行失败错误文案已分类处理；已修复 safe swap 被误判为 blocked 的 QA bug |
-| CP5 | Audit 页接入 mock API | 2-3h | 待开始 | 待开始 | Todo | 点击行展开完整 decision chain |
+| CP4.5 | 后端契约重新对齐 | 1-2h | 2026-06-04 22:02 | 2026-06-04 22:36 | Code Done / CLI QA Partial | 已对齐 minimal `/api/execute`、`attempts[]`、`execution`、CAW evidence、更新 presets；typecheck/lint 通过；3000 端口 CLI 请求仍超时 |
+| CP5 | Audit 页接入 mock/API | 2-3h | 待开始 | 待开始 | Todo | 点击行展开 attempts timeline + execution evidence |
 | CP6 | 前端理解层 | 2-4h | 待开始 | 待开始 | Todo | `frontend-implementation-guide.md` + `/frontend-map` |
 | CP7 | 验证与小修 | 1-3h | 待开始 | 待开始 | Todo | 类型检查、lint、关键路径手动验收 |
 
 当前整体判断：
 
-- 前端 MVP 约完成 35%-45%，视觉骨架和数据 contract 已完成，真实链上状态栏代码已接入。
+- 前端 MVP 约完成 35%-45%，视觉骨架和旧数据 contract 已完成，真实链上 SmartAccount 状态栏代码已接入。
+- 后端在 2026-06-04 已出现重大方向变化：CAW 成为 Cobo demo 主执行路径，`attempts[]` 和 `execution` 成为前端必须展示的新证据字段。
+- 下一步不应直接进入旧 CP5 Audit 页实现，应先做新增 CP4.5，把前端类型、mock、API mapper、presets、状态栏叙事与后端 minimal `/api/execute` 对齐。
 - 本地 dev server 之前出现过监听后 `curl` timeout，但用户侧浏览器现已能加载页面。
 - CP3 代码层已完成。当前需要用户在浏览器中手动点击三个 preset，确认 decision chain 是否按预期切换。
 - CP4 代码层已完成。当前需要用户在浏览器中手动检查 Manual review 的 Approve / Reject 两条路径，以及输入 `timeout`、`network`、`daily limit` 关键词时的错误文案。
 
 ## 当前进度详情
+
+### 2026-06-04 前端计划同步：后端 CAW + agentic API 变更
+
+- 已检查后端 worktree：
+  - 路径：`/home/admini/sentinel-backend`
+  - 分支：`feature/backend-risk-pipeline`
+  - 最新提交：`b314d3c Add minimal execute API`
+  - 本地分支与 `origin/feature/backend-risk-pipeline` 对齐。
+- 后端当前 minimal FastAPI 已有：
+  - `GET /health`
+  - `POST /api/execute`
+- `/api/execute` 当前返回：
+  - `tx_id`
+  - `status`
+  - `decision`
+  - `decision_reason`
+  - `attempts[]`
+  - `decision_chain` legacy compatibility shape
+  - `execution`
+- 后端计划已调整：
+  - CAW 是 Cobo demo 主执行路径。
+  - `SmartAccount.sol` 降级为 baseline / fallback / 技术展示。
+  - `attempts[]` 记录 bounded agentic loop 每轮 proposal、rules、agent reviews、decision、rejection source。
+  - `execution` 后续承载 CAW wallet / pact / request id / tx hash / policy deny reason。
+- 前端计划已同步调整：
+  - 新增 CP4.5：后端契约重新对齐。
+  - CP5 Audit 页展开区改为 attempts timeline + execution evidence。
+  - 顶部状态栏后续应优先展示 CAW execution context，SmartAccount 状态作为 secondary / fallback。
+  - demo presets 需要更新：
+    - `Swap 0.01 ETH to USDC` -> safe path。
+    - `Swap 0.2 ETH to USDC` -> agentic retry path。
+    - `Swap 1 ETH to USDC` -> hard rule reject。
+    - `Send 0.03 ETH to 0x742d...` -> confirm path。
+  - 旧 `Send 0.08 ETH to 0x742d...` 在当前后端会经 retry 后 executed，不再适合作为稳定 confirm preset。
+
+当前状态判断：
+
+- 本次只更新文档，不改前端代码。
+- 下一步进入 CP5 Audit 页：接 `getAuditLog()` / `getAuditLogItem()`，展开区复用 attempts timeline + execution evidence。
+
+### 2026-06-04 前端 Checkpoint 4.5：后端契约重新对齐
+
+- 开始时间：2026-06-04 22:02。
+- 完成时间：2026-06-04 22:36。
+- 已完成：
+  - 前端数据层对齐后端 minimal `/api/execute`。
+  - 新增 `attempts[]`、`execution`、suggestions / CAW evidence 相关类型。
+  - 新增 `backendMapper.ts`，负责后端 snake_case DTO -> 前端 camelCase view model。
+  - 新增 Next proxy route：`/api/sentinel/execute` -> `http://127.0.0.1:8000/api/execute`，避免浏览器 CORS 问题。
+  - `executeIntent()` 优先调用本地 Next proxy；失败时回退 mock 数据。
+  - 更新 demo presets：
+    - `Safe swap`：`Swap 0.01 ETH to USDC`
+    - `Agent retry`：`Swap 0.2 ETH to USDC`
+    - `Blocked swap`：`Swap 1 ETH to USDC`
+    - `Manual review`：`Send 0.03 ETH to 0x742d...`
+  - `DecisionChain` 增加 compact attempts timeline，展示 bounded reproposal history。
+  - `DecisionChain` 的 Transaction / Audit Result 区域增加 execution backend/status/request/CAW evidence 展示。
+  - 顶部状态栏主叙事调整为 CAW / FastAPI execution context，SmartAccount 作为 baseline/fallback 信息保留。
+- 已确认：
+  - 开始实现时后端 FastAPI 服务在 `127.0.0.1:8000` 可访问。
+  - 当时 `GET /health` 返回 `{"status":"ok"}`。
+  - 当时直接请求后端 `POST /api/execute` with `Swap 0.2 ETH to USDC` 返回 2 个 attempts：
+    - attempt 1：RiskAnalyst reject，suggestion `amount -> 0.01`。
+    - attempt 2：revised proposal executed。
+
+验证命令：
+
+```bash
+yarn workspace @se-2/nextjs check-types
+yarn workspace @se-2/nextjs lint
+git diff --check
+curl --max-time 10 -sS http://127.0.0.1:8000/health
+curl --max-time 10 -sS -X POST http://127.0.0.1:8000/api/execute -H 'Content-Type: application/json' -d '{"intent":"Swap 0.2 ETH to USDC"}'
+```
+
+当前测试结果：
+
+```text
+check-types: passed
+lint: passed, no ESLint warnings or errors
+git diff --check: passed
+backend /health: passed earlier with {"status":"ok"}, but final rerun failed to connect to 127.0.0.1:8000
+backend /api/execute: returned 2 attempts for Swap 0.2 ETH to USDC earlier in the checkpoint
+```
+
+当前限制：
+
+- Next dev server 进程已启动，但 CLI 请求 `http://127.0.0.1:3000` 和 `/api/sentinel/execute` 仍持续 timeout；这与 CP3/CP4 记录过的本地 WSL/Next dev server 访问问题一致。
+- 最终复查时 `127.0.0.1:8000/health` 连接失败，后端服务可能已停止；前端 `executeIntent()` 已实现 backend-unavailable fallback 到 mock。
+- 因 3000 端口 CLI timeout，本轮未完成浏览器自动点击验收；需要用户在浏览器手动检查页面。
+
+提交 / push 记录：
+
+- 时间：2026-06-05 01:47。
+- 范围：CP4.5 代码改动与文档记录放在同一个提交中。
+- 目标分支：`feature/frontend-risk-console`。
+- 提交信息计划：`feat(frontend): align console with backend attempts`。
 
 ### 2026-06-01 前端 Checkpoint 1：类型、mock 数据、API 封装
 

@@ -61,11 +61,13 @@ export const DecisionChain = ({
   const proposal = chain.agentProposal.proposal;
   const agentB = chain.agentReviews.find(review => review.agent === "Agent B");
   const agentC = chain.agentReviews.find(review => review.agent === "Agent C");
+  const shouldShowAttempts = response.attempts.length > 1;
 
   return (
     <div className="flex h-full flex-col">
       <DecisionHeader response={response} />
       <DecisionSummary response={response} />
+      {shouldShowAttempts && <AttemptsTimeline response={response} />}
 
       <div className="min-h-0 flex-1 overflow-y-auto divide-y divide-white/5">
         {visibleSteps >= 1 && (
@@ -165,6 +167,7 @@ const ProposalGrid = ({ proposal }: { proposal: TxProposal }) => {
       <DataPoint label="Target" value={proposal.targetContract} />
       <DataPoint label="Slippage" value={proposal.slippage ?? "N/A"} />
       <DataPoint label="Expected Output" value={proposal.expectedOutput ?? "N/A"} />
+      <DataPoint label="Deadline" value={proposal.deadline ?? "N/A"} />
     </div>
   );
 };
@@ -204,6 +207,59 @@ const AgentReviewPanel = ({ fallback, review }: { fallback: string; review?: Age
           ))}
         </div>
         <p className="m-0 mt-3 text-sm leading-6 text-[#e2e2e8]">{review.reasoning}</p>
+        {review.suggestions.length > 0 && (
+          <div className="mt-3 grid gap-2">
+            {review.suggestions.map(suggestion => (
+              <div
+                className="rounded-md border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-xs leading-5 text-amber-100"
+                key={`${suggestion.field}-${suggestion.suggestedValue}`}
+              >
+                <span className="font-semibold">{suggestion.field}</span>
+                {" -> "}
+                {suggestion.suggestedValue}: {suggestion.reason}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const AttemptsTimeline = ({ response }: { response: ExecuteResponse }) => {
+  return (
+    <div className="border-b border-white/10 bg-[#0c0e12] px-4 py-3">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div>
+          <div className="font-mono text-[10px] uppercase text-[#89938d]">Agentic Attempts</div>
+          <p className="m-0 mt-1 text-xs text-[#bec9c2]">Bounded reproposal history returned by the backend.</p>
+        </div>
+        <span className="font-mono text-xs text-[#88d6b6]">{response.attempts.length} attempts</span>
+      </div>
+      <div className="grid gap-2">
+        {response.attempts.map(attempt => (
+          <div
+            className="grid gap-2 rounded-md border border-white/10 bg-[#111318] p-2.5 lg:grid-cols-[88px_120px_minmax(0,1fr)_minmax(0,1fr)]"
+            key={attempt.attemptIndex}
+          >
+            <div className="font-mono text-xs text-[#89938d]">ATTEMPT {attempt.attemptIndex}</div>
+            <StatusBadge status={decisionToStatus(attempt.decision)} />
+            <div className="min-w-0 text-xs leading-5 text-[#bec9c2]">
+              <span className="font-semibold text-[#e2e2e8]">{attempt.proposal.amount}</span>{" "}
+              {attempt.proposal.tokenPair ?? attempt.proposal.action}
+              {attempt.rejectionSource !== "none" && (
+                <span className="ml-2 text-[#ffb4ab]">source: {attempt.rejectionSource}</span>
+              )}
+            </div>
+            <div className="min-w-0 text-xs leading-5 text-[#bec9c2]">
+              {attempt.suggestions.length > 0
+                ? attempt.suggestions
+                    .map(suggestion => `${suggestion.field} -> ${suggestion.suggestedValue}`)
+                    .join(", ")
+                : attempt.decisionReason}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -240,6 +296,22 @@ const AuditResult = ({ response }: { response: ExecuteResponse }) => {
     );
   }
 
+  if (response.execution.requestId || response.execution.walletId || response.execution.pactId) {
+    return (
+      <div className="grid gap-2 md:grid-cols-2">
+        <DataPoint label="Backend" value={response.execution.backend} />
+        <DataPoint label="Execution Status" value={response.execution.status} />
+        <DataPoint
+          label="CAW Wallet"
+          value={response.execution.walletAddress ?? response.execution.walletId ?? "N/A"}
+        />
+        <DataPoint label="Pact" value={response.execution.pactId ?? "N/A"} />
+        <DataPoint label="Request ID" value={response.execution.requestId ?? "N/A"} />
+        <DataPoint label="Policy Reason" value={response.execution.policyReason ?? "N/A"} />
+      </div>
+    );
+  }
+
   if (response.status === "confirm_needed") {
     return (
       <div className="grid gap-3">
@@ -272,10 +344,15 @@ const AuditResult = ({ response }: { response: ExecuteResponse }) => {
     return (
       <div className="grid gap-2 md:grid-cols-2">
         <DataPoint label="Simulation" value={simulationLabel(decisionChain.simulation)} />
-        <DataPoint label="TX Hash" value="Audit update only" />
+        <DataPoint label="Execution Backend" value={response.execution.backend} />
+        <DataPoint label="Execution Status" value={response.execution.status} />
+        <DataPoint
+          label="TX Hash"
+          value={response.execution.txHash ? shortHash(response.execution.txHash) : "Not submitted"}
+        />
         <div className="rounded-lg border border-[#88d6b6]/25 bg-[#88d6b6]/10 p-3 text-sm leading-6 text-[#d8f8e8] md:col-span-2">
-          Operator approval was recorded by the mock confirmation API. No on-chain transaction hash is emitted in MVP
-          confirmation mode.
+          {response.execution.reason ??
+            "Execution evidence will show CAW request or transaction details once the backend submits through CAW."}
         </div>
       </div>
     );
@@ -522,6 +599,10 @@ function getRiskLabel(response: ExecuteResponse): string {
 
 function getNextAction(response: ExecuteResponse): string {
   if (response.status === "executed") {
+    if (response.execution.status === "not_submitted") {
+      return "Await CAW submission evidence";
+    }
+
     if (!response.decisionChain.txHash) {
       return "Audit state updated";
     }
@@ -542,6 +623,10 @@ function getNextAction(response: ExecuteResponse): string {
 
 function getActionBarText(response: ExecuteResponse): string {
   if (response.status === "executed") {
+    if (response.execution.status === "not_submitted") {
+      return "Risk decision is ready. CAW submission evidence is not available yet.";
+    }
+
     if (!response.decisionChain.txHash) {
       return "Operator decision recorded in audit state.";
     }
@@ -594,4 +679,16 @@ function statusIconClass(status: "passed" | "review" | ExecutionStatus): string 
   }
 
   return "text-[#88d6b6]";
+}
+
+function decisionToStatus(decision: "execute" | "reject" | "confirm"): ExecutionStatus {
+  if (decision === "execute") {
+    return "executed";
+  }
+
+  if (decision === "confirm") {
+    return "confirm_needed";
+  }
+
+  return "rejected";
 }

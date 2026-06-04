@@ -22,13 +22,18 @@ const presets = [
     tone: "executed" as const,
   },
   {
+    label: "Agent retry",
+    intent: "Swap 0.2 ETH to USDC",
+    tone: "executed" as const,
+  },
+  {
     label: "Blocked swap",
     intent: "Swap 1 ETH to USDC",
     tone: "rejected" as const,
   },
   {
     label: "Manual review",
-    intent: "Send 0.08 ETH to 0x742d...",
+    intent: "Send 0.03 ETH to 0x742d...",
     tone: "confirm_needed" as const,
   },
 ] as const;
@@ -43,16 +48,23 @@ const recentDecisions = [
   },
   {
     id: "SNT-2047",
+    intent: "Swap 0.2 ETH to USDC",
+    status: "executed" as const,
+    reason: "Reproposal accepted",
+    time: "09:39:10",
+  },
+  {
+    id: "SNT-2046",
     intent: "Swap 1 ETH to USDC",
     status: "rejected" as const,
     reason: "AmountRule exceeded",
     time: "09:37:04",
   },
   {
-    id: "SNT-2046",
-    intent: "Quote WETH to USDC",
-    status: "failed" as const,
-    reason: "RPC timeout",
+    id: "SNT-2045",
+    intent: "Send 0.03 ETH to 0x742d...",
+    status: "confirm_needed" as const,
+    reason: "Manual approval required",
     time: "09:31:55",
   },
 ] as const;
@@ -68,7 +80,7 @@ type RecentDecision = {
 type ConfirmationAction = "approve" | "reject";
 
 const Home: NextPage = () => {
-  const [intent, setIntent] = useState("Send 0.08 ETH to 0x742d... after AI risk review");
+  const [intent, setIntent] = useState("Swap 0.2 ETH to USDC");
   const [execution, setExecution] = useState<ExecuteResponse | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -133,7 +145,7 @@ const Home: NextPage = () => {
               <h1 className="m-0 text-base font-semibold">Intent Workbench</h1>
             </div>
             <p className="m-0 mt-1 text-xs text-[#bec9c2]">
-              Natural language command intake for the guarded SmartAccount.
+              Natural language command intake for Sentinel risk control before CAW execution.
             </p>
           </div>
 
@@ -274,6 +286,10 @@ function infoPanelTitle(response: ExecuteResponse | null): string {
   }
 
   if (response.status === "executed") {
+    if (response.attempts.length > 1) {
+      return "Agentic retry completed";
+    }
+
     return "Execution path completed";
   }
 
@@ -295,6 +311,10 @@ function infoPanelBody(response: ExecuteResponse | null): string {
 
   if (response.status === "confirm_needed") {
     return response.decisionChain.confirmation?.riskNote ?? response.reason;
+  }
+
+  if (response.status === "executed" && response.attempts.length > 1) {
+    return "The first proposal was rejected, revised by the bounded agent loop, and accepted on a later attempt.";
   }
 
   return response.reason;

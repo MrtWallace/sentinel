@@ -1,10 +1,12 @@
 # Sentinel 前端 MVP 更新计划
 
-> 最后更新：2026-06-01 05:37
+> 最后更新：2026-06-04 21:54
 
 ## 总结
 
-前端做成 **AI 风控执行控制台**：打开页面后直接演示自然语言意图如何经过 AI 提案、硬规则、Agent 审查、确认/执行/拦截，并留下审计记录。
+前端做成 **AI 风控执行控制台**：打开页面后直接演示自然语言意图如何经过 AI 提案、硬规则、Agent 审查、bounded agentic reproposal、确认/执行/拦截，并留下审计记录。
+
+后端在 2026-06-04 已切到 Cobo 赛道主线：**CAW 是 Cobo demo 的主资金执行路径**，`SmartAccount.sol` 保留为 baseline / fallback / 技术展示。因此前端后续计划也要从“SmartAccount dashboard + 单条 decision chain”调整为“Sentinel 风控 + CAW execution evidence + attempts audit”的 demo 叙事。
 
 同时新增一个专门的 **前端理解层**：让项目作者能讲清楚每个组件在干什么、接口传什么数据、数据如何从 API 变成页面展示。这个部分用于内部学习和项目介绍，不进入评委 demo 主流程。
 
@@ -22,17 +24,18 @@
 
 首页是执行控制台。
 
-- 顶部状态栏读取真实链上状态：SmartAccount 余额、daily limit、daily spent、agent、network。
+- 顶部状态栏优先展示 Cobo demo 需要的 execution context：network、execution backend、CAW wallet、pact status / pact id、real-tx mode。SmartAccount 余额、daily limit、daily spent、agent 可作为 baseline / fallback 的 secondary 信息保留。
 - 左侧输入 intent，提供 demo 快捷按钮：成功 swap、被拦截 swap、需要确认的大额操作。
-- 右侧展示 decision chain：先显示 loading skeleton，再逐步 reveal 每个步骤。
+- 右侧展示 decision chain：先显示 loading skeleton，再逐步 reveal 每个步骤；如果后端返回 `attempts[]`，优先展示 attempts timeline，而不是只展示 legacy `decision_chain`。
 
 ### Audit 页 `/audit`
 
 Audit 页用于展示审计记录。
 
 - 表格列：time、intent、status、reason、tx hash。
-- 点击行展开完整 decision chain。
-- Audit v1 使用 API/mock `decision_chain`，暂不直接读取链上 `Executed` 事件。
+- 点击行展开完整 decision chain / attempts timeline / execution evidence。
+- Audit v1 使用 API/mock audit record，暂不直接读取链上 `Executed` 事件。
+- Cobo demo 相关记录需要展示 CAW wallet、pact、request id / transaction id、policy deny reason。
 
 ### 内部讲解页 `/frontend-map`
 
@@ -52,6 +55,10 @@ Audit 页用于展示审计记录。
 - `RuleCheck`
 - `AgentReview`
 - `AuditLogItem`
+- `AttemptRecord`
+- `Suggestion`
+- `ExecutionResult`
+- `CawExecutionEvidence`
 
 新增 API 封装：
 
@@ -60,7 +67,28 @@ Audit 页用于展示审计记录。
 - `getAuditLog()`：获取审计列表。
 - `getAuditLogItem(txId: string)`：获取单条完整审计记录。
 
-第一版 `api.ts` 使用同真实接口形状一致的 mock 数据。后端 API 完成后，只替换 `api.ts` 内部实现，页面和组件不改。
+第一版 `api.ts` 使用同真实接口形状一致的 mock 数据。后端 API 完成后，优先只替换 `api.ts` 内部实现和 mapper，页面组件不直接写后端 DTO 解析逻辑。
+
+后端 2026-06-04 最小 `/api/execute` 已返回以下关键字段：
+
+- `tx_id`
+- `status`
+- `decision`
+- `decision_reason`
+- `attempts[]`
+- `decision_chain`（legacy compatibility）
+- `execution`
+
+前端后续类型应把 `attempts[]` 和 `execution` 当作一等字段；`decision_chain` 可以作为单 attempt / legacy UI 的兼容来源，但不应继续成为唯一展示源。
+
+当前可用 demo 输入需要更新：
+
+- `Swap 0.01 ETH to USDC`：safe path，1 个 attempt，最终 `executed`。
+- `Swap 0.2 ETH to USDC`：agentic retry path，attempt 1 被 Risk Analyst 拒绝并给出 suggestion，ReproposalAgent 降额到 `0.01`，attempt 2 执行。
+- `Swap 1 ETH to USDC`：hard rule reject，1 个 attempt，Agent B/C skipped，不触发 CAW。
+- `Send 0.03 ETH to 0x742d...`：confirm path，`confirm_needed`。
+
+旧的 `Send 0.08 ETH to 0x742d...` 在当前后端最小 API 中会进入 agentic retry 后 executed，不再适合作为稳定 confirm preset。
 
 ## 前端理解层
 
@@ -72,6 +100,7 @@ Audit 页用于展示审计记录。
 - 数据流：用户输入 -> `executeIntent` -> `ExecuteResponse` -> 页面状态 -> `DecisionChain` 展示。
 - 接口解释：每个 API 函数传什么、返回什么、为什么需要。
 - 类型解释：`DecisionChain`、`RuleCheck`、`AgentReview` 等字段的业务含义。
+- 新增解释：`attempts[]` 为什么存在、`Suggestion` 如何驱动 reproposal、`MutationGuard` 负责什么、`execution` 如何承载 CAW evidence。
 - 组件地图：每个组件职责、输入 props、输出 UI。
 - mock 到真实 API 的替换方式。
 
@@ -103,23 +132,37 @@ Audit 页用于展示审计记录。
 - tx hash 默认链接到 Sepolia Etherscan。
 - 同时提供 Blockscout 备用链接。
 - demo 前验证两者可打开。
+- 如果后端只返回 CAW request id / transaction id 而没有 testnet tx hash，UI 显示 CAW request evidence，不伪造 explorer 链接。
 
 ## 展示细节
 
 ### 状态栏数据来源
 
-- `useBalance` 读取 SmartAccount ETH balance。
-- `useScaffoldReadContract` 读取 `owner`、`agent`、`dailyLimit`、`dailySpent`。
-- 合约地址统一来自 Scaffold-ETH contract config，不再硬编码。
+- Cobo demo 主状态栏优先从 API/mock config 展示 CAW execution context：
+  - execution backend：`mock` / `caw` / `local`
+  - CAW wallet address / wallet id
+  - pact status / pact id
+  - real-tx mode：dry-run / real tx enabled
+  - network：Sepolia
+- SmartAccount baseline 状态仍可保留：
+  - `useBalance` 读取 SmartAccount ETH balance。
+  - `useScaffoldReadContract` 读取 `owner`、`agent`、`dailyLimit`、`dailySpent`。
+  - 合约地址统一来自 Scaffold-ETH contract config，不再硬编码。
+- UI 文案必须避免让评委误解 SmartAccount 是 Cobo 主执行钱包。
 
 ### Decision chain 展示层级
 
-- Agent A Proposal：action、amount、token pair、target contract、slippage、expected output。
-- Hard Rules：每条 rule 显示 passed/rejected、rule name、reason。
-- Agent Reviews：Agent B / Agent C 各自显示 passed、risk level、findings、reasoning。
-- Final Decision：executed/rejected/confirm_needed、decision reason、simulation、tx hash。
+- 如果只有 legacy `decision_chain`：继续展示 Agent A Proposal、Hard Rules、Agent Reviews、Final Decision、Transaction / Audit Result。
+- 如果有 `attempts[]`：展示 attempts timeline：
+  - Attempt header：attempt index、decision、rejection source。
+  - Proposal：action、amount、token pair、target contract / recipient、slippage、deadline。
+  - Hard Rules：每条 rule 显示 passed / confirm / rejected / skipped、rule name、reason、severity。
+  - Agent Reviews：Agent B / Agent C 各自显示 passed、risk level、findings、reasoning、suggestions。
+  - Reproposal evidence：从上一轮 suggestions 到下一轮 revised proposal 的关键变化，例如 amount `0.2 -> 0.01`。
+  - Final Decision：executed/rejected/confirm_needed、decision reason。
+  - Execution：CAW/mock/local backend、status、request id、tx hash、policy reason。
 
-Audit 展开区复用同一个 `DecisionChain` 组件，避免两套展示逻辑不一致。
+Audit 展开区复用同一个 decision/attempts 展示组件，避免首页和 audit 页两套展示逻辑不一致。
 
 ## 执行拆解
 
@@ -391,6 +434,49 @@ yarn workspace @se-2/nextjs lint
 - 业务状态和异常状态的区别。
 - 为什么 `confirm_needed` 属于 agent/API flow，不是合约里的显式状态。
 
+### Checkpoint 4.5：后端契约重新对齐（新增）
+
+背景：
+
+- 后端在 2026-06-04 已完成 minimal FastAPI `/api/execute`。
+- 后端返回结构从单条 `decision_chain` 扩展为 `attempts[] + execution + legacy decision_chain`。
+- Cobo demo 主资金路径从 SmartAccount 调整为 CAW，前端状态栏和 audit evidence 需要同步。
+
+产物：
+
+- 更新 `frontend/packages/nextjs/lib/sentinel/types.ts`：
+  - 新增 `AttemptRecord`。
+  - 新增 `Suggestion`。
+  - 新增 `ExecutionResult`。
+  - 新增 `CawExecutionEvidence` 或等价字段。
+  - 保留现有 `DecisionChain` 作为 legacy / single-attempt view model。
+- 更新 `frontend/packages/nextjs/lib/sentinel/mockData.ts`：
+  - 新增 `Swap 0.2 ETH to USDC` agentic retry 场景。
+  - 将 confirm preset 从 `Send 0.08 ETH...` 调整为 `Send 0.03 ETH...`。
+  - 增加 mock execution block：`backend`、`status`、`requestId`、`txHash`、`policyReason`、`reason`。
+- 更新 `frontend/packages/nextjs/lib/sentinel/api.ts`：
+  - 继续导出 `executeIntent`、`confirmExecution`、`getAuditLog`、`getAuditLogItem`。
+  - 增加后端 DTO 到前端 view model 的 mapper。
+  - 页面组件不直接依赖后端 snake_case 字段。
+- 更新首页 preset 文案：
+  - `Safe swap` -> `Swap 0.01 ETH to USDC`
+  - `Agent retry` -> `Swap 0.2 ETH to USDC`
+  - `Blocked swap` -> `Swap 1 ETH to USDC`
+  - `Manual review` -> `Send 0.03 ETH to 0x742d...`
+
+审查重点：
+
+- 后端实际 `/api/execute` response shape 是否能被前端类型完整表达。
+- `attempts[]` 是否不会破坏已有单链路 UI。
+- 新 demo presets 是否和后端当前行为一致。
+- `execution.status = "not_submitted"` 时 UI 是否明确表示“CP5 minimal API 尚未提交 CAW 交易”，不伪造 tx hash。
+
+学习点：
+
+- 为什么要在 `api.ts` 做 DTO mapper，而不是让页面组件直接处理后端原始 JSON。
+- 为什么 `attempts[]` 是 agentic demo 的核心证据。
+- 为什么 CAW evidence 属于 execution result，不属于 AI decision 本身。
+
 ### Checkpoint 5：Audit 页
 
 产物：
@@ -398,18 +484,26 @@ yarn workspace @se-2/nextjs lint
 - 新增 `/audit` 页面。
 - 新增 `AuditTable`。
 - 表格展示 audit log。
-- 点击行展开复用 `DecisionChain`。
+- 点击行展开复用 decision / attempts 展示组件。
+- 展开区展示：
+  - final status 和 decision reason。
+  - attempts timeline。
+  - 每轮 proposal、rules、agent reviews、suggestions。
+  - CAW/mock execution evidence。
 
 审查重点：
 
 - Audit 页是否能讲清“可审计”。
-- 展开区是否和首页 decision chain 保持一致。
-- tx hash 是否同时提供 Etherscan 和 Blockscout 链接。
+- 展开区是否和首页 decision / attempts 展示保持一致。
+- agentic retry 是否能看出“先拒绝，再降风险重提案，再执行”。
+- tx hash 存在时是否同时提供 Etherscan 和 Blockscout 链接。
+- 只有 CAW request id / transaction id 时是否展示为 CAW evidence，不伪造 explorer 链接。
 
 学习点：
 
 - 列表数据和单条详情数据的区别。
-- 为什么 Audit v1 先展示 API/mock decision chain，而不是链上 `Executed` 事件。
+- 为什么 Audit v1 先展示 API/mock audit record，而不是链上 `Executed` 事件。
+- 为什么 CAW request id、pact id、policy deny reason 也是审计证据。
 
 ### Checkpoint 6：前端理解层
 
@@ -424,6 +518,8 @@ yarn workspace @se-2/nextjs lint
   - 类型含义。
   - 组件职责。
   - mock 到真实 API 的替换方式。
+  - 后端 DTO -> 前端 view model 的 mapper。
+  - `attempts[]`、`Suggestion`、`MutationGuard`、`execution`、CAW evidence 的关系。
 
 审查重点：
 
@@ -440,6 +536,7 @@ yarn workspace @se-2/nextjs lint
 
 - 运行类型检查和 lint。
 - 手动过一遍成功、拦截、确认、Audit、frontend-map。
+- 手动过一遍 agentic retry 和 CAW evidence 展示。
 - 根据验证结果做小修，不做新功能。
 
 审查重点：
@@ -462,6 +559,7 @@ yarn workspace @se-2/nextjs lint
 - 不做页面上的 mock/API 切换按钮。
 - 不做链上事件审计读取；后续可以作为增强。
 - 不做真实 streaming；第一版 API 返回完整结果，前端用 skeleton 和 stagger reveal 模拟检查过程。
+- 不做前端 CAW wallet 操作、pact approval、签名或资金提交；前端只展示后端返回的 CAW evidence。
 - `/frontend-map` 是内部学习页，不作为产品功能包装。
 
 ## 测试计划
@@ -476,9 +574,11 @@ yarn workspace @se-2/nextjs lint
 手动验收：
 
 - 成功场景：`Swap 0.01 ETH to USDC` 展示完整通过链路和 tx hash。
+- Agentic retry 场景：`Swap 0.2 ETH to USDC` 展示 attempt 1 reject、suggestion、revised proposal、attempt 2 executed。
 - 拦截场景：`Swap 1 ETH to USDC` 展示硬规则拒绝，并跳过后续执行。
-- 确认场景：大额操作进入 `confirm_needed`，Approve / Reject 都能走到终态。
-- Audit 页面能展开成功、拦截、确认后的记录。
-- 顶部状态栏读取真实 Sepolia SmartAccount 状态。
-- `/frontend-map` 能用中文讲清楚接口、类型、组件、数据流。
+- 确认场景：`Send 0.03 ETH to 0x742d...` 进入 `confirm_needed`，Approve / Reject 都能走到终态。
+- Audit 页面能展开成功、agent retry、拦截、确认后的记录。
+- 顶部状态栏能清楚区分 CAW 主执行上下文和 SmartAccount baseline/fallback 状态。
+- `/frontend-map` 能用中文讲清楚接口、类型、组件、数据流、attempts、CAW evidence。
 - Etherscan 和 Blockscout 链接 demo 前可打开。
+- 如果后端没有 tx hash，只展示 CAW request / transaction evidence，不生成 explorer 链接。

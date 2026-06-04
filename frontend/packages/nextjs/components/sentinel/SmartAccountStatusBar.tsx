@@ -9,6 +9,13 @@ type StatusItem = {
   value: string;
 };
 
+const CAW_CONTEXT: StatusItem[] = [
+  { label: "BACKEND", value: "FASTAPI :8000" },
+  { label: "EXECUTION", value: "CAW PRIMARY" },
+  { label: "CAW WALLET", value: "PENDING" },
+  { label: "PACT", value: "PENDING" },
+];
+
 export const SmartAccountStatusBar = () => {
   const { targetNetwork } = useTargetNetwork();
   const { data: smartAccount } = useDeployedContractInfo({ contractName: "SmartAccount" });
@@ -46,16 +53,16 @@ export const SmartAccountStatusBar = () => {
     balanceRead.isError || ownerRead.isError || agentRead.isError || dailyLimitRead.isError || dailySpentRead.isError;
 
   const primaryStatusItems: StatusItem[] = [
-    ["NETWORK", targetNetwork.name.toUpperCase()],
-    ["SMART ACCOUNT", shortenAddress(smartAccountAddress)],
-    ["BALANCE", formatEth(balanceRead.data?.value, balanceRead.isLoading)],
-    ["DAILY LIMIT", formatEth(dailyLimitRead.data, dailyLimitRead.isLoading)],
-  ].map(([label, value]) => ({ label, value }));
+    { label: "NETWORK", value: targetNetwork.name.toUpperCase() },
+    ...CAW_CONTEXT,
+  ];
 
   const secondaryStatusItems: StatusItem[] = [
-    ["SPENT", formatEth(dailySpentRead.data, dailySpentRead.isLoading)],
+    ["SMART ACCOUNT", shortenAddress(smartAccountAddress)],
+    ["BALANCE", formatEth(balanceRead.data?.value, balanceRead.isLoading)],
+    ["LIMIT", formatEth(dailyLimitRead.data, dailyLimitRead.isLoading)],
     ["AGENT", shortenAddress(agentRead.data, agentRead.isLoading)],
-    ["OWNER", shortenAddress(ownerRead.data, ownerRead.isLoading)],
+    ["SPENT", formatEth(dailySpentRead.data, dailySpentRead.isLoading)],
   ].map(([label, value]) => ({ label, value }));
 
   return (
@@ -78,7 +85,7 @@ export const SmartAccountStatusBar = () => {
           }`}
         >
           <span className={`h-1.5 w-1.5 rounded-full ${hasReadError ? "bg-amber-200" : "bg-[#88d6b6]"}`} />
-          {hasReadError ? "RPC CHECK" : "PROTECTED"}
+          {hasReadError ? "BASELINE RPC CHECK" : "CAW READY"}
         </div>
       </div>
     </>

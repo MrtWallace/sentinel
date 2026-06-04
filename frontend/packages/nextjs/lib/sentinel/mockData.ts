@@ -1,9 +1,25 @@
-import type { AuditLogItem, DecisionChain, ExecuteResponse, IntentScenario } from "~~/lib/sentinel/types";
+import type {
+  AttemptRecord,
+  AuditLogItem,
+  DecisionChain,
+  ExecuteResponse,
+  ExecutionResult,
+  IntentScenario,
+} from "~~/lib/sentinel/types";
 
 export const DEMO_INTENTS: Record<IntentScenario, string> = {
   safe_swap: "Swap 0.01 ETH to USDC",
+  agent_retry_swap: "Swap 0.2 ETH to USDC",
   blocked_swap: "Swap 1 ETH to USDC",
-  confirm_transfer: "Send 0.08 ETH to 0x742d...",
+  confirm_transfer: "Send 0.03 ETH to 0x742d...",
+};
+
+const mockExecutionNotSubmitted: ExecutionResult = {
+  backend: "mock",
+  status: "not_submitted",
+  requestId: null,
+  txHash: null,
+  reason: "CP4.5 mock mirrors the backend minimal API before CAW submission is enabled.",
 };
 
 const safeSwapChain: DecisionChain = {
@@ -49,6 +65,7 @@ const safeSwapChain: DecisionChain = {
       riskLevel: "low",
       findings: ["No prompt-injection pattern detected", "Target contract matches the allowlist"],
       reasoning: "Security review found no suspicious authorization or contract-routing pattern.",
+      suggestions: [],
     },
     {
       agent: "Agent C",
@@ -57,6 +74,7 @@ const safeSwapChain: DecisionChain = {
       riskLevel: "low",
       findings: ["Trade size is small", "Expected output is within tolerance"],
       reasoning: "The proposed swap is inside the demo risk budget and market assumptions.",
+      suggestions: [],
     },
   ],
   finalDecision: "executed",
@@ -66,6 +84,70 @@ const safeSwapChain: DecisionChain = {
     gasEstimate: 152340,
   },
   txHash: "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+};
+
+const agentRetryChain: DecisionChain = {
+  agentProposal: {
+    agent: "Agent A",
+    proposal: {
+      action: "swap",
+      amount: "0.01",
+      fromToken: "ETH",
+      toToken: "USDC",
+      tokenPair: "ETH / USDC",
+      targetContract: "Uniswap V3 SwapRouter",
+      slippage: "3%",
+      expectedOutput: "After reproposal",
+      deadline: "300s",
+    },
+    reasoning: "AgenticLoop revised the original 0.2 ETH proposal down to 0.01 ETH after risk review.",
+  },
+  hardRules: [
+    {
+      rule: "AmountRule",
+      passed: true,
+      severity: "pass",
+      reason: "Revised swap amount is within the autonomous execution limit.",
+    },
+    {
+      rule: "SlippageRule",
+      passed: true,
+      severity: "pass",
+      reason: "3% slippage is within the acceptable range.",
+    },
+    {
+      rule: "WhitelistRule",
+      passed: true,
+      severity: "pass",
+      reason: "Uniswap V3 SwapRouter is allowlisted.",
+    },
+  ],
+  agentReviews: [
+    {
+      agent: "Agent B",
+      role: "Security Auditor",
+      passed: true,
+      riskLevel: "low",
+      findings: [],
+      reasoning: "Mock security auditor found no issues.",
+      suggestions: [],
+    },
+    {
+      agent: "Agent C",
+      role: "Risk Analyst",
+      passed: true,
+      riskLevel: "low",
+      findings: [],
+      reasoning: "Amount is within autonomous execution limits after reproposal.",
+      suggestions: [],
+    },
+  ],
+  finalDecision: "executed",
+  decisionReason: "Transaction meets all criteria for execution after one bounded reproposal.",
+  simulation: {
+    success: true,
+  },
+  txHash: null,
 };
 
 const blockedSwapChain: DecisionChain = {
@@ -145,6 +227,7 @@ const confirmTransferChain: DecisionChain = {
       riskLevel: "low",
       findings: ["No prompt-injection pattern detected", "No suspicious approval request"],
       reasoning: "Security review found no exploit pattern, but the recipient has limited context.",
+      suggestions: [],
     },
     {
       agent: "Agent C",
@@ -153,6 +236,7 @@ const confirmTransferChain: DecisionChain = {
       riskLevel: "medium",
       findings: ["Transfer amount is near confirmation threshold", "Recipient context needs operator approval"],
       reasoning: "Risk review requests human confirmation before finalizing the audit state.",
+      suggestions: [],
     },
   ],
   finalDecision: "confirm_needed",
@@ -170,6 +254,124 @@ const confirmTransferChain: DecisionChain = {
   },
 };
 
+const safeSwapAttempts: AttemptRecord[] = [
+  {
+    attemptIndex: 1,
+    proposal: safeSwapChain.agentProposal.proposal,
+    hardRules: safeSwapChain.hardRules,
+    agentReviews: safeSwapChain.agentReviews,
+    decision: "execute",
+    decisionReason: safeSwapChain.decisionReason,
+    suggestions: [],
+    rejectionSource: "none",
+  },
+];
+
+const agentRetryAttempts: AttemptRecord[] = [
+  {
+    attemptIndex: 1,
+    proposal: {
+      action: "swap",
+      amount: "0.2",
+      fromToken: "ETH",
+      toToken: "USDC",
+      tokenPair: "ETH / USDC",
+      targetContract: "Uniswap V3 SwapRouter",
+      slippage: "3%",
+      deadline: "300s",
+      reasoning: "Initial proposal from deterministic parser.",
+    },
+    hardRules: [
+      {
+        rule: "AmountRule",
+        passed: true,
+        severity: "confirm",
+        reason: "Swap amount requires confirmation.",
+      },
+      {
+        rule: "SlippageRule",
+        passed: true,
+        severity: "pass",
+        reason: "Slippage within acceptable range.",
+      },
+    ],
+    agentReviews: [
+      {
+        agent: "Agent B",
+        role: "Security Auditor",
+        passed: true,
+        riskLevel: "low",
+        findings: [],
+        reasoning: "Mock security auditor found no issues.",
+        suggestions: [],
+      },
+      {
+        agent: "Agent C",
+        role: "Risk Analyst",
+        passed: false,
+        riskLevel: "high",
+        findings: ["Transaction amount creates high exposure"],
+        reasoning: "Amount is too high for autonomous execution.",
+        suggestions: [
+          {
+            field: "amount",
+            suggestedValue: "0.01",
+            reason: "Reduce amount to lower exposure.",
+            rejectionCode: "amount_too_high",
+          },
+        ],
+      },
+    ],
+    decision: "reject",
+    decisionReason: "Agents flagged the transaction: RiskAnalyst",
+    suggestions: [
+      {
+        field: "amount",
+        suggestedValue: "0.01",
+        reason: "Reduce amount to lower exposure.",
+        rejectionCode: "amount_too_high",
+      },
+    ],
+    rejectionSource: "sentinel",
+  },
+  {
+    attemptIndex: 2,
+    proposal: agentRetryChain.agentProposal.proposal,
+    hardRules: agentRetryChain.hardRules,
+    agentReviews: agentRetryChain.agentReviews,
+    decision: "execute",
+    decisionReason: agentRetryChain.decisionReason,
+    suggestions: [],
+    rejectionSource: "none",
+  },
+];
+
+const blockedSwapAttempts: AttemptRecord[] = [
+  {
+    attemptIndex: 1,
+    proposal: blockedSwapChain.agentProposal.proposal,
+    hardRules: blockedSwapChain.hardRules,
+    agentReviews: [],
+    decision: "reject",
+    decisionReason: blockedSwapChain.decisionReason,
+    suggestions: [],
+    rejectionSource: "sentinel",
+  },
+];
+
+const confirmTransferAttempts: AttemptRecord[] = [
+  {
+    attemptIndex: 1,
+    proposal: confirmTransferChain.agentProposal.proposal,
+    hardRules: confirmTransferChain.hardRules,
+    agentReviews: confirmTransferChain.agentReviews,
+    decision: "confirm",
+    decisionReason: confirmTransferChain.decisionReason,
+    suggestions: [],
+    rejectionSource: "none",
+  },
+];
+
 export const MOCK_EXECUTE_RESPONSES: Record<IntentScenario, ExecuteResponse> = {
   safe_swap: {
     txId: "demo-001",
@@ -178,22 +380,41 @@ export const MOCK_EXECUTE_RESPONSES: Record<IntentScenario, ExecuteResponse> = {
     status: "executed",
     reason: "All checks passed.",
     decisionChain: safeSwapChain,
+    attempts: safeSwapAttempts,
+    execution: {
+      ...mockExecutionNotSubmitted,
+      txHash: safeSwapChain.txHash,
+    },
+  },
+  agent_retry_swap: {
+    txId: "demo-002",
+    timestamp: "2026-05-28T09:39:10.000Z",
+    intent: DEMO_INTENTS.agent_retry_swap,
+    status: "executed",
+    reason: "AgenticLoop revised the risky proposal and then executed.",
+    decisionChain: agentRetryChain,
+    attempts: agentRetryAttempts,
+    execution: mockExecutionNotSubmitted,
   },
   blocked_swap: {
-    txId: "demo-002",
+    txId: "demo-003",
     timestamp: "2026-05-28T09:37:04.000Z",
     intent: DEMO_INTENTS.blocked_swap,
     status: "rejected",
     reason: "Hard rule violation: SlippageRule and AmountRule.",
     decisionChain: blockedSwapChain,
+    attempts: blockedSwapAttempts,
+    execution: mockExecutionNotSubmitted,
   },
   confirm_transfer: {
-    txId: "demo-003",
+    txId: "demo-004",
     timestamp: "2026-05-28T09:31:55.000Z",
     intent: DEMO_INTENTS.confirm_transfer,
     status: "confirm_needed",
     reason: "Manual approval required.",
     decisionChain: confirmTransferChain,
+    attempts: confirmTransferAttempts,
+    execution: mockExecutionNotSubmitted,
   },
 };
 
@@ -217,6 +438,7 @@ export const MOCK_AUDIT_LOG: AuditLogItem[] = [
         parsedReason: "Request timed out.",
       },
     },
+    attempts: blockedSwapAttempts,
   },
 ];
 
@@ -229,5 +451,7 @@ export function responseToAuditItem(response: ExecuteResponse): AuditLogItem {
     reason: response.reason,
     txHash: response.decisionChain.txHash,
     decisionChain: response.decisionChain,
+    attempts: response.attempts,
+    execution: response.execution,
   };
 }

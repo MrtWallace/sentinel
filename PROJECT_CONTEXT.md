@@ -2,7 +2,7 @@
 
 > Root source of truth for Codex and other coding agents. Read this before suggesting or making changes.
 
-Last updated: 2026-05-28
+Last updated: 2026-06-04
 
 ## 1. Project Positioning
 
@@ -51,7 +51,7 @@ Known mismatch:
 
 ### Hackathon Extension
 
-The hackathon direction is a demo frontend and backend shape for an AI risk-control execution pipeline:
+The hackathon direction is a demo frontend and backend shape for a CAW-backed AI risk-control execution pipeline:
 
 ```
 user intent
@@ -59,28 +59,46 @@ user intent
   -> hard rule checks
   -> Agent B security review + Agent C risk review
   -> decision
+  -> optional bounded reproposal attempts
   -> optional confirmation
-  -> execution/rejection
+  -> CAW execution / rejection / CAW policy denial
   -> audit log
 ```
 
 The frontend plan is in `hackathon/docs/frontend-plan.md`.
 
-The backend/API specs are in `hackathon/docs/backend-spec.md` and `hackathon/docs/backend-plan.md`. Current backend checkpoint status is tracked separately in `hackathon/docs/backend-progress.md`. As of this update, there is no FastAPI/Flask HTTP API implementation in the repo. Frontend work should use API-shaped mock data first, then replace only the transport layer when the backend is ready.
+The backend/API specs are in `hackathon/docs/backend-spec.md` and `hackathon/docs/backend-plan.md`. Current backend checkpoint status is tracked separately in `hackathon/docs/backend-progress.md`.
+
+As of 2026-06-04, the backend feature work lives in the separate worktree `/home/admini/sentinel-backend` on branch `feature/backend-risk-pipeline`. The current backend has a first FastAPI implementation with:
+
+- `GET /health`
+- `POST /api/execute`
+
+The current `/api/execute` response includes `tx_id`, `status`, `decision`, `decision_reason`, `attempts[]`, a legacy `decision_chain`, and an `execution` block. The legacy `decision_chain` exists for frontend compatibility, but the frontend plan must now treat `attempts[]` and `execution` as first-class demo data.
 
 Confirmed backend direction from `hackathon/docs/backend-plan.md`:
 
 - FastAPI is the MVP backend framework. Flask is only a later comparison exercise.
-- MVP API surface:
-  - `POST /api/execute`
-  - `POST /api/confirm`
-  - `GET /api/audit-log`
-  - `GET /api/audit-log/{tx_id}`
+- Cobo Agentic Wallet (CAW) is now the Cobo track primary execution path.
+- `SmartAccount.sol` is retained as baseline / fallback / technical evidence, not the primary Cobo demo funding path.
+- MVP API surface is staged:
+  - `POST /api/execute` exists first and must return a stable response shape for frontend work.
+  - `GET /api/audit-log/{tx_id}` follows for detail records.
+  - `POST /api/confirm` and `GET /api/audit-log` list API can be added after the minimal execute/detail path.
 - `CONFIRM` is a backend terminal state in MVP.
 - `/api/confirm` only records the user's approve/reject choice in the audit log for v1; it does not trigger a real on-chain transaction.
 - Real Sepolia transactions must be gated by `ENABLE_REAL_TX=true`; default behavior should be dry-run/mock.
 - Audit log v1 is local JSON plus HTTP query API, not chain-event reads.
 - Agent B/C receive raw user input as untrusted data plus structured `TxProposal`.
+- Agentic behavior uses a bounded retry loop:
+  - `attempts[]` records each proposal, rule result, reviewer result, decision, and rejection source.
+  - `ReproposalAgent` may revise a rejected proposal based on suggestions.
+  - `MutationGuard` verifies that revisions lower risk and do not bypass hard rules.
+- CAW evidence is now part of the demo surface:
+  - CAW wallet address.
+  - active pact id/status.
+  - CAW request / transaction id.
+  - CAW policy denial reason when applicable.
 
 ## 3. Tech Stack
 
@@ -93,6 +111,7 @@ Locked choices:
 | AI model | DeepSeek `deepseek-chat` |
 | Frontend | Scaffold-ETH 2, Next.js App Router, React, TypeScript, DaisyUI/Tailwind |
 | Chain interaction | wagmi v2, viem |
+| CAW execution | Cobo Agentic Wallet for Cobo track primary execution |
 | Network | Sepolia |
 | Secrets | `.env` for MVP |
 
@@ -164,7 +183,9 @@ For the current frontend implementation:
 - Build the risk-control console in checkpoints.
 - Use English UI copy for external demo.
 - Use Chinese internal docs and explanations.
-- Use API-shaped mock data until backend HTTP API exists.
+- Use API-shaped mock data until the backend API endpoint needed by the current checkpoint is ready.
+- Keep the frontend data access behind `frontend/packages/nextjs/lib/sentinel/api.ts`, with mapper functions handling backend DTO changes.
+- Show CAW evidence when the backend provides it, but do not add wallet connect or front-end signing flows.
 - Do not add wallet connect flow, auth, Redux/Zustand, i18n, charts, mobile polish, or chain-event audit reads in v1.
 - Do not implement real streaming; use loading skeleton plus reveal animation.
 
@@ -174,7 +195,9 @@ For the current frontend implementation:
 - `agent/guardrails.py` still uses blocking `input()` for confirmation in the CLI flow.
 - Swap path in `main.py` does not call `guardrails.check`; the hackathon risk pipeline is expected to supersede this.
 - `agent/eval.py` has expected cases for ENS/WETH-like variants that may not match the strict parser perfectly.
-- Frontend `page.tsx` has a hardcoded old contract address for balance reads.
+- Frontend plan must be updated from a single `decision_chain` model to `attempts[] + execution` while preserving a simple demo UI.
+- Current backend `/api/execute` has only a minimal `execution.status = "not_submitted"` block until CAW execution is implemented.
+- Frontend status bar must shift from SmartAccount-only framing to CAW wallet / pact framing for the Cobo demo; SmartAccount can remain as secondary baseline/fallback context.
 - Frontend `confirmExecution` must mirror backend MVP semantics: update audit/decision state, not assume confirmation sends a real transaction.
 - Root README should not claim the planned risk-control console is already implemented until Checkpoint 1-7 are complete.
 

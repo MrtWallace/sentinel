@@ -1,16 +1,25 @@
+import { mapBackendExecuteResponse } from "~~/lib/sentinel/backendMapper";
 import { MOCK_AUDIT_LOG, MOCK_EXECUTE_RESPONSES, responseToAuditItem } from "~~/lib/sentinel/mockData";
 import type {
   ApiError,
   AuditLogItem,
+  BackendExecuteResponse,
   ConfirmExecutionResponse,
   ExecuteResponse,
   IntentScenario,
 } from "~~/lib/sentinel/types";
 
 const MOCK_LATENCY_MS = 350;
+const EXECUTE_PROXY_PATH = "/api/sentinel/execute";
 
 // 这个函数是页面唯一需要依赖的执行入口；后端完成后只替换函数内部实现。
 export async function executeIntent(intent: string): Promise<ExecuteResponse> {
+  const backendResponse = await executeIntentViaBackend(intent);
+
+  if (backendResponse) {
+    return backendResponse;
+  }
+
   await waitForMockLatency();
 
   maybeThrowMockError(intent);
@@ -49,7 +58,40 @@ export async function confirmExecution(txId: string, approved: boolean): Promise
         riskNote: "Confirmation was recorded by the mock API layer.",
       },
     },
+    attempts: baseResponse.attempts.map(attempt => ({
+      ...attempt,
+      decision: approved ? "execute" : "reject",
+      decisionReason: reason,
+      rejectionSource: approved ? "none" : "sentinel",
+    })),
+    execution: {
+      ...baseResponse.execution,
+      txHash: null,
+      reason,
+    },
   };
+}
+
+async function executeIntentViaBackend(intent: string): Promise<ExecuteResponse | null> {
+  try {
+    const response = await fetch(EXECUTE_PROXY_PATH, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ intent }),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const body = (await response.json()) as BackendExecuteResponse;
+
+    return mapBackendExecuteResponse(body, intent);
+  } catch {
+    return null;
+  }
 }
 
 function maybeThrowMockError(intent: string): void {
@@ -121,6 +163,10 @@ function detectIntentScenario(intent: string): IntentScenario {
 
   if (swapEthAmount !== null && swapEthAmount >= 1) {
     return "blocked_swap";
+  }
+
+  if (swapEthAmount !== null && swapEthAmount >= 0.2) {
+    return "agent_retry_swap";
   }
 
   if (normalizedIntent.includes("send") || normalizedIntent.includes("0.08 eth")) {
