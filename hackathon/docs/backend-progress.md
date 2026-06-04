@@ -1,7 +1,7 @@
 # Sentinel Hackathon — 后端 & 合约进度
 
 > 目的：只记录短期状态，包括 checkpoint 进度表、当前阻塞、最近完成项。
-> 最后更新：2026-06-04 21:06
+> 最后更新：2026-06-04 21:22
 > 稳定方向和 checkpoint 定义见 `hackathon/docs/backend-plan.md`。
 
 ## 更新约定
@@ -22,7 +22,7 @@
 | CP4b | ReproposalAgent + MutationGuard | 1.5-2.5h | 2026-06-04 00:21 | 2026-06-04 21:06 | Done | 11 个 reproposal 单元测试通过 |
 | CP4c | AgenticLoop + in-memory attempts | 1.5-2.5h | 2026-06-04 21:06 | 2026-06-04 21:06 | Done | 4 个 loop 单元测试通过，attempts 先存在返回值 |
 | CP4.5 | CAW Setup Spike | 1-3h | 待开始 | 待完成 | Todo | P0：CLI/SDK/wallet/pact 提前验通 |
-| CP5 | Minimal FastAPI mock API + AuditLogger + attempts[] | 2-3h | 待开始 | 待完成 | Todo | 先给前端 `/api/execute` + attempts/execution shape |
+| CP5 | Minimal FastAPI mock API + AuditLogger + attempts[] | 2-3h | 2026-06-04 21:22 | 待完成 | In Progress | 最小 `/api/execute` 已完成；AuditLogger / detail API 待补 |
 | CP6 | CAW Execution Backend + Real Transfer | 6-10h | 待开始 | 待完成 | Todo | Cobo 硬门槛：至少一条真实 CAW `transfer_tokens` |
 | CP7 | Demo Evidence + README + Script | 2-4h | 待开始 | 待完成 | Todo | CAW evidence checklist + 3-5 分钟 demo script |
 | CP8 | Stretch：合约事件 / contract_call swap / polish | 2-5h | 待开始 | 待完成 | Stretch | 时间允许再做，不阻塞 Cobo MVP |
@@ -30,13 +30,34 @@
 ## 当前阻塞
 
 - 无明确外部阻塞。
-- 当前进行：CP4.5 CAW Setup Spike，优先验通真实 CAW wallet / pact / SDK 路径。
+- 当前进行：CP5 最小 FastAPI API，先给前端稳定 `/api/execute` response shape；随后回到 CP4.5 CAW Setup Spike。
 - Cobo 赛道新增工作量约 10-16h；其中真实 CAW setup + `transfer_tokens` 是硬门槛，不能用 mock/simulator 替代。
 - agentic 优化新增约 3-5h，主要集中在 ReproposalAgent、MutationGuard 和 loop 测试。
 - 提交截止：2026-06-13 12:00。当前判断仍可完成；执行顺序调整为 CP4b -> CP4c -> CP4.5 CAW setup -> CP5 minimal API -> CP6 real transfer -> CP7 evidence/script。
 - 前端需要后续同步：DecisionChain 支持 attempts；状态栏从 SmartAccount 主视角调整为 CAW wallet / pact 主视角；Audit 展示 CAW request id、policy result、tx hash。
 
 ## 最近完成项
+
+### 2026-06-04 CP5 最小 API 起步
+
+- 已新增 FastAPI app：
+  - `GET /health`
+  - `POST /api/execute`
+- `/api/execute` 当前最小行为：
+  - 接收 `{ "intent": "..." }` 或 `{ "proposal": {...} }`。
+  - 使用 deterministic demo parser，不调用 DeepSeek。
+  - 串起 `AgenticLoop`，返回 `status`、`decision`、`decision_reason`、`attempts`、`decision_chain`、`execution`。
+  - `execution.status = "not_submitted"`，明确 CP5 最小 API 还不提交 CAW 交易。
+- 当前验证：
+
+```bash
+PYTHONPATH=agent python3 -m unittest discover -s agent -p 'test_*.py'
+```
+
+```text
+Ran 69 tests
+OK
+```
 
 ### 2026-06-04 CP4b/CP4c：Reproposal + AgenticLoop
 
