@@ -1,7 +1,7 @@
 # Sentinel Hackathon — 后端 & 合约进度
 
 > 目的：只记录短期状态，包括 checkpoint 进度表、当前阻塞、最近完成项。
-> 最后更新：2026-06-03 21:17
+> 最后更新：2026-06-04 21:06
 > 稳定方向和 checkpoint 定义见 `hackathon/docs/backend-plan.md`。
 
 ## 更新约定
@@ -19,8 +19,8 @@
 | CP2 | RiskPipeline 骨架 + AmountRule | 2-3h | 2026-06-01（未记录分钟） | 2026-06-01 05:12 | Done | 19 个 agent 单元测试通过，包含 stop-on-reject 测试 |
 | CP3 | 剩余硬规则：Slippage / Whitelist / Approval / Frequency | 4-6h | 2026-06-01 05:12 | 2026-06-01 06:48 | Done | 37 个 risk/pipeline 单元测试通过 |
 | CP4a | DecisionEngine + Agent B/C mock + suggestions | 已完成 | 2026-06-02 00:13 | 2026-06-02 21:41 | Done | 53 个单元测试通过 |
-| CP4b | ReproposalAgent + MutationGuard | 1.5-2.5h | 待开始 | 待完成 | Todo | 下一步；按 `rejection_code` 生成 revised proposal 并验证 |
-| CP4c | AgenticLoop + in-memory attempts | 1.5-2.5h | 待开始 | 待完成 | Todo | 最多 2 次 retry，attempts 先存在返回值 |
+| CP4b | ReproposalAgent + MutationGuard | 1.5-2.5h | 2026-06-04 00:21 | 2026-06-04 21:06 | Done | 11 个 reproposal 单元测试通过 |
+| CP4c | AgenticLoop + in-memory attempts | 1.5-2.5h | 2026-06-04 21:06 | 2026-06-04 21:06 | Done | 4 个 loop 单元测试通过，attempts 先存在返回值 |
 | CP4.5 | CAW Setup Spike | 1-3h | 待开始 | 待完成 | Todo | P0：CLI/SDK/wallet/pact 提前验通 |
 | CP5 | Minimal FastAPI mock API + AuditLogger + attempts[] | 2-3h | 待开始 | 待完成 | Todo | 先给前端 `/api/execute` + attempts/execution shape |
 | CP6 | CAW Execution Backend + Real Transfer | 6-10h | 待开始 | 待完成 | Todo | Cobo 硬门槛：至少一条真实 CAW `transfer_tokens` |
@@ -30,13 +30,39 @@
 ## 当前阻塞
 
 - 无明确外部阻塞。
-- 当前进行：CP4a 已完成；下一步进入 CP4b，补 `MockReproposalAgent` 和 `MutationGuard`。
+- 当前进行：CP4.5 CAW Setup Spike，优先验通真实 CAW wallet / pact / SDK 路径。
 - Cobo 赛道新增工作量约 10-16h；其中真实 CAW setup + `transfer_tokens` 是硬门槛，不能用 mock/simulator 替代。
 - agentic 优化新增约 3-5h，主要集中在 ReproposalAgent、MutationGuard 和 loop 测试。
 - 提交截止：2026-06-13 12:00。当前判断仍可完成；执行顺序调整为 CP4b -> CP4c -> CP4.5 CAW setup -> CP5 minimal API -> CP6 real transfer -> CP7 evidence/script。
 - 前端需要后续同步：DecisionChain 支持 attempts；状态栏从 SmartAccount 主视角调整为 CAW wallet / pact 主视角；Audit 展示 CAW request id、policy result、tx hash。
 
 ## 最近完成项
+
+### 2026-06-04 CP4b/CP4c：Reproposal + AgenticLoop
+
+- 已完成 `MockReproposalAgent`：
+  - 按 `rejection_code` 处理 `amount_too_high`、`slippage_too_high`、`deadline_too_long`。
+  - `unknown_contract` 默认不自动改合约，避免绕过 whitelist。
+- 已完成 `MutationGuard`：
+  - amount 至少降低 30%。
+  - slippage 必须降低。
+  - deadline 必须缩短。
+  - `to_contract` 不允许在 reproposal 中被偷改。
+- 已完成 `AgenticLoop` 第一版：
+  - 串起 `RiskPipeline`、Agent B/C mock、`DecisionEngine`、`ReproposalAgent`、`MutationGuard`。
+  - 支持最多 2 次 retry。
+  - 每轮返回 in-memory `AttemptRecord`，供 CP5 API / AuditLogger 复用。
+  - hard rule reject 不调用 reviewer，不触发 retry。
+- 当前验证：
+
+```bash
+PYTHONPATH=agent python3 -m unittest discover -s agent -p 'test_*.py'
+```
+
+```text
+Ran 66 tests
+OK
+```
 
 ### 2026-06-03 Solo MVP 计划重排
 
