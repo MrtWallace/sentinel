@@ -4,6 +4,8 @@ Sentinel is a risk-aware autonomous trading agent for the Cobo Agentic Wallet tr
 
 It turns a user intent into a structured transaction proposal, runs deterministic risk rules and agent reviews, retries bounded safer proposals when possible, and executes approved transfers through Cobo Agentic Wallet (CAW) with Pact policy enforcement.
 
+> Active hackathon development is currently split across `feature/backend-risk-pipeline` and `feature/frontend-risk-console`. This README mirrors the current Cobo/Agent direction before final integration back to `main`.
+
 ## Cobo Track
 
 - Track: Cobo — Agentic Economy x Cobo Agentic Wallet
@@ -37,6 +39,34 @@ Sentinel:
 CAW:
   wallet-level Pact policy enforcement for real funds
 ```
+
+## Current Status
+
+Backend Cobo core is implemented and verified on the feature branch:
+
+- FastAPI `/api/execute` risk decision API
+- local audit list/detail API
+- bounded reproposal loop with mutation guard
+- provider-agnostic LLM reviewers
+- CAW execution backend with real `transfer_tokens`
+- CAW policy-deny handling mapped to final API `reject`
+- per-user CAW wallet lifecycle API contract and persistence
+
+Next backend priorities:
+
+1. Input guard: sanitize user intent, validate LLM output, detect intent/proposal mismatch.
+2. User-scoped CAW execution: route `/api/execute` through the user's CAW wallet and active Pact.
+3. Minimal auth and rate limit: MetaMask signature login, JWT, simple per-user/IP throttling.
+4. User risk config + Pact sync status.
+5. SQLite audit with per-user CAW evidence queries.
+
+Advanced Agent features are intentionally deferred:
+
+- Agent Planner / multi-step autonomous workflow: P3, after Cobo core is stable.
+- Agent Reflector / self-critique: P3, roadmap only for the current demo.
+- Write-capable MCP and full external tool suite: P3, not a demo requirement.
+
+The current Agent evidence layer should stay bounded: read-only MCP, basic tool calling, and memory anomaly detection are useful; complex autonomous planning is not required for the Cobo demo.
 
 ## Demo Evidence
 
@@ -96,6 +126,22 @@ Audit list:
 
 ```bash
 curl http://127.0.0.1:8000/api/audit-log
+```
+
+Wallet lifecycle endpoints:
+
+```text
+GET  /api/wallet/status
+POST /api/wallet/connect-existing
+POST /api/wallet/create
+POST /api/wallet/pact
+POST /api/wallet/refresh-status
+```
+
+Shared API response shapes are tracked in the backend feature branch contract:
+
+```text
+hackathon/docs/shared-api-contract.md
 ```
 
 ## Execution Modes
@@ -181,7 +227,7 @@ PYTHONPATH=agent agent/venv/bin/python -m unittest discover -s agent -p 'test_*.
 Current backend test count:
 
 ```text
-Ran 82 tests
+Ran 107 tests
 OK
 ```
 
@@ -193,8 +239,11 @@ agent/
   audit.py            local JSON audit logger
   execution.py        mock / CAW execution backend
   loop.py             bounded agent loop
+  llm.py              provider-agnostic LLM client
   reproposal.py       reproposal agent + mutation guard
   reviewers.py        mock reviewers
+  wallet_store.py     per-user CAW wallet persistence
+  wallet_service.py   CAW wallet lifecycle service
   risk/               deterministic hard rules and pipeline
   caw_smoke.py        manual CAW SDK smoke script
 
@@ -207,6 +256,8 @@ hackathon/docs/
   backend-progress.md
   caw-setup.md
   demo-script.md
+  shared-api-contract.md
+  post-mvp-requirements.md
 ```
 
 ## Documentation
@@ -214,9 +265,16 @@ hackathon/docs/
 - `PROJECT_CONTEXT.md`: project context
 - `hackathon/docs/backend-plan.md`: stable backend plan
 - `hackathon/docs/backend-progress.md`: short progress tracker
+- `hackathon/docs/shared-api-contract.md`: backend/frontend API contract
+- `hackathon/docs/post-mvp-requirements.md`: Post-MVP Cobo + Agent requirements and priorities
 - `hackathon/docs/caw-setup.md`: CAW setup and smoke-test flow
 - `hackathon/docs/demo-script.md`: demo video script
 - `hackathon/docs/frontend-plan.md`: frontend plan
+
+If reading from `main` before integration, detailed Cobo/Agent planning docs may still live on the active feature branches:
+
+- `feature/backend-risk-pipeline`
+- `feature/frontend-risk-console`
 
 ## License
 
