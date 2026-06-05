@@ -4,12 +4,13 @@
 
 为 Sentinel 构建 demo 前端，展示 AI Agent DeFi 交易的完整决策链路。
 
-先读 `docs/frontend-spec.md` 了解完整设计规格。
+先读 `docs/frontend-plan.md` 了解当前前端计划，并读 `docs/shared-api-contract.md` 对齐后端 API contract。
 
 ## 项目位置
 
 - 前端代码: `sentinel/frontend/` (已有 Scaffold-ETH 2 基础)
-- 后端 spec: `docs/frontend-spec.md`
+- API contract: `docs/shared-api-contract.md`
+- MVP archive: `docs/mvp-spec.md`
 
 ## 核心页面
 
@@ -40,7 +41,7 @@
 
 ## Mock 数据
 
-`docs/frontend-spec.md` 底部有完整的 mock JSON，直接用。
+`docs/shared-api-contract.md` 有当前 API examples；mock 数据应按 contract 生成。
 
 ## 不要做的事
 

@@ -3,6 +3,7 @@
 > **目的**：记录从黑客松 MVP 到真实产品需要补齐的架构和功能。
 > **当前状态**：MVP 已完成（后端 CP1-7.6，前端 CP0-7），demo-ready。
 > **适用对象**：Codex / Claude Code 接手开发时的任务输入。
+> **API Contract**：前后端接口字段以 `shared-api-contract.md` 为准，本文件只记录需求和优先级。
 
 ---
 
@@ -14,7 +15,7 @@
 |------|----------|-------------|
 | 钱包 | 所有用户共享一个 CAW | 每个用户独立 CAW 钱包 |
 | 风控配置 | 硬编码阈值 | 用户可自定义风险偏好 |
-| 执行容灾 | CAW 不可用直接报错 | 降级到 SmartAccount 或 pending 队列 |
+| 执行容灾 | CAW 不可用直接报错 | CAW timeout/API 错误可 pending/fallback；CAW policy deny 必须拒绝 |
 | 审计存储 | 本地 JSON 文件 | SQLite/PostgreSQL，支持查询和分页 |
 | 安全防护 | LLM 输入输出无校验 | 输入清洗 + 输出 schema 验证 |
 | API 安全 | 无认证无限制 | JWT 认证 + Rate Limiting |
@@ -23,11 +24,11 @@
 
 ## 2. 需求清单
 
-### 2.1 Per-User CAW 钱包注册
+### 2.1 Per-User CAW 钱包生命周期
 
 **优先级**：P0 — 架构基础，后续全依赖
 
-**目标**：每个用户通过 MetaMask 连接后，绑定自己的 CAW 钱包。Sentinel 风控层只做判断，执行时路由到用户自己的 CAW。
+**目标**：每个用户通过 MetaMask 连接后绑定自己的 CAW 钱包。已有 CAW 钱包走 connect/import；没有 CAW 钱包走 create/pairing。新创建的钱包是持久化用户钱包，不是一次性临时 demo 钱包。Sentinel 风控层只做判断，执行时路由到用户自己的 CAW。
 
 **数据模型**：
 
@@ -36,9 +37,11 @@
 class UserWallet:
     user_address: str          # MetaMask 地址（主键）
     caw_wallet_id: str         # CAW 钱包 ID
+    caw_wallet_address: str    # CAW 钱包地址
     caw_api_key: str           # CAW API Key（加密存储）
     pact_id: str | None        # 当前活跃 Pact ID
-    pact_status: Literal["none", "pending", "active", "expired", "revoked"]
+    pairing_status: Literal["none", "pending", "paired", "failed"]
+    pact_status: Literal["none", "pending_approval", "active", "expired", "revoked"]
     created_at: str
     updated_at: str
 ```
@@ -46,10 +49,14 @@ class UserWallet:
 **API 端点**：
 
 ```
-POST /api/wallet/register
+POST /api/wallet/connect-existing
+  请求：{ "user_address": "0x...", "caw_wallet_id": "..." }
+  行为：绑定已有 CAW 钱包，返回 pairing / pact 状态
+
+POST /api/wallet/create
   请求：{ "user_address": "0x..." }
-  行为：调用 CAW SDK 创建钱包，返回 pairing 信息
-  响应：{ "wallet_id": "...", "pairing_url": "...", "status": "pending_pairing" }
+  行为：调用 CAW SDK 创建持久化钱包，返回 pairing 信息
+  响应：{ "wallet_id": "...", "pairing_url": "...", "status": "pairing_pending" }
 
 GET /api/wallet/status?user_address=0x...
   响应：{ "wallet_id": "...", "pact_status": "active", "pact_limits": {...} }
@@ -58,6 +65,10 @@ POST /api/wallet/pact
   请求：{ "user_address": "0x...", "limits": { "max_amount_eth": "0.1", ... } }
   行为：提交 PactSpec 到 CAW，等待用户在 App 审批
   响应：{ "pact_id": "...", "status": "pending_approval" }
+
+POST /api/wallet/refresh-status
+  请求：{ "user_address": "0x..." }
+  行为：从 CAW 拉取最新 pairing / pact 状态
 ```
 
 **执行路由改造**：
@@ -78,7 +89,7 @@ def _execute_if_allowed(result, tx_id, user_address):
 
 **前端改造**：
 - SentinelShell 顶部栏：已连接钱包时显示用户 CAW 地址 + Pact 状态
-- 未绑定时：显示"绑定 CAW 钱包"按钮 → 展示 pairing 流程
+- 未绑定时：显示 "Connect existing CAW" 和 "Create CAW wallet" 两个入口
 - `/api/execute` 请求时自动携带 `user_address`
 
 **Pitfalls**：
@@ -143,17 +154,20 @@ POST /api/config/reset
 
 **优先级**：P1 — 故障处理能力
 
-**目标**：CAW 不可用时自动降级到备用执行路径，不直接报错。
+**目标**：CAW timeout / API 错误时自动进入 pending 或可控 fallback，不直接报错。CAW policy deny 是资金安全边界，必须拒绝，不能 fallback 到 SmartAccount 执行。
 
 **降级链**：
 
 ```
 CAW (primary)
-  → 超时 / API 错误 / policy deny
+  → 超时 / API 错误
 SmartAccount.sol (fallback)
   → 不可用 / 网络错误
 Pending Queue (last resort)
   → 入队等待，CAW 恢复后自动重试
+
+CAW policy deny
+  → reject，不 fallback
 ```
 
 **实现**：
@@ -374,11 +388,13 @@ async def rate_limit_middleware(request: Request, call_next):
 ```
 Task 1: Per-user CAW wallet registration
 - Add user_wallets table (SQLite)
-- POST /api/wallet/register: call CAW SDK to create wallet, return pairing info
+- POST /api/wallet/connect-existing: bind an existing CAW wallet
+- POST /api/wallet/create: call CAW SDK to create a persistent wallet, return pairing info
 - GET /api/wallet/status: query user binding status + pact status  
 - POST /api/wallet/pact: submit PactSpec
+- POST /api/wallet/refresh-status: refresh pairing/pact status from CAW
 - Refactor /api/execute: route to user's own CAW via user_address
-- Frontend: connect wallet → check binding → show registration flow if unbound
+- Frontend: connect wallet → check binding → show connect-existing/create-wallet flow if unbound
 - Reference: agent/execution.py for existing CawExecutor pattern
 
 Task 2: User risk configuration (Settings page)
@@ -393,7 +409,8 @@ Task 2: User risk configuration (Settings page)
 
 ```
 Task 3: CAW fallback strategy
-- FallbackExecutor: CAW → SmartAccount → pending queue
+- FallbackExecutor: CAW timeout/API error → SmartAccount or pending queue
+- CAW policy_denied must reject and must not fallback
 - Log fallback reason in audit
 - Frontend: show which backend was used
 

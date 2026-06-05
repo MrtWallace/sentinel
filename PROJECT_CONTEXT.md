@@ -10,6 +10,8 @@
 
 > 定位调整说明(2026-05-01)：原定位"AI-Operated Smart Account"调整为"AI Agent for DeFi Operations"，以精准匹配Binance AI Agent Engineer岗位JD。合约代码无需改动，只影响README描述、Demo故事线和简历措辞。
 
+> Hackathon/Cobo方向补充(2026-06-06)：当前赛道优先级调整为 **Cobo Agentic Wallet (CAW) 优先的DeFi执行层**。SmartAccount仍是历史MVP和本地/降级执行基线，但评审Demo应尽量完整展示CAW钱包生命周期、CAW Pact护栏、CAW执行证据和策略拒绝链路。
+
 ---
 
 ## 2. 项目的"为什么"
@@ -46,15 +48,16 @@
 |----|------|------|
 | 智能合约 | Solidity 0.8.20+ | 不要用旧版本 |
 | 合约工具链 | Foundry (forge/cast/anvil) | **不用Hardhat**,这是练习Foundry的项目 |
-| Agent | Python 3.11+ | 用web3.py + anthropic SDK |
-| AI模型 | DeepSeek API | deepseek-chat；原计划Claude，因国内支付限制改用DeepSeek |
+| Agent | Python 3.11+ | FastAPI + 风险/执行流水线；历史MVP曾用web3.py脚本 |
+| AI模型 | DeepSeek API / OpenAI-compatible client | deepseek-chat；原计划Claude，因国内支付限制改用DeepSeek |
+| Cobo CAW | cobo-agentic-wallet / Cobo WaaS | Post-MVP主执行钱包、Pact策略护栏和审计证据 |
 | 前端 | Next.js 14 + Scaffold-ETH 2 | 不要从零搭Next |
 | 链交互 | wagmi v2 + viem | Scaffold-ETH 2自带 |
 | 部署链 | Sepolia testnet | 不要部署主网 |
 | 私钥管理 | .env文件 (MVP) | 生产级方案非MVP范围 |
 
 **关键纪律**:
-- ❌ 不要建议用LangChain、AI SDK、Coinbase AgentKit(MVP不需要,后续可加)
+- ❌ 不要建议用LangChain、AI SDK、Coinbase AgentKit等重型框架(MVP/Post-MVP都优先轻量可控)
 - ❌ 不要建议EIP-4337 / Account Abstraction标准实现(MVP是简化版)
 - ❌ 不要建议多链支持
 - ❌ 不要建议复杂的私钥管理方案
@@ -62,6 +65,8 @@
 ---
 
 ## 5. MVP范围(锁定边界)
+
+> 本节保留历史MVP边界，主要用于理解项目来源和SmartAccount基线。当前Hackathon扩展以 Cobo/CAW 为优先级最高的Post-MVP方向，具体拆分以 `hackathon/docs/backend-plan.md`、`hackathon/docs/frontend-plan.md` 和 `hackathon/docs/shared-api-contract.md` 为准。
 
 ### MVP必须包含
 1. **SmartAccount合约**:持有资金,有owner和agent两个角色
@@ -128,12 +133,35 @@
 - `bytes calldata` → `bytes memory` 是关键修复，详见 notes/2026-05-02-uniswap-debug.md
 - Uniswap V3 已通过 SmartAccount 成功执行（0.001 ETH → 8.02 USDC on Sepolia）✅
 
+### 当前Hackathon Cobo + Agent路线(2026-06-06)
+
+**总原则**：Cobo/CAW功能尽量全做，Agent功能做成可解释的证据层；高Demo风险的Agent自动化能力后置。
+
+**Cobo优先(P1)**：
+- 用户CAW设置拆成两条路径：已有CAW钱包直接连接/导入；没有CAW钱包则注册并创建新的CAW钱包。
+- 新创建的CAW钱包不是一次性临时钱包，应持久化到后端数据库，并维护 `wallet_status`、`pairing_status`、`pact_status`。
+- 后端执行优先走CAW；CAW Pact策略拒绝必须直接拒绝，不能静默fallback到SmartAccount。
+- CAW timeout/API不可用可以进入pending或明确fallback，但必须在审计证据里标出原因。
+- Demo必须展示：CAW active、Pact active、CAW request/transaction id、policy denied、Sentinel reject。
+
+**Agent优先(P1/P2)**：
+- P1做基础tool calling、只读MCP工具、memory anomaly evidence，让项目不只停留在单轮loop。
+- P2再考虑planner/reflection、多步自动化、写操作MCP等Demo风险更高的能力。
+
+**输入安全**：
+- 前端做UX层输入检测：长度、明显非法字符、危险格式提示、按钮禁用和错误文案。
+- 后端才是安全边界：Pydantic/schema校验、sanitize、LLM prompt injection提示、risk/anomaly判断、rate limit。
+
+**工作流**：
+- 继续使用后端/前端分离的两个分支和worktree开发；通过 `shared-api-contract.md` 作为联调契约。
+- 每个跨端功能完成前，需要先更新shared contract和对应plan，再进入代码实现。
+
 ---
 
 ## 6. 项目结构
 
 ```
-sentinel/
+sentinel-backend/
 ├── PROJECT_CONTEXT.md          # 本文档
 ├── README.md                    # 项目说明(对外)
 ├── .gitignore
@@ -149,19 +177,33 @@ sentinel/
 │
 ├── agent/                       # Python AI Agent
 │   ├── main.py                  # 主循环
-│   ├── intent.py                # Claude意图解析
+│   ├── intent.py                # LLM意图解析
 │   ├── executor.py              # 链上交易执行
 │   ├── requirements.txt
 │   ├── .env.example
 │   └── venv/                    # 虚拟环境(gitignore)
 │
-└── frontend/                    # Scaffold-ETH 2 (Day 9-10建)
-    └── ... (暂不细化)
+└── hackathon/                   # Hackathon planning/docs
+    ├── README.md
+    ├── CLAUDE-backend.md
+    ├── CLAUDE-frontend.md
+    ├── proposal.md              # External-facing proposal, keep concise
+    └── docs/
+        ├── backend-plan.md
+        ├── frontend-plan.md
+        ├── shared-api-contract.md
+        ├── mvp-spec.md          # Historical MVP archive, not active source of truth
+        └── post-mvp-requirements.md
+
+frontend worktree:
+/home/admini/sentinel-frontend   # branch feature/frontend-risk-console
 ```
 
 ---
 
-## 7. 开发路线图(更新于2026-05-01)
+## 7. 开发路线图(历史MVP，更新于2026-05-01)
+
+> 下面表格是原始SmartAccount MVP路线。当前Cobo/Agent Post-MVP路线不要在这里继续扩展，统一维护到 `hackathon/docs/backend-plan.md`、`hackathon/docs/frontend-plan.md` 和 `hackathon/docs/shared-api-contract.md`。
 
 | 阶段 | 任务 | 完成标志 | 状态 |
 |------|------|---------|------|
@@ -247,12 +289,20 @@ sentinel/
 ## 10. 当前状态(每次更新)
 
 ```
-最后更新：2026-05-07
-当前阶段：阶段6（合约最终版 + Demo视频）
-本日目标：合约补全(setAgent/receive/Executed) → 重部署 → re-verify → 录Demo视频
-卡点：无
-合约地址：0xad7C1EBe561C9359C657FA36a156Cd213C8E6d7c（Sepolia，当前版本）
-作息：10:00-13:00 Deep Work（驾校16:00-20:00）
+最后更新：2026-06-06
+当前阶段：Hackathon Post-MVP planning / Cobo CAW + Agent evidence
+当前分支：
+- backend worktree: /home/admini/sentinel-backend @ feature/backend-risk-pipeline
+- frontend worktree: /home/admini/sentinel-frontend @ feature/frontend-risk-console
+本轮目标：
+- Cobo/CAW功能优先拆入前后端plan
+- Agent功能保留但按Demo风险分层
+- 新增 shared-api-contract.md 作为前后端联调契约
+- 合并旧 backend-spec/frontend-spec 为 mvp-spec.md 历史归档
+卡点：
+- CAW SDK/API真实返回字段需要实现时再以官方文档或实际SDK校准
+- Agent高级自动化不要抢Cobo主线优先级
+合约地址：0xad7C1EBe561C9359C657FA36a156Cd213C8E6d7c（Sepolia，历史SmartAccount MVP版本）
 ```
 
 ---
@@ -269,6 +319,8 @@ sentinel/
 - 🌟 投递到至少1个黑客松
 - 🌟 在Twitter/X发build in public推文
 - 🌟 GitHub README有架构图、测试覆盖率截图、demo链接
+- 🌟 Demo能展示完整CAW链路：CAW wallet active、Pact active、CAW execution evidence、policy deny、Sentinel risk reject
+- 🌟 Agent证据层能展示tool calling、只读MCP调用和memory anomaly，而不是只有单轮LLM loop
 
 **成功不是**:
 - 完美的代码

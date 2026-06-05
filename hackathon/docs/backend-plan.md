@@ -1,7 +1,7 @@
 # Sentinel Hackathon — 后端 & 合约稳定计划
 
 > 目的：记录 Sentinel 黑客松后端/合约方向、已确认取舍、checkpoint 定义和长期测试策略。
-> 最后更新：2026-06-03 21:17
+> 最后更新：2026-06-06
 > 短期进度、当前阻塞、最近完成项见 `hackathon/docs/backend-progress.md`。
 
 ## 语言约定
@@ -63,6 +63,11 @@ Sentinel 不应该只是一个交易解析器，而要表现为 CAW 之上的 ri
 - Agentic 能力采用 `ReproposalAgent + MutationGuard + AgenticLoop`：LLM/mock 负责重新提案，确定性 guard 负责验证风险是否真的降低。
 - CP4/CP5 不做多笔交易拆分，`TxProposal` 仍保持单笔交易模型；拆单策略只作为 reasoning / v1.1 方向。
 - Solo MVP 优先级按 P0/P1/P2 执行，先暴露 CAW 真实调用风险，再补 API 和 demo polish。
+- Post-MVP 继续保持前后端分支/worktree 分离：后端在 `feature/backend-risk-pipeline`，前端在 `feature/frontend-risk-console`，最后再开 integration branch 做联调和 demo polish。
+- 后续路线采用 **Cobo-first execution platform + Agent evidence layer**：CAW 钱包、Pact、policy、执行证据是获奖主线；Agent 工具调用、记忆和 MCP 是展示 Sentinel 不只是 if-else 风控的增强层。
+- CAW 账户生命周期拆成两条路径：已有 CAW 钱包走 connect/import；没有 CAW 钱包走 create/pairing。新创建的钱包必须持久化到后端数据库，不作为一次性临时钱包处理。
+- 用户 intent 输入需要前后端双层校验：前端做体验层提示，后端做安全边界。后端 sanitizer、schema validation、intent/proposal anomaly detection 失败时必须 fail closed。
+- CAW policy deny 是资金安全边界，不能 fallback 到 SmartAccount 执行。只有 CAW timeout/API unavailable 这类可用性问题才允许 pending/fallback。
 
 ## Solo MVP 优先级
 
@@ -408,6 +413,143 @@ Demo 先按场景反推后端字段和前端展示：
 - 补 Foundry 测试，确认事件 emit 和原有权限/限额逻辑不变。
 - 不新增复杂 guard，不改变 `execute(address,uint256,bytes)` 的行为。
 - 时间允许再做 CAW `contract_call` swap 和 LLM reproposal polish。
+
+## Post-MVP Cobo + Agent Checkpoint 定义
+
+> 本节记录 CP7.6 之后的新路线。优先级顺序是 Cobo core > Agent evidence > security hardening > advanced agent。每个 checkpoint 实现前先更新 shared contract/docs，再进入代码。
+
+### Shared CP0：Contract / Docs 对齐
+
+- 所属分支：后端文档先在 `feature/backend-risk-pipeline` 更新；前端分支 `feature/frontend-risk-console` 同步 `frontend-plan.md` 和 mapper 预期。
+- 产物：
+  - 更新 `hackathon/docs/post-mvp-requirements.md` 的优先级：Cobo P0、Agent P1、Security P1.5、Advanced Agent P2。
+  - 写清 API contract example：`/api/wallet/status`、`/api/wallet/connect-existing`、`/api/wallet/create`、`/api/wallet/pact`、`/api/config`、`/api/execute`、`/api/audit-log`。
+  - 写清 response 字段的 snake_case/camelCase 映射，前端只通过 mapper 消化后端 DTO。
+  - 明确 demo preset 和 CAW evidence 字段。
+- 完成标志：
+  - 后端和前端计划都引用同一组 API contract。
+  - 前端可以先按 contract 写 mock/mapper，不等后端实现完成。
+
+### CP9 / Phase 9：User CAW Account Lifecycle
+
+- 目标：把共享 CAW demo wallet 升级为 per-user CAW account model。
+- 后端职责：
+  - 新增 SQLite `user_wallets` 表，字段覆盖 `user_address`、`caw_wallet_id`、`caw_wallet_address`、`pact_id`、`pact_status`、`pairing_status`、`created_at`、`updated_at`。
+  - `POST /api/wallet/connect-existing`：绑定已有 CAW 钱包，返回 wallet/pairing/pact 状态。
+  - `POST /api/wallet/create`：创建新 CAW 钱包并持久化，返回 pairing 信息；新 wallet 不是临时钱包。
+  - `GET /api/wallet/status`：返回当前用户 wallet、pairing、pact、config sync 状态。
+  - `POST /api/wallet/pact`：提交或刷新 PactSpec，返回 `pending_approval` 或 `active`。
+  - `POST /api/wallet/refresh-status`：从 CAW 拉取最新 pairing/pact 状态。
+- Demo 约束：
+  - 可以预创建 1-2 个 `active` wallet，避免现场 pairing 卡住。
+  - UI 和文档必须表达真实产品路径：connect existing 或 create wallet 后持久绑定。
+
+### CP10 / Phase 10：Intent Input Guard
+
+- 目标：在 CAW 真执行前加输入安全边界。
+- 后端职责：
+  - 新增 `sanitize_user_input(intent)`：长度限制、控制字符过滤、常见 prompt injection pattern 拦截。
+  - 新增 `validate_agent_output(raw_json, schema)`：LLM 输出必须严格转成 `TxProposal` / `AgentResult`。
+  - 新增 `detect_intent_proposal_anomaly(intent, proposal)`：action、amount、target 与原始 intent 明显不一致时 reject 或 confirm。
+  - `/api/execute` 在进入 `AgenticLoop` 前调用 sanitizer；异常写入 audit，且不触发 CAW。
+- 前后端分工：
+  - 前端只做体验层校验和提示。
+  - 后端校验才是安全边界，不能依赖浏览器。
+
+### CP11 / Phase 11：User-Scoped CAW Execution + Evidence
+
+- 目标：`/api/execute` 按用户 CAW wallet + active pact 执行，而不是共享 env wallet。
+- 后端职责：
+  - `ExecuteRequest` 接收 `user_address` 或从 JWT user 解析；无 active pact 时返回 `no_wallet` / `pact_not_active`。
+  - `build_execution_backend()` 支持注入用户级 `caw_wallet_id`、pact scoped credential、`pact_id`。
+  - audit 记录 `user_address`、CAW wallet、pact、request id、transaction id、tx hash、policy reason。
+  - Sentinel reject 时不调用 CAW。
+  - CAW policy deny 时顶层结果映射为 rejected，并保留 `sentinel_decision`。
+
+### CP12 / Phase 12：User Risk Config + CAW Pact Sync
+
+- 目标：把硬编码阈值升级为用户可配置风险偏好，并和 CAW Pact 状态对齐。
+- 后端职责：
+  - 新增 SQLite `user_configs` 表。
+  - `GET /api/config`、`PUT /api/config`、`POST /api/config/reset`。
+  - `AmountRule`、`SlippageRule`、`FrequencyRule`、`WhitelistRule` 从用户 config 读取阈值。
+  - 保存 `pact_limits_snapshot`、`config_version`、`pact_config_version`。
+  - 返回 `config_status: synced | needs_pact_update`，避免用户误以为 Sentinel config 自动修改 CAW Pact。
+
+### CP13 / Phase 13：SQLite Audit + CAW Evidence Query
+
+- 目标：把 JSON audit 升级为 per-user 可查询 SQLite audit。
+- 后端职责：
+  - 新增 `audit_logs` 表，保留 `attempts_json`、`execution_json`、CAW evidence、policy deny 字段。
+  - `GET /api/audit-log?user_address=...&status=...&limit=20&offset=0` 支持分页和过滤。
+  - `GET /api/audit-log/{tx_id}` 返回完整 detail。
+  - 写入前脱敏敏感字段：API key、pact scoped credential、headers、secret-like raw fields 不能入库。
+- 兼容策略：
+  - JSON audit 可保留为开发 fallback，但主 API 读 SQLite。
+
+### CP14 / Phase 14：CAW contract_call Demo Path
+
+- 目标：除 `transfer_tokens` 外，展示 CAW `contract_call` 能力。
+- 后端职责：
+  - 优先选择白名单 MockDEX 或受控 Sepolia 合约，避免 Uniswap route 不稳定影响 demo。
+  - `contract_call` 必须受 Sentinel RiskPipeline + CAW Pact 双层限制。
+  - CAW result 写入同一套 `ExecutionResult` / audit evidence。
+- 范围边界：
+  - 不强求真实 Uniswap swap，只要能证明 CAW contract_call 集成进执行层。
+
+### CP15 / Phase 15：Read-only MCP Server
+
+- 目标：让外部 Agent 可以调用 Sentinel 风控能力，证明 Sentinel 是可组合的 Agent tool。
+- 后端职责：
+  - 新增独立 `agent/mcp_server.py`，不耦合 FastAPI 主进程。
+  - 暴露 read-only tools：
+    - `evaluate_transaction`
+    - `get_risk_config`
+    - `get_audit_log`
+  - 暂不开放 `update_risk_config`，除非 auth 和授权边界已完成。
+  - MCP tool 复用现有 `AgenticLoop`、RiskPipeline 和 SQLite audit。
+- Demo 口径：
+  - “External agent can ask Sentinel before sending funds through CAW.”
+
+### CP16 / Phase 16：Basic Agent Tool Calling
+
+- 目标：Agent B/C 从“只靠模型推理”升级为“调用工具查证据”。
+- 后端职责：
+  - 新增 `AgentTool` registry 和工具执行结果模型。
+  - 第一批只做稳定、可 mock 的工具：
+    - `check_contract_verified`
+    - `check_gas_price`
+    - `get_token_price`（允许 mock/static provider）
+  - `OpenAICompatibleLLMClient` 增加 tool-calling path；缺少 provider 支持时 fail closed 或回退普通 reviewer。
+  - reviewer result / audit 增加 `tool_calls[]` / `observations[]`。
+- 后放：
+  - Etherscan address history、Uniswap Quote API 等外部不稳定工具。
+
+### CP17 / Phase 17：Agent Memory + Anomaly Detection
+
+- 目标：Agent 能利用用户历史交易模式辅助判断，而不是只看单笔交易。
+- 后端职责：
+  - 优先复用 SQLite audit，不单独创建孤立 `memory.db`。
+  - 计算 per-user patterns：平均金额、常用目标、常用 token、rejection rate。
+  - 当前 proposal 明显偏离历史模式时产生 memory anomaly finding，并可把决策提升到 confirm。
+  - Agent B/C prompt 注入 memory context，但仍声明历史数据是辅助证据，不是执行指令。
+
+### CP18 / Phase 18：Minimal Auth + Rate Limit
+
+- 目标：per-user CAW API 不能只信任裸传 `user_address`。
+- 后端职责：
+  - `POST /api/auth/login`：MetaMask 签名登录，返回 JWT。
+  - `/api/execute`、`/api/config`、`/api/wallet/*` 优先使用 JWT address。
+  - 简单 rate limit：每 IP 或每 user 每分钟 30 次。
+- 范围边界：
+  - 不做完整用户系统、refresh token、RBAC。
+
+### CP19 / Phase 19：Deferred Advanced Agent
+
+- Planner、reflection、full tool suite、pending queue worker 放到后续。
+- Planner 会扩展 `TxProposal -> ExecutionPlan`，影响 AgenticLoop、audit 和前端展示，不在 Cobo core 稳定前动。
+- Reflection 可作为 roadmap 和 README 叙事，不作为第一轮可运行 demo 的门槛。
+- FallbackExecutor 可以设计 pending queue，但 CAW policy deny 永远不能 fallback 执行。
 
 ### Demo 用例
 

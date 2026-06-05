@@ -28,7 +28,8 @@
 先读：
 - `docs/backend-plan.md` 了解稳定方向和 checkpoint 定义
 - `docs/backend-progress.md` 了解当前进度、阻塞和最近完成项
-- `docs/backend-spec.md` 了解完整技术规格
+- `docs/shared-api-contract.md` 了解前后端 API contract
+- `docs/mvp-spec.md` 了解历史 MVP 规格（归档，不作为最新计划维护）
 
 ## 现有代码位置
 
