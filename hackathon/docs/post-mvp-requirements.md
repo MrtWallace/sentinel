@@ -447,7 +447,9 @@ Task 7: MCP tool interface
 - Test: MCP client can call tools and get valid responses
 ```
 
-### Batch 4（P2 — 高级 Agent）
+### Batch 4（P3 — 高级 Agent / Demo 后置）
+
+> 暂不作为当前 Cobo demo 门槛。Planner 和 Reflector 在 DeFi 钱包场景里会引出多步授权、失败回滚、partial execution、LLM 自评可信度等问题；先完成 CAW / Pact / evidence 主线，再考虑本批。
 
 ```
 Task 8: Agent planner (task decomposition)
@@ -744,7 +746,9 @@ class LLMSecurityAuditor:
 
 ### 3.11 Agent 规划系统（任务分解）
 
-**优先级**：P2 — 复杂任务处理
+**优先级**：P3 — 高 demo 风险，Cobo core 稳定后再做
+
+**后置原因**：多步意图分解会把单笔 `TxProposal` 扩展成 `ExecutionPlan`，影响 AgenticLoop、audit、API contract 和前端展示；如果分解错了，还需要回答 step-level authorization、失败回滚、partial execution 和 prompt injection 责任边界。当前不适合作为面试/demo 主线。
 
 **目标**：将包含多步操作的复杂 intent 分解为独立的执行步骤。
 
@@ -832,7 +836,9 @@ Execution Plan (2 steps):
 
 ### 3.12 Agent 反思系统
 
-**优先级**：P2 — 自我改进
+**优先级**：P3 — 高 demo 风险，Cobo core 稳定后再做
+
+**后置原因**：如果只是让 LLM 自评，会显得 toy；如果认真做，需要可验证 execution trace、rule-based post-check、retry policy、human confirmation strategy 和记忆写入策略。当前优先级低于 CAW lifecycle、Pact sync、execution evidence、MCP/tool calling/memory anomaly。
 
 **目标**：交易执行后，Agent 回顾自己的判断是否准确，记录学习。
 
@@ -953,6 +959,6 @@ Cobo Agentic Wallet (per-user)
 
 ---
 
-> **Last updated**: 2026-06-06 (v2 — added Agent system: MCP, tool calling, memory, planner, reflection)
+> **Last updated**: 2026-06-06 (v3 — moved Planner/Reflection to P3 deferred scope)
 > **Author**: MrtWallace
 > **Status**: 待开发

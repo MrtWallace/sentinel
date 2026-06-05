@@ -65,6 +65,7 @@ Sentinel 不应该只是一个交易解析器，而要表现为 CAW 之上的 ri
 - Solo MVP 优先级按 P0/P1/P2 执行，先暴露 CAW 真实调用风险，再补 API 和 demo polish。
 - Post-MVP 继续保持前后端分支/worktree 分离：后端在 `feature/backend-risk-pipeline`，前端在 `feature/frontend-risk-console`，最后再开 integration branch 做联调和 demo polish。
 - 后续路线采用 **Cobo-first execution platform + Agent evidence layer**：CAW 钱包、Pact、policy、执行证据是获奖主线；Agent 工具调用、记忆和 MCP 是展示 Sentinel 不只是 if-else 风控的增强层。
+- Advanced Agent 能力明确后置到 P3：Agent Planner、Agent Reflector、多步自治 workflow、write-capable MCP 和 full tool suite 不作为当前 Cobo demo 门槛。
 - CAW 账户生命周期拆成两条路径：已有 CAW 钱包走 connect/import；没有 CAW 钱包走 create/pairing。新创建的钱包必须持久化到后端数据库，不作为一次性临时钱包处理。
 - 用户 intent 输入需要前后端双层校验：前端做体验层提示，后端做安全边界。后端 sanitizer、schema validation、intent/proposal anomaly detection 失败时必须 fail closed。
 - CAW policy deny 是资金安全边界，不能 fallback 到 SmartAccount 执行。只有 CAW timeout/API unavailable 这类可用性问题才允许 pending/fallback。
@@ -422,7 +423,7 @@ Demo 先按场景反推后端字段和前端展示：
 
 - 所属分支：后端文档先在 `feature/backend-risk-pipeline` 更新；前端分支 `feature/frontend-risk-console` 同步 `frontend-plan.md` 和 mapper 预期。
 - 产物：
-  - 更新 `hackathon/docs/post-mvp-requirements.md` 的优先级：Cobo P0、Agent P1、Security P1.5、Advanced Agent P2。
+  - 更新 `hackathon/docs/post-mvp-requirements.md` 的优先级：Cobo P0、Agent P1、Security P1.5、Advanced Agent P3。
   - 写清 API contract example：`/api/wallet/status`、`/api/wallet/connect-existing`、`/api/wallet/create`、`/api/wallet/pact`、`/api/config`、`/api/execute`、`/api/audit-log`。
   - 写清 response 字段的 snake_case/camelCase 映射，前端只通过 mapper 消化后端 DTO。
   - 明确 demo preset 和 CAW evidence 字段。
@@ -546,8 +547,10 @@ Demo 先按场景反推后端字段和前端展示：
 
 ### CP19 / Phase 19：Deferred Advanced Agent
 
-- Planner、reflection、full tool suite、pending queue worker 放到后续。
-- Planner 会扩展 `TxProposal -> ExecutionPlan`，影响 AgenticLoop、audit 和前端展示，不在 Cobo core 稳定前动。
+- 状态：P3 / Demo 后置，不作为当前 Cobo 赛道交付门槛。
+- Agent Planner、Agent Reflector、full tool suite、write-capable MCP、pending queue worker 放到后续。
+- Planner 会扩展 `TxProposal -> ExecutionPlan`，影响 AgenticLoop、audit、API contract 和前端展示；在 DeFi 执行场景里还会引出 step-level authorization、失败回滚、partial execution 和 prompt injection 责任边界，不在 Cobo core 稳定前动。
+- Reflection 如果只做 LLM 自评会显得 toy；如果认真做，需要 execution trace、post-check、retry policy、human confirmation 和记忆写入策略，当前投入产出比低于 CAW / Pact / evidence。
 - Reflection 可作为 roadmap 和 README 叙事，不作为第一轮可运行 demo 的门槛。
 - FallbackExecutor 可以设计 pending queue，但 CAW policy deny 永远不能 fallback 执行。
 
