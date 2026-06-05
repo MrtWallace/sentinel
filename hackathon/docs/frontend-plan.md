@@ -1,12 +1,16 @@
 # Sentinel 前端 MVP 更新计划
 
-> 最后更新：2026-06-05 23:27
+> 最后更新：2026-06-06
 
 ## 总结
 
 前端做成 **AI 风控执行控制台**：打开页面后直接演示自然语言意图如何经过 AI 提案、硬规则、Agent 审查、bounded agentic reproposal、确认/执行/拦截，并留下审计记录。
 
 后端在 2026-06-04 已切到 Cobo 赛道主线：**CAW 是 Cobo demo 的主资金执行路径**，`SmartAccount.sol` 保留为 baseline / fallback / 技术展示。因此前端后续计划也要从“SmartAccount dashboard + 单条 decision chain”调整为“Sentinel 风控 + CAW execution evidence + attempts audit”的 demo 叙事。
+
+Post-MVP 新路线采用 **Cobo-first execution platform + Agent evidence layer**：前端优先把 CAW wallet、Pact、policy、execution evidence 做成评委第一眼能看懂的主线；Agent tool calling、memory anomaly、MCP 作为证据层展示，证明 Sentinel 不只是 if-else 风控。
+
+前后端继续分支/worktree 分离开发：后端在 `feature/backend-risk-pipeline`，前端在 `feature/frontend-risk-console`。每个后端功能先产出 API contract，前端按 contract 做 mock/mapper；最后再开 integration branch 做联调和 demo polish。
 
 同时新增一个专门的 **前端理解层**：让项目作者能讲清楚每个组件在干什么、接口传什么数据、数据如何从 API 变成页面展示。这个部分用于内部学习和项目介绍，不进入评委 demo 主流程。按 2026-06-05 的收尾决策，Checkpoint 6 可以顺延到前端 MVP 之后，不阻塞真实后端联调和 demo 主路径。
 
@@ -592,10 +596,253 @@ yarn workspace @se-2/nextjs lint
 
 - 前端完成标志不是“看起来差不多”，而是类型检查、lint、关键路径手动验收都过。
 
+### Checkpoint 8：Shared Contract / Docs 对齐
+
+背景：
+
+- 后端 Post-MVP 将进入 per-user CAW、Settings、SQLite audit、MCP、tool calling、memory anomaly。
+- 前端不直接等待后端代码完成，而是先按 shared API contract 更新类型、mock 和 mapper。
+
+产物：
+
+- 更新前端类型和 mock，覆盖：
+  - `WalletStatus`
+  - `CawWalletBinding`
+  - `RiskConfig`
+  - `ConfigSyncStatus`
+  - `IntentValidationResult`
+  - `ToolCallEvidence`
+  - `MemoryAnomaly`
+  - `McpEvaluationResult`
+- 更新 API 封装预期：
+  - `getWalletStatus()`
+  - `connectExistingCawWallet()`
+  - `createCawWallet()`
+  - `refreshWalletStatus()`
+  - `getRiskConfig()`
+  - `updateRiskConfig()`
+  - `validateIntentInput()`
+- 和后端共同确认 `/api/wallet/*`、`/api/config`、`/api/execute`、`/api/audit-log` 的 response examples。
+
+审查重点：
+
+- 前端字段是否只依赖稳定 contract，不直接散落后端 snake_case DTO。
+- mock 是否能覆盖 active wallet、pairing pending、pact pending、needs pact update、policy deny。
+- 首页、Settings、Audit 后续都能复用同一组 mapper。
+
+学习点：
+
+- 为什么前端先做 contract/mock/mapper，可以降低前后端并行开发的摩擦。
+
+### Checkpoint 9：CAW Account Lifecycle UI
+
+目标：
+
+- 把 User CAW Setup 拆成两条真实产品路径：已有 CAW 钱包连接，新用户创建 CAW 钱包。
+- 新创建的钱包不是临时钱包，前端文案要表达“persisted user CAW wallet”，状态由后端数据库和 CAW status 驱动。
+
+产物：
+
+- 顶部 CAW status bar 增强：
+  - connected user address。
+  - CAW wallet address / wallet id。
+  - pairing status。
+  - pact status / pact id。
+  - config sync status。
+- 未绑定状态显示两个入口：
+  - `Connect existing CAW`
+  - `Create CAW wallet`
+- 状态流：
+  - `none`
+  - `pairing_pending`
+  - `paired`
+  - `pact_pending`
+  - `active`
+  - `revoked`
+  - `expired`
+- 增加 `Refresh status` 操作，调用后端刷新 pairing/pact 状态。
+
+审查重点：
+
+- 评委能否看懂这是 per-user CAW account model，而不是共享 demo wallet。
+- Demo 使用预创建 active wallet 时，UI 是否仍保留完整真实产品路径。
+- SmartAccount baseline 信息不能抢 CAW 主叙事。
+
+学习点：
+
+- 为什么 wallet create 和 wallet connect 是两个不同用户路径。
+- 为什么 pairing/pact approval 不是即时后端动作，需要单独状态流。
+
+### Checkpoint 10：Intent Input Guard UX
+
+目标：
+
+- 前端做体验层输入校验，减少用户误输入；安全边界仍在后端。
+
+产物：
+
+- `validateIntentInput(intent)`：
+  - 空输入不能提交。
+  - 长度限制，例如 500 字符。
+  - 明显控制字符提示 `Unsupported characters detected`。
+  - 常见 prompt-injection 文本提示为 high-risk input，不在前端声称“完全防护”。
+- Run 按钮在前端校验失败时禁用或显示 inline error。
+- 后端返回 sanitizer/anomaly rejection 时，DecisionChain 显示为 security rejection，不混成网络错误。
+
+审查重点：
+
+- 错误文案是否直白，不教育用户写 prompt。
+- 前端校验不会让人误以为浏览器是安全边界。
+
+学习点：
+
+- 前端 validation 是 UX，后端 validation 才是 security boundary。
+
+### Checkpoint 11：Settings Page + Pact Sync Status
+
+目标：
+
+- 用户可以调整 Sentinel 风控配置，并看懂这些配置与 CAW Pact 是否同步。
+
+产物：
+
+- 新增 `/settings` 页面。
+- 配置区：
+  - swap pass / confirm threshold。
+  - transfer pass / confirm threshold。
+  - slippage pass / confirm threshold。
+  - frequency limit。
+  - whitelist mode。
+  - custom whitelist。
+  - auto approve low risk。
+- 保存后显示：
+  - `Sentinel config updated`
+  - `CAW Pact synced` 或 `CAW Pact update required`
+- 如果 `config_status = needs_pact_update`，首页和 Settings 都显示轻量 warning。
+
+审查重点：
+
+- 用户不会误以为改了 Sentinel config 就自动改了 CAW Pact。
+- Settings 页面保持工具型、紧凑，不做营销页。
+
+学习点：
+
+- Sentinel config 和 CAW Pact policy 是双层控制，不是同一个状态。
+
+### Checkpoint 12：CAW Evidence Audit + Policy Deny Visual
+
+目标：
+
+- Audit 页展示 Cobo 评委关心的 CAW 证据链。
+
+产物：
+
+- Audit list 支持 user-scoped records、status filter、分页。
+- Audit detail 展开区显示：
+  - user address。
+  - CAW wallet id/address。
+  - pact id/status。
+  - request id。
+  - transaction id。
+  - tx hash / explorer links。
+  - policy deny reason。
+  - execution backend。
+- 单独处理 CAW policy deny 视觉：
+  - 不和普通 Sentinel reject 混在一起。
+  - 文案强调 `Sentinel allowed, CAW Pact blocked execution`。
+
+审查重点：
+
+- 能否讲清 “Sentinel AI risk control + CAW infrastructure-enforced policy”。
+- 没有 tx hash 时只展示 CAW request/transaction evidence，不伪造 explorer 链接。
+
+学习点：
+
+- 为什么 CAW request id / pact id 也是审计证据。
+
+### Checkpoint 13：CAW contract_call Demo UI
+
+目标：
+
+- 在前端展示 CAW 不只支持 transfer，也能执行受控 contract_call。
+
+产物：
+
+- 增加一个稳定 preset，例如 whitelisted MockDEX / controlled contract call。
+- DecisionChain / Audit evidence 显示：
+  - target contract。
+  - function selector 或 action label。
+  - CAW contract_call request id。
+  - policy result。
+- 如果后端选择 dry-run 或 mock evidence，UI 必须明确标注，不暗示真实链上执行。
+
+审查重点：
+
+- contract_call 不抢 safe transfer 主线。
+- UI 文案不把 MockDEX 伪装成 Uniswap 实盘。
+
+学习点：
+
+- 为什么 Cobo 赛道展示 contract_call 能力有价值，但 demo 稳定性优先。
+
+### Checkpoint 14：Agent Evidence UI（Tools + Memory + MCP）
+
+目标：
+
+- 让 “Agent 项目” 不只展示 loop，还能展示工具调用、用户记忆和 MCP 互操作证据。
+
+产物：
+
+- Agent B/C 区块增加 tool evidence：
+  - `check_contract_verified`
+  - `check_gas_price`
+  - `get_token_price` 或 mock/static price provider
+- Memory anomaly 区块：
+  - average amount。
+  - current amount multiplier。
+  - unusual target / common target。
+  - resulting finding or confirm reason。
+- MCP evidence panel：
+  - 显示外部 Agent 调用 `evaluate_transaction` 的一条示例结果。
+  - 先作为 read-only evidence，不做前端编辑 MCP config。
+
+审查重点：
+
+- Agent evidence 是辅助层，不打断 CAW 主 demo 流。
+- 不把外部 API 不稳定性暴露给 demo 主路径；必要时使用 mock/static evidence。
+
+学习点：
+
+- Tool calling 解决“Agent 会查证据”，memory 解决“Agent 记得用户模式”，MCP 解决“Sentinel 可被其他 Agent 调用”。
+
+### Checkpoint 15：Auth UX + Rate Limit Error
+
+目标：
+
+- 配合后端 minimal auth，避免 per-user CAW API 看起来只靠裸传地址。
+
+产物：
+
+- Connect wallet 后签名登录。
+- 保存 JWT，后续 API 调用自动携带。
+- 401 时显示重新签名提示。
+- 429 时显示 `Too many requests. Try again shortly.`。
+
+范围边界：
+
+- 不做完整账户系统。
+- 不做复杂 session management。
+
+### Checkpoint 16：Deferred Advanced Agent UI
+
+- Planner 多步执行 UI 后放，等后端 `ExecutionPlan` 稳定后再做。
+- Reflection UI 后放，可先进入 README roadmap。
+- Pending queue UI 后放，等后端真的有 pending/retry worker 再做。
+
 ## 范围边界
 
-- 不做 wallet connect。
-- 不做认证。
+- 当前 MVP 不做 wallet connect；Post-MVP CAW lifecycle 需要 wallet connect / signature login。
+- 当前 MVP 不做认证；Post-MVP per-user CAW API 需要 minimal auth UX。
 - 不做 Redux / Zustand。
 - 不做 i18n。
 - 不做图表。
