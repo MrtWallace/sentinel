@@ -1,7 +1,11 @@
 # Sentinel Shared API Contract
 
+## Contract Change Rule
+
+Any API shape/status/field change must be committed as a docs(contract) change and synced to both backend and frontend branches before implementation.
+
 > **Purpose:** Single source of truth for backend/frontend integration.
-> **Status:** Draft for Post-MVP Cobo + Agent work.
+> **Status:** Draft for Post-MVP Cobo + Agent work. Backend CP9 wallet APIs implemented; CAW status and execute response shape locked for CP11.
 > **Last updated:** 2026-06-06
 
 This document defines API shapes, status names, and frontend mapper rules shared by:
@@ -32,18 +36,54 @@ wallet_status: none | pairing_pending | paired | active | revoked | expired
 pairing_status: none | pending | paired | failed
 pact_status: none | pending_approval | active | expired | revoked
 config_status: synced | needs_pact_update
+caw_readiness: ready | wallet_required | pairing_required | pact_required | pact_pending | unavailable
 ```
 
 ### Decision / Execution
 
 ```text
-status: executed | rejected | confirm_needed | failed | no_wallet | pact_not_active
+status: executed | rejected | confirm_needed | failed | pending | no_wallet | pact_not_active
 decision: execute | confirm | reject
-execution.status: skipped | dry_run | submitted | succeeded | pending_approval | policy_denied | failed
+execution.status: skipped | dry_run | submitted | succeeded | pending | pending_approval | policy_denied | failed
 execution.backend: caw | mock | local | pending
 ```
 
 Policy note: `policy_denied` is a CAW security boundary. It must not fallback to SmartAccount execution.
+
+### Canonical CAW Status Object
+
+Use this nested shape inside `/api/execute` responses. Wallet APIs may keep returning the same fields at the top level for CP9 compatibility, but frontend mappers should normalize both forms into one view model.
+
+```json
+{
+  "wallet_status": "active",
+  "pairing_status": "paired",
+  "pact_status": "active",
+  "config_status": "synced",
+  "readiness": "ready",
+  "caw_wallet_id": "wallet_123",
+  "caw_wallet_address": "0xCAW...",
+  "pact_id": "pact_123",
+  "pact_limits": {
+    "transfer_amount_threshold_confirm": "0.1",
+    "swap_amount_threshold_confirm": "0.2",
+    "frequency_limit": 3
+  },
+  "blocking_reason": null,
+  "last_refreshed_at": "2026-06-06T12:00:00Z"
+}
+```
+
+Readiness mapping:
+
+```text
+ready: wallet_status=active, pairing_status=paired, pact_status=active
+wallet_required: no CAW wallet is bound to this user
+pairing_required: wallet exists but pairing_status is none/failed
+pact_required: wallet is paired but pact_status is none/revoked/expired
+pact_pending: pact_status is pending_approval
+unavailable: CAW status could not be refreshed because CAW API timed out or failed
+```
 
 ---
 
@@ -98,7 +138,8 @@ Request:
 ```json
 {
   "user_address": "0xabc...",
-  "caw_wallet_id": "wallet_123"
+  "caw_wallet_id": "wallet_123",
+  "caw_wallet_address": "0xCAW..."
 }
 ```
 
@@ -108,6 +149,7 @@ Response:
 {
   "user_address": "0xabc...",
   "caw_wallet_id": "wallet_123",
+  "caw_wallet_address": "0xCAW...",
   "wallet_status": "paired",
   "pairing_status": "paired",
   "pact_status": "none"
@@ -130,6 +172,7 @@ Response:
 {
   "user_address": "0xabc...",
   "caw_wallet_id": "wallet_456",
+  "caw_wallet_address": "0xCAW...",
   "wallet_status": "pairing_pending",
   "pairing_status": "pending",
   "pairing_url": "cobo://pair/...",
@@ -262,33 +305,106 @@ Core response fields:
 ```json
 {
   "tx_id": "uuid",
+  "user_address": "0xabc...",
   "intent": "Send 0.001 ETH to 0x111...",
   "status": "executed",
   "decision": "execute",
   "decision_reason": "All checks passed.",
   "sentinel_decision": "execute",
   "sentinel_decision_reason": "All Sentinel checks passed.",
+  "caw": {
+    "wallet_status": "active",
+    "pairing_status": "paired",
+    "pact_status": "active",
+    "config_status": "synced",
+    "readiness": "ready",
+    "caw_wallet_id": "wallet_123",
+    "caw_wallet_address": "0xCAW...",
+    "pact_id": "pact_123",
+    "blocking_reason": null,
+    "last_refreshed_at": "2026-06-06T12:00:00Z"
+  },
   "attempts": [],
   "decision_chain": {},
-  "execution": {},
+  "execution": {
+    "backend": "caw",
+    "status": "succeeded",
+    "request_id": "sentinel-uuid",
+    "caw_transaction_id": "caw_tx_123",
+    "tx_hash": "0x...",
+    "reason": "CAW transfer status: Success",
+    "policy_reason": null,
+    "fallback_reason": null,
+    "pending_reason": null,
+    "caw_wallet_id": "wallet_123",
+    "caw_wallet_address": "0xCAW...",
+    "pact_id": "pact_123"
+  },
   "tool_calls": [],
   "memory_anomalies": []
 }
 ```
+
+Required top-level fields for every `/api/execute` response:
+
+```text
+tx_id, user_address, intent, status, decision, decision_reason,
+sentinel_decision, sentinel_decision_reason, caw, attempts, decision_chain,
+execution, tool_calls, memory_anomalies
+```
+
+Required `execution` fields:
+
+```text
+backend, status, reason, request_id, caw_transaction_id, tx_hash,
+policy_reason, fallback_reason, pending_reason,
+caw_wallet_id, caw_wallet_address, pact_id
+```
+
+When a value is not applicable, return `null` rather than omitting the key. Do not return CAW API keys, pact scoped credentials, auth headers, or raw secret-like fields.
 
 ### No Wallet
 
 ```json
 {
   "tx_id": "uuid",
+  "user_address": "0xabc...",
+  "intent": "Send 0.001 ETH to 0x111...",
   "status": "no_wallet",
   "decision": "reject",
   "decision_reason": "Please bind or create a CAW wallet before execution.",
+  "sentinel_decision": "reject",
+  "sentinel_decision_reason": "No active CAW wallet.",
+  "caw": {
+    "wallet_status": "none",
+    "pairing_status": "none",
+    "pact_status": "none",
+    "config_status": "synced",
+    "readiness": "wallet_required",
+    "caw_wallet_id": null,
+    "caw_wallet_address": null,
+    "pact_id": null,
+    "blocking_reason": "No CAW wallet is bound to this user.",
+    "last_refreshed_at": null
+  },
   "execution": {
     "backend": "caw",
     "status": "skipped",
-    "reason": "No active CAW wallet."
-  }
+    "request_id": null,
+    "caw_transaction_id": null,
+    "tx_hash": null,
+    "reason": "No active CAW wallet.",
+    "policy_reason": null,
+    "fallback_reason": null,
+    "pending_reason": null,
+    "caw_wallet_id": null,
+    "caw_wallet_address": null,
+    "pact_id": null
+  },
+  "attempts": [],
+  "decision_chain": {},
+  "tool_calls": [],
+  "memory_anomalies": []
 }
 ```
 
@@ -297,14 +413,43 @@ Core response fields:
 ```json
 {
   "tx_id": "uuid",
+  "user_address": "0xabc...",
+  "intent": "Send 0.001 ETH to 0x111...",
   "status": "pact_not_active",
   "decision": "reject",
   "decision_reason": "CAW Pact is not active.",
+  "sentinel_decision": "reject",
+  "sentinel_decision_reason": "CAW Pact is not active.",
+  "caw": {
+    "wallet_status": "paired",
+    "pairing_status": "paired",
+    "pact_status": "pending_approval",
+    "config_status": "needs_pact_update",
+    "readiness": "pact_pending",
+    "caw_wallet_id": "wallet_123",
+    "caw_wallet_address": "0xCAW...",
+    "pact_id": "pact_123",
+    "blocking_reason": "Pact status is pending_approval.",
+    "last_refreshed_at": "2026-06-06T12:00:00Z"
+  },
   "execution": {
     "backend": "caw",
     "status": "skipped",
-    "reason": "Pact status is pending_approval."
-  }
+    "request_id": null,
+    "caw_transaction_id": null,
+    "tx_hash": null,
+    "reason": "Pact status is pending_approval.",
+    "policy_reason": null,
+    "fallback_reason": null,
+    "pending_reason": null,
+    "caw_wallet_id": "wallet_123",
+    "caw_wallet_address": "0xCAW...",
+    "pact_id": "pact_123"
+  },
+  "attempts": [],
+  "decision_chain": {},
+  "tool_calls": [],
+  "memory_anomalies": []
 }
 ```
 
@@ -313,10 +458,25 @@ Core response fields:
 ```json
 {
   "tx_id": "uuid",
+  "user_address": "0xabc...",
+  "intent": "Swap 1 ETH to USDC",
   "status": "rejected",
   "decision": "reject",
   "decision_reason": "Hard rule violation: AmountRule",
   "sentinel_decision": "reject",
+  "sentinel_decision_reason": "Hard rule rejected transaction.",
+  "caw": {
+    "wallet_status": "active",
+    "pairing_status": "paired",
+    "pact_status": "active",
+    "config_status": "synced",
+    "readiness": "ready",
+    "caw_wallet_id": "wallet_123",
+    "caw_wallet_address": "0xCAW...",
+    "pact_id": "pact_123",
+    "blocking_reason": null,
+    "last_refreshed_at": "2026-06-06T12:00:00Z"
+  },
   "attempts": [
     {
       "attempt_index": 1,
@@ -333,8 +493,19 @@ Core response fields:
   "execution": {
     "backend": "caw",
     "status": "skipped",
-    "reason": "Sentinel rejected before CAW execution."
-  }
+    "request_id": null,
+    "caw_transaction_id": null,
+    "tx_hash": null,
+    "reason": "Sentinel rejected before CAW execution.",
+    "policy_reason": null,
+    "fallback_reason": null,
+    "pending_reason": null,
+    "caw_wallet_id": "wallet_123",
+    "caw_wallet_address": "0xCAW...",
+    "pact_id": "pact_123"
+  },
+  "tool_calls": [],
+  "memory_anomalies": []
 }
 ```
 
@@ -343,22 +514,90 @@ Core response fields:
 ```json
 {
   "tx_id": "uuid",
+  "user_address": "0xabc...",
+  "intent": "Send 0.005 ETH to 0x111...",
   "status": "rejected",
   "decision": "reject",
   "decision_reason": "CAW policy denied execution: matched_pact_transfer_deny_if",
   "sentinel_decision": "execute",
+  "sentinel_decision_reason": "All Sentinel checks passed.",
+  "caw": {
+    "wallet_status": "active",
+    "pairing_status": "paired",
+    "pact_status": "active",
+    "config_status": "synced",
+    "readiness": "ready",
+    "caw_wallet_id": "wallet_123",
+    "caw_wallet_address": "0xCAW...",
+    "pact_id": "pact_123",
+    "blocking_reason": null,
+    "last_refreshed_at": "2026-06-06T12:00:00Z"
+  },
   "execution": {
     "backend": "caw",
     "status": "policy_denied",
     "request_id": "sentinel-uuid",
-    "tx_id": null,
+    "caw_transaction_id": null,
     "tx_hash": null,
     "reason": "matched_pact_transfer_deny_if",
     "policy_reason": "TRANSFER_LIMIT_EXCEEDED",
+    "fallback_reason": null,
+    "pending_reason": null,
     "caw_wallet_id": "wallet_123",
     "caw_wallet_address": "0xCAW...",
     "pact_id": "pact_123"
-  }
+  },
+  "attempts": [],
+  "decision_chain": {},
+  "tool_calls": [],
+  "memory_anomalies": []
+}
+```
+
+### CAW Unavailable / Pending
+
+CAW timeout or API unavailable is an availability failure, not a policy denial. Backend may return `pending` or explicitly fallback later, but the evidence must say why. `policy_denied` must never use this shape.
+
+```json
+{
+  "tx_id": "uuid",
+  "user_address": "0xabc...",
+  "intent": "Send 0.001 ETH to 0x111...",
+  "status": "pending",
+  "decision": "execute",
+  "decision_reason": "Sentinel approved, but CAW is temporarily unavailable.",
+  "sentinel_decision": "execute",
+  "sentinel_decision_reason": "All Sentinel checks passed.",
+  "caw": {
+    "wallet_status": "active",
+    "pairing_status": "paired",
+    "pact_status": "active",
+    "config_status": "synced",
+    "readiness": "unavailable",
+    "caw_wallet_id": "wallet_123",
+    "caw_wallet_address": "0xCAW...",
+    "pact_id": "pact_123",
+    "blocking_reason": "CAW API timeout while submitting transfer.",
+    "last_refreshed_at": "2026-06-06T12:00:00Z"
+  },
+  "execution": {
+    "backend": "pending",
+    "status": "pending",
+    "request_id": "sentinel-uuid",
+    "caw_transaction_id": null,
+    "tx_hash": null,
+    "reason": "Queued after CAW API timeout.",
+    "policy_reason": null,
+    "fallback_reason": null,
+    "pending_reason": "caw_api_timeout",
+    "caw_wallet_id": "wallet_123",
+    "caw_wallet_address": "0xCAW...",
+    "pact_id": "pact_123"
+  },
+  "attempts": [],
+  "decision_chain": {},
+  "tool_calls": [],
+  "memory_anomalies": []
 }
 ```
 

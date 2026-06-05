@@ -2,7 +2,23 @@ import unittest
 from unittest.mock import patch
 import tempfile
 
-from api import ConfirmRequest, ExecuteRequest, confirm, execute, get_audit_log, list_audit_log
+from api import (
+    ConfirmRequest,
+    CreateWalletRequest,
+    ExecuteRequest,
+    ExistingWalletRequest,
+    PactRequest,
+    RefreshWalletStatusRequest,
+    confirm,
+    connect_existing_wallet,
+    create_wallet,
+    execute,
+    get_audit_log,
+    get_wallet_status,
+    list_audit_log,
+    submit_wallet_pact,
+    refresh_wallet_status,
+)
 from execution import ExecutionResult
 
 
@@ -112,6 +128,92 @@ class ExecuteApiTest(unittest.TestCase):
         self.assertEqual(body["status"], "executed")
         self.assertEqual(len(body["attempts"]), 2)
         self.assertEqual(body["attempts"][1]["proposal"]["amount"], "0.01")
+
+
+class WalletApiTest(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.env_patcher = patch.dict(
+            "os.environ",
+            {
+                "WALLET_DB_PATH": f"{self.tmpdir.name}/wallets.db",
+                "CAW_WALLET_SETUP_MODE": "mock",
+            },
+        )
+        self.env_patcher.start()
+
+    def tearDown(self):
+        self.env_patcher.stop()
+        self.tmpdir.cleanup()
+
+    def test_wallet_status_returns_unbound_shape(self):
+        body = get_wallet_status("0xabc0000000000000000000000000000000000000")
+
+        self.assertEqual(body["wallet_status"], "none")
+        self.assertEqual(body["pairing_status"], "none")
+        self.assertEqual(body["pact_status"], "none")
+        self.assertEqual(body["config_status"], "synced")
+
+    def test_connect_existing_wallet_persists_binding(self):
+        body = connect_existing_wallet(
+            ExistingWalletRequest(
+                user_address="0xabc0000000000000000000000000000000000000",
+                caw_wallet_id="wallet_123",
+                caw_wallet_address="0xCAW0000000000000000000000000000000000000",
+            )
+        )
+
+        status = get_wallet_status("0xabc0000000000000000000000000000000000000")
+
+        self.assertEqual(body["wallet_status"], "paired")
+        self.assertEqual(status["caw_wallet_id"], "wallet_123")
+
+    def test_create_wallet_persists_pairing_status(self):
+        body = create_wallet(
+            CreateWalletRequest(
+                user_address="0xabc0000000000000000000000000000000000000"
+            )
+        )
+
+        status = get_wallet_status("0xabc0000000000000000000000000000000000000")
+
+        self.assertEqual(body["wallet_status"], "pairing_pending")
+        self.assertEqual(body["pairing_status"], "pending")
+        self.assertEqual(status["caw_wallet_id"], body["caw_wallet_id"])
+        self.assertEqual(status["wallet_status"], "pairing_pending")
+
+    def test_submit_pact_updates_status(self):
+        create_wallet(
+            CreateWalletRequest(
+                user_address="0xabc0000000000000000000000000000000000000"
+            )
+        )
+
+        body = submit_wallet_pact(
+            PactRequest(
+                user_address="0xabc0000000000000000000000000000000000000",
+                limits={"frequency_limit": 3},
+            )
+        )
+
+        self.assertEqual(body["pact_status"], "pending_approval")
+        self.assertEqual(body["config_status"], "needs_pact_update")
+
+    def test_refresh_wallet_status_returns_current_binding(self):
+        create_wallet(
+            CreateWalletRequest(
+                user_address="0xabc0000000000000000000000000000000000000"
+            )
+        )
+
+        body = refresh_wallet_status(
+            RefreshWalletStatusRequest(
+                user_address="0xabc0000000000000000000000000000000000000"
+            )
+        )
+
+        self.assertEqual(body["wallet_status"], "pairing_pending")
+        self.assertEqual(body["pairing_status"], "pending")
 
 
 class PolicyDeniedBackend:

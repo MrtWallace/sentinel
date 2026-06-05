@@ -18,6 +18,7 @@ from reproposal import LLMReproposalAgent
 from reviewers import LLMSecurityAuditor, LLMRiskAnalyst, MockSecurityAuditor
 from risk.pipeline import RiskPipeline
 from risk.rules import AmountRule, ApprovalRule, FrequencyRule, SlippageRule, WhitelistRule
+from wallets import CawWalletService, UserWalletStore, WalletNotFoundError
 
 
 DEFAULT_SWAP_CONTRACT = "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E"
@@ -34,6 +35,25 @@ class ExecuteRequest(BaseModel):
 class ConfirmRequest(BaseModel):
     tx_id: str
     action: Literal["approve", "reject"]
+
+
+class ExistingWalletRequest(BaseModel):
+    user_address: str
+    caw_wallet_id: str
+    caw_wallet_address: str | None = None
+
+
+class CreateWalletRequest(BaseModel):
+    user_address: str
+
+
+class PactRequest(BaseModel):
+    user_address: str
+    limits: dict[str, Any] = Field(default_factory=dict)
+
+
+class RefreshWalletStatusRequest(BaseModel):
+    user_address: str
 
 
 @app.get("/health")
@@ -103,6 +123,44 @@ def confirm(request: ConfirmRequest):
     return record
 
 
+@app.get("/api/wallet/status")
+def get_wallet_status(user_address: str):
+    return build_wallet_service().get_status(user_address)
+
+
+@app.post("/api/wallet/connect-existing")
+def connect_existing_wallet(request: ExistingWalletRequest):
+    return build_wallet_service().connect_existing(
+        user_address=request.user_address,
+        caw_wallet_id=request.caw_wallet_id,
+        caw_wallet_address=request.caw_wallet_address,
+    )
+
+
+@app.post("/api/wallet/create")
+def create_wallet(request: CreateWalletRequest):
+    return build_wallet_service().create_wallet(request.user_address)
+
+
+@app.post("/api/wallet/pact")
+def submit_wallet_pact(request: PactRequest):
+    try:
+        return build_wallet_service().submit_pact(
+            request.user_address,
+            request.limits,
+        )
+    except WalletNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/wallet/refresh-status")
+def refresh_wallet_status(request: RefreshWalletStatusRequest):
+    try:
+        return build_wallet_service().refresh_status(request.user_address)
+    except WalletNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 def _build_loop() -> AgenticLoop:
     security_auditor, risk_analyst = _build_reviewers()
     reproposal_agent = _build_reproposal_agent()
@@ -124,6 +182,10 @@ def _build_loop() -> AgenticLoop:
 
 def build_audit_logger() -> AuditLogger:
     return AuditLogger()
+
+
+def build_wallet_service() -> CawWalletService:
+    return CawWalletService(UserWalletStore.from_env())
 
 
 def _build_reviewers():

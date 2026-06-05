@@ -1,7 +1,7 @@
 # Sentinel Hackathon — 后端 & 合约进度
 
 > 目的：只记录短期状态，包括 checkpoint 进度表、当前阻塞、最近完成项。
-> 最后更新：2026-06-05 18:25
+> 最后更新：2026-06-06 07:17
 > 稳定方向和 checkpoint 定义见 `hackathon/docs/backend-plan.md`。
 
 ## 更新约定
@@ -28,17 +28,63 @@
 | CP7.5 | Provider-agnostic LLM Reviewers | 3-5h | 2026-06-05 18:04 | 2026-06-05 18:11 | Done | OpenAI-compatible LLM client + real reviewer smoke 完成 |
 | CP7.6 | LLM Reproposal + Real Integration Smoke | 1-2h | 2026-06-05 18:14 | 2026-06-05 18:25 | Done | `REPROPOSAL_MODE=llm` 已接 API，真实 LLM reproposal + LLM reviewers + CAW deny 组合烟测完成 |
 | CP8 | Stretch：合约事件 / contract_call swap / polish | 2-5h | 待开始 | 待完成 | Stretch | 时间允许再做，不阻塞 Cobo MVP |
+| CP9 | User CAW Account Lifecycle | 3-5h | 2026-06-06 06:43 | 2026-06-06 06:51 | Done | per-user CAW wallet store + `/api/wallet/*` 已完成；执行路由留到 CP11 |
+| Shared CP1 | CAW status + execute response contract | 0.5-1h | 2026-06-06 07:17 | 2026-06-06 07:17 | Done | 锁定 `/api/execute` 的 `caw` object、execution evidence、no_wallet/pact_not_active/policy_denied/pending shape |
 
 ## 当前阻塞
 
 - 无明确外部阻塞。
-- 当前进行：CP8 stretch / final polish；CP5-CP7.6 后端 demo 主链路、材料、真实 LLM reviewer、真实 LLM reproposal 已完成。
+- 当前进行：CP10 Input Guard 或 CP11 User-Scoped CAW Execution 待选；Shared CP1 CAW status / execute response contract 已完成。
 - Cobo 赛道新增工作量约 10-16h；其中真实 CAW setup + `transfer_tokens` 是硬门槛，不能用 mock/simulator 替代。
 - agentic 优化新增约 3-5h，主要集中在 ReproposalAgent、MutationGuard 和 loop 测试。
 - 提交截止：2026-06-13 12:00。当前判断仍可完成；执行顺序调整为 CP6 real transfer -> CP5 Audit detail -> CP7 evidence/script -> CP7.5 real LLM reviewers -> CP8 stretch。
 - 前端需要后续同步：DecisionChain 支持 attempts；状态栏从 SmartAccount 主视角调整为 CAW wallet / pact 主视角；Audit 展示 CAW request id、policy result、tx hash。
 
 ## 最近完成项
+
+### 2026-06-06 Shared CP1：CAW status + execute response contract 完成
+
+- 已在 `shared-api-contract.md` 锁定 Canonical CAW Status Object：
+  - `wallet_status` / `pairing_status` / `pact_status` / `config_status`
+  - `readiness`
+  - CAW wallet / Pact evidence 字段
+  - `blocking_reason` / `last_refreshed_at`
+- 已锁定 `/api/execute` 必返字段：
+  - 顶层 `user_address`、`caw`、`execution`、`tool_calls`、`memory_anomalies`
+  - `execution` 固定返回 `request_id`、`caw_transaction_id`、`tx_hash`、policy/fallback/pending reason 和 CAW evidence。
+- 已补齐核心场景 response shape：
+  - active CAW execution
+  - `no_wallet`
+  - `pact_not_active`
+  - Sentinel reject before CAW
+  - CAW policy deny
+  - CAW unavailable / pending
+- 当前验证：文档-only checkpoint，未改 Python 代码；下一步 CP11 按此契约实现 user-scoped execute。
+
+### 2026-06-06 CP9：User CAW Account Lifecycle 完成
+
+- 已新增 SQLite `user_wallets` 持久化：
+  - `user_address` 归一化为小写。
+  - 记录 `caw_wallet_id`、`caw_wallet_address`、`wallet_status`、`pairing_status`、`pact_id`、`pact_status`、`config_status`、`created_at`、`updated_at`。
+  - 新创建钱包写入数据库，不作为临时内存 wallet。
+- 已新增 `/api/wallet/*`：
+  - `GET /api/wallet/status`
+  - `POST /api/wallet/connect-existing`
+  - `POST /api/wallet/create`
+  - `POST /api/wallet/pact`
+  - `POST /api/wallet/refresh-status`
+- 已新增 `CawWalletService` + 可注入 CAW wallet client：
+  - 默认 `CAW_WALLET_SETUP_MODE=mock`，保证本地测试稳定。
+  - `CAW_WALLET_SETUP_MODE=real` 保留 SDK adapter 入口，真实字段后续可按 CAW SDK 校准。
+- 当前刻意未做：
+  - `/api/execute` 按用户 CAW wallet 路由，留到 CP11，避免把 lifecycle 和 execution checkpoint 混在一起。
+- 当前验证：
+
+```bash
+PYTHONPATH=agent agent/venv/bin/python -m unittest discover -s agent -p 'test_*.py'
+# Ran 107 tests
+# OK
+```
 
 ### 2026-06-05 CP7.6：LLM Reproposal + Real Integration Smoke 完成
 
