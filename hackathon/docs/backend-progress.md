@@ -1,7 +1,7 @@
 # Sentinel Hackathon — 后端 & 合约进度
 
 > 目的：只记录短期状态，包括 checkpoint 进度表、当前阻塞、最近完成项。
-> 最后更新：2026-06-05 17:00
+> 最后更新：2026-06-05 17:53
 > 稳定方向和 checkpoint 定义见 `hackathon/docs/backend-plan.md`。
 
 ## 更新约定
@@ -23,7 +23,7 @@
 | CP4c | AgenticLoop + in-memory attempts | 1.5-2.5h | 2026-06-04 21:06 | 2026-06-04 21:06 | Done | 4 个 loop 单元测试通过，attempts 先存在返回值 |
 | CP4.5 | CAW Setup Spike | 1-3h | 2026-06-05 16:16 | 2026-06-05 16:37 | Done | CAW wallet/pact/policy deny/allowed transfer 已验通 |
 | CP5 | Minimal FastAPI mock API + AuditLogger + attempts[] | 2-3h | 2026-06-04 21:22 | 待完成 | In Progress | 最小 `/api/execute` 已完成；AuditLogger / detail API 待补 |
-| CP6 | CAW Execution Backend + Real Transfer | 6-10h | 2026-06-05 17:00 | 待完成 | In Progress | 执行层骨架 + dry-run/mock/policy-denied 单测已完成 |
+| CP6 | CAW Execution Backend + Real Transfer | 6-10h | 2026-06-05 17:00 | 2026-06-05 17:53 | Done | `/api/execute` 已真实触发 CAW transfer，policy deny 已返回 reject |
 | CP7 | Demo Evidence + README + Script | 2-4h | 待开始 | 待完成 | Todo | CAW evidence checklist + 3-5 分钟 demo script |
 | CP7.5 | Provider-agnostic LLM Reviewers | 3-5h | 待开始 | 待完成 | Todo | OpenAI-compatible client + real Agent B/C，mock 保留 fallback |
 | CP8 | Stretch：合约事件 / contract_call swap / polish | 2-5h | 待开始 | 待完成 | Stretch | 时间允许再做，不阻塞 Cobo MVP |
@@ -31,13 +31,52 @@
 ## 当前阻塞
 
 - 无明确外部阻塞。
-- 当前进行：CP6 CAW Execution Backend；CP4.5 已确认真实 CAW deny 和 allowed transfer 路径。
+- 当前进行：CP5 Audit detail / `/api/audit-log/{tx_id}`；CP6 已完成真实 CAW API transfer 和 policy deny。
 - Cobo 赛道新增工作量约 10-16h；其中真实 CAW setup + `transfer_tokens` 是硬门槛，不能用 mock/simulator 替代。
 - agentic 优化新增约 3-5h，主要集中在 ReproposalAgent、MutationGuard 和 loop 测试。
 - 提交截止：2026-06-13 12:00。当前判断仍可完成；执行顺序调整为 CP6 real transfer -> CP5 Audit detail -> CP7 evidence/script -> CP7.5 real LLM reviewers -> CP8 stretch。
 - 前端需要后续同步：DecisionChain 支持 attempts；状态栏从 SmartAccount 主视角调整为 CAW wallet / pact 主视角；Audit 展示 CAW request id、policy result、tx hash。
 
 ## 最近完成项
+
+### 2026-06-05 CP6：CAW Execution Backend 完成
+
+- 已用 Python SDK 验证 CAW transfer：
+  - `0.001 SETH` allowed transfer 成功提交。
+  - `0.005 SETH` 被 pact policy deny。
+  - SDK deny 捕获为 `PolicyDeniedError`，code 为 `TRANSFER_LIMIT_EXCEEDED`。
+- 已用 `/api/execute` 等价调用跑通真实 CAW 执行链路：
+  - intent: `Send 0.001 ETH`
+  - Sentinel decision: `execute`
+  - execution backend: `caw`
+  - CAW request id: 已记录到本地 evidence。
+  - CAW tx hash: 已记录到本地 evidence。
+- 已用 `/api/execute` 验证双层防护：
+  - intent: `Send 0.005 ETH`
+  - Sentinel decision: `execute`
+  - CAW execution status: `policy_denied`
+  - API final decision: `reject`
+  - reason: `matched_pact_transfer_deny_if`
+- 已修正 API 语义：
+  - 顶层 `decision/status` 表示最终结果。
+  - 新增 `sentinel_decision` / `sentinel_decision_reason` 保留 Sentinel 原始判断。
+  - CAW `policy_denied` / `failed` 会把最终 API response 映射为 rejected。
+- 已兼容 CAW SDK submit response：
+  - SDK 可能返回数字 `status` 和字符串 `status_display`。
+  - `CawExecutor` 优先使用 `status_display`。
+- 当前验证：
+
+```bash
+PYTHONPATH=agent agent/venv/bin/python -m unittest discover -s agent -p 'test_*.py'
+```
+
+```text
+Ran 76 tests
+OK
+```
+- CP6 剩余后移到 CP5/CP7：
+  - 把 CAW execution result 写入 AuditLogger。
+  - `/api/audit-log/{tx_id}` 返回 execution evidence。
 
 ### 2026-06-05 CP6 CAW Execution Backend 起步
 
@@ -75,8 +114,7 @@ Ran 74 tests
 OK
 ```
 - CP6 剩余：
-  - 安装/验证 `cobo-agentic-wallet` Python SDK。
-  - 在 `EXECUTION_BACKEND=caw ENABLE_REAL_TX=true` 下跑一次受控 API real transfer。
+  - 用 `/api/execute` 在 `EXECUTION_BACKEND=caw ENABLE_REAL_TX=true` 下跑一次受控 API real transfer。
   - 把 CAW execution result 写进 audit/detail API。
 
 ### 2026-06-05 真实 LLM 调用计划确认

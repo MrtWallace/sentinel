@@ -73,6 +73,35 @@ class ExecutionBackendTest(unittest.TestCase):
         self.assertEqual(result.tx_hash, "0xabc")
         self.assertEqual(factory.transfer_kwargs["src_addr"], config.src_address)
 
+    def test_caw_executor_uses_status_display_when_status_is_numeric(self):
+        tx = TxProposal(
+            action="transfer",
+            amount="0.001",
+            recipient="0x1111111111111111111111111111111111111111",
+        )
+        config = CawConfig(
+            api_url="https://api.agenticwallet.cobo.com",
+            api_key="agent-key",
+            wallet_id="wallet-id",
+            pact_id="pact-id",
+            src_address="0x927f175c85d61237f817b499f739336b498384fe",
+            enable_real_tx=True,
+        )
+        factory = FakeCawClientFactory(
+            transfer_response={
+                "id": "caw-tx-id",
+                "request_id": "sentinel-tx-1",
+                "status": 400,
+                "status_display": "Processing",
+                "transaction_hash": None,
+            }
+        )
+
+        result = CawExecutor(config=config, client_factory=factory).execute(tx, "tx-1")
+
+        self.assertEqual(result.status, "submitted")
+        self.assertIn("Processing", result.reason)
+
     def test_caw_executor_maps_policy_denial(self):
         tx = TxProposal(
             action="transfer",
@@ -84,6 +113,7 @@ class ExecutionBackendTest(unittest.TestCase):
             api_key="agent-key",
             wallet_id="wallet-id",
             pact_id="pact-id",
+            src_address="0x927f175c85d61237f817b499f739336b498384fe",
             enable_real_tx=True,
         )
         factory = FakeCawClientFactory(transfer_error=FakePolicyDeniedError())

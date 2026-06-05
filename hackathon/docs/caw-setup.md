@@ -231,3 +231,44 @@ Sentinel decision == execute
 -> capture request_id / tx_id / tx_hash
 -> handle policy denial as rejection_source="caw"
 ```
+
+## Python SDK Smoke Script
+
+After installing the SDK in the project venv:
+
+```bash
+source agent/venv/bin/activate
+pip install -r agent/requirements.txt
+```
+
+Verify import:
+
+```bash
+PYTHONPATH=agent python3 -c "from cobo_agentic_wallet.client import WalletAPIClient; print('ok')"
+```
+
+Run one allowed transfer:
+
+```bash
+PYTHONPATH=agent python3 agent/caw_smoke.py --amount 0.001
+```
+
+Run one policy-denied transfer:
+
+```bash
+PYTHONPATH=agent python3 agent/caw_smoke.py --amount 0.005
+```
+
+The script requires `.env` to contain:
+
+```bash
+AGENT_WALLET_API_URL=
+AGENT_WALLET_API_KEY=
+AGENT_WALLET_WALLET_ID=
+COBO_PACT_ID=
+COBO_CHAIN_ID=SETH
+COBO_TOKEN_ID=SETH
+COBO_SRC_ADDRESS=
+```
+
+Use `--request-id <stable-id>` when retrying the same smoke test to avoid duplicate submission.

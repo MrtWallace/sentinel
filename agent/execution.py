@@ -1,6 +1,7 @@
 import asyncio
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Literal, Protocol
 
 from dotenv import load_dotenv
@@ -8,7 +9,7 @@ from dotenv import load_dotenv
 from models import TxProposal
 
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 
 ExecutionStatus = Literal[
@@ -192,11 +193,12 @@ class CawExecutor:
         }
 
     def _result_from_caw_response(self, raw: dict[str, Any]) -> ExecutionResult:
-        status = raw.get("status", "")
+        status = raw.get("status_display") or raw.get("status", "")
+        status_text = str(status).lower()
         normalized_status: ExecutionStatus = "submitted"
-        if status.lower() == "success":
+        if status_text == "success":
             normalized_status = "succeeded"
-        elif status.lower() == "pending_approval":
+        elif status_text == "pending_approval":
             normalized_status = "pending_approval"
 
         return ExecutionResult(
@@ -240,7 +242,7 @@ class CawExecutor:
 
     def _missing_real_tx_config(self) -> list[str]:
         missing = []
-        for field_name in ["api_url", "api_key", "wallet_id", "pact_id"]:
+        for field_name in ["api_url", "api_key", "wallet_id", "pact_id", "src_address"]:
             if not getattr(self.config, field_name):
                 missing.append(field_name)
         return missing

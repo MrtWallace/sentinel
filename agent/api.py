@@ -37,14 +37,19 @@ def execute(request: ExecuteRequest):
     loop = _build_loop()
     result = loop.run(tx)
     tx_id = str(uuid4())
-    status = _status_from_decision(result.final_decision.decision)
     execution = _execute_if_allowed(result, tx_id)
+    final_decision, status, decision_reason = _final_response_decision(
+        result,
+        execution,
+    )
 
     return {
         "tx_id": tx_id,
         "status": status,
-        "decision": result.final_decision.decision,
-        "decision_reason": result.final_decision.reason,
+        "decision": final_decision,
+        "decision_reason": decision_reason,
+        "sentinel_decision": result.final_decision.decision,
+        "sentinel_decision_reason": result.final_decision.reason,
         "attempts": [_attempt_to_dict(attempt) for attempt in result.attempts],
         "decision_chain": _legacy_decision_chain(result),
         "execution": asdict(execution),
@@ -83,6 +88,29 @@ def _execute_if_allowed(result, tx_id: str):
 
     final_tx = result.attempts[-1].tx_proposal
     return build_execution_backend().execute(final_tx, tx_id)
+
+
+def _final_response_decision(result, execution):
+    if execution.status == "policy_denied":
+        return (
+            "reject",
+            "rejected",
+            f"CAW policy denied execution: {execution.reason}",
+        )
+
+    if execution.status == "failed":
+        return (
+            "reject",
+            "rejected",
+            f"Execution failed: {execution.reason}",
+        )
+
+    decision = result.final_decision.decision
+    return (
+        decision,
+        _status_from_decision(decision),
+        result.final_decision.reason,
+    )
 
 
 def _demo_proposal_from_intent(intent: str) -> TxProposal:
