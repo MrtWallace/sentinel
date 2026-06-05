@@ -67,6 +67,12 @@ export const SmartAccountStatusBar = () => {
 
   return (
     <>
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-2 lg:hidden">
+        <CompactStatusPill label="NET" value={targetNetwork.name.toUpperCase()} />
+        <CompactStatusPill label="EXEC" value="CAW" />
+        <CompactStatusPill label="API" value=":8000" />
+      </div>
+
       <div className="hidden min-w-0 flex-1 items-center gap-4 border-l border-white/10 pl-4 lg:flex">
         {primaryStatusItems.map(item => (
           <StatusPair item={item} key={item.label} />
@@ -89,6 +95,15 @@ export const SmartAccountStatusBar = () => {
         </div>
       </div>
     </>
+  );
+};
+
+const CompactStatusPill = ({ label, value }: StatusItem) => {
+  return (
+    <div className="min-w-0 rounded-md border border-white/10 bg-[#111318] px-2 py-1 font-mono text-[10px] text-[#bec9c2]">
+      <span className="text-[#68726d]">{label}</span>
+      <span className="ml-1 text-[#a4f3d1]">{value}</span>
+    </div>
   );
 };
 

@@ -28,7 +28,7 @@ export const AuditTable = ({
   return (
     <section className="overflow-hidden rounded-lg border border-white/10 bg-[#111318]">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[940px] border-collapse text-left">
+        <table className="w-full min-w-[760px] border-collapse text-left lg:min-w-[940px]">
           <thead className="border-b border-white/10 bg-[#0c0e12]">
             <tr className="font-mono text-[11px] uppercase text-[#89938d]">
               <th className="px-4 py-3 font-medium">ID</th>

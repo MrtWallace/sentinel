@@ -153,6 +153,7 @@ const Home: NextPage = () => {
             <label className="flex flex-col gap-2">
               <span className="font-mono text-[11px] uppercase text-[#89938d]">Intent</span>
               <textarea
+                aria-label="Natural language DeFi intent"
                 className="h-44 resize-none rounded-lg border border-[#3f4944] bg-[#0c0e12] p-3 font-mono text-sm leading-6 text-[#e2e2e8] outline-none placeholder:text-[#89938d] focus:border-[#88d6b6]"
                 onChange={event => setIntent(event.target.value)}
                 value={intent}
@@ -181,15 +182,17 @@ const Home: NextPage = () => {
               ))}
             </div>
 
-            <div className={infoPanelClass(execution?.status)}>
-              <div className="flex items-start gap-2">
-                <ExclamationTriangleIcon className="mt-0.5 h-4 w-4 text-amber-200" />
-                <div>
-                  <p className="m-0 text-sm font-medium text-amber-100">{infoPanelTitle(execution)}</p>
-                  <p className="m-0 mt-1 text-xs leading-5 text-amber-100/75">{infoPanelBody(execution)}</p>
+            {execution && (
+              <div className={infoPanelClass(execution.status)}>
+                <div className="flex items-start gap-2">
+                  <ExclamationTriangleIcon className="mt-0.5 h-4 w-4 text-amber-200" />
+                  <div>
+                    <p className="m-0 text-sm font-medium text-amber-100">{infoPanelTitle(execution)}</p>
+                    <p className="m-0 mt-1 text-xs leading-5 text-amber-100/75">{infoPanelBody(execution)}</p>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             <button
               className="flex h-11 items-center justify-center gap-2 rounded-lg border border-[#88d6b6] bg-[#88d6b6] px-4 text-sm font-semibold text-[#003828] transition hover:bg-[#a4f3d1]"
@@ -280,11 +283,7 @@ function infoPanelClass(status?: ExecutionStatus): string {
   return "rounded-lg border border-amber-300/20 bg-amber-300/10 p-3";
 }
 
-function infoPanelTitle(response: ExecuteResponse | null): string {
-  if (!response) {
-    return "Manual confirmation slot";
-  }
-
+function infoPanelTitle(response: ExecuteResponse): string {
   if (response.status === "executed") {
     if (response.attempts.length > 1) {
       return "Agentic retry completed";
@@ -301,14 +300,10 @@ function infoPanelTitle(response: ExecuteResponse | null): string {
     return "Execution failed";
   }
 
-  return "Manual confirmation slot";
+  return "Manual review required";
 }
 
-function infoPanelBody(response: ExecuteResponse | null): string {
-  if (!response) {
-    return "Recipient context is incomplete. Operator approval is required before audit finalization.";
-  }
-
+function infoPanelBody(response: ExecuteResponse): string {
   if (response.status === "confirm_needed") {
     return response.decisionChain.confirmation?.riskNote ?? response.reason;
   }

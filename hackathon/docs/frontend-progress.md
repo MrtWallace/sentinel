@@ -1,6 +1,6 @@
 # Sentinel 前端进度记录
 
-> 最后更新：2026-06-05 23:36
+> 最后更新：2026-06-06 00:03
 
 ## 进度记录约定
 
@@ -27,6 +27,7 @@
 | CP5.5 | 后端联调接入 | 1-2h | 2026-06-05 22:38 | 2026-06-05 22:56 | Code Done / Backend Proxy Verified / User QA Pending | 已对接后端 `/api/audit-log`、`/api/audit-log/{tx_id}`、`/api/confirm`，复核 execute contract |
 | CP6 | 前端理解层 | 2-4h | 待开始 | 待开始 | Deferred / Post-MVP | `frontend-implementation-guide.md` + `/frontend-map`；按用户要求顺延，不阻塞前端 MVP |
 | CP7 | 验证与小修 | 1-3h | 2026-06-05 23:05 | 2026-06-05 23:27 | MVP Code Done / Build Passed / User QA Pending | CP6 顺延；前端 MVP 已完成真实后端 smoke、typecheck、lint、build |
+| CP7.1 | MVP quick wins | 0.5h | 2026-06-05 23:53 | 2026-06-06 00:03 | Code Done / QA Pending | 修复 info panel 空态、状态标签、死代码、textarea aria、global paragraph margin，并补轻量移动端状态栏/Audit 表格适配 |
 
 当前整体判断：
 
@@ -36,9 +37,40 @@
 - CP5.5 已完成真实后端 audit/confirm 联调。
 - CP6 前端理解层按用户要求顺延，不阻塞 MVP。
 - CP7 已完成前端 MVP 验证：真实后端 smoke、Next proxy、首页/Audit 页面、typecheck、lint、production build 均已跑过。
+- CP7.1 已按用户 review 反馈处理 quick wins。
 - 当前还需要用户做浏览器侧主观 QA：检查页面视觉、文案和 demo 讲述是否符合预期。
 
 ## 当前进度详情
+
+### 2026-06-05 前端 Checkpoint 7.1：MVP quick wins
+
+- 开始时间：2026-06-05 23:53。
+- 完成时间：2026-06-06 00:03。
+- 已完成：
+  - 没有 execution 时隐藏 info panel，不再默认显示 `Manual confirmation slot`。
+  - 统一状态标签用词：`confirm_needed` / `review` 均显示 `MANUAL REVIEW`。
+  - 删除未引用的 `DecisionChainPreview.tsx` 死代码。
+  - 给 intent textarea 加 `aria-label="Natural language DeFi intent"`。
+  - 将 `globals.css` 的全局 `p { margin: 1rem 0 }` 收窄为 `.prose p`，避免覆盖页面内 `m-0`。
+  - 小屏状态栏增加简版 `NET / EXEC / API` pills，不再完全隐藏关键状态。
+  - Audit table 从固定 `min-w-[940px]` 调整为 `min-w-[760px] lg:min-w-[940px]`，降低平板溢出。
+  - 新增 `StatusBadge.test.ts` 类型契约测试，约束状态标签用词。
+
+验证命令：
+
+```bash
+yarn workspace @se-2/nextjs check-types
+yarn workspace @se-2/nextjs lint
+git diff --check
+```
+
+当前测试结果：
+
+```text
+check-types: passed
+lint: passed, no ESLint warnings or errors
+git diff --check: passed
+```
 
 ### 2026-06-05 前端 Checkpoint 7：验证与小修
 

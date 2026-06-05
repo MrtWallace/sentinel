@@ -84,7 +84,7 @@
     border-color: var(--color-gray-200, currentColor);
   }
 
-  p {
+  .prose p {
     margin: 1rem 0;
   }
 

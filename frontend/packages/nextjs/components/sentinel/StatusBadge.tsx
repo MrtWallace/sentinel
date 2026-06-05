@@ -16,17 +16,21 @@ const statusLabels: Record<StatusBadgeProps["status"], string> = {
   executed: "EXECUTED",
   passed: "PASSED",
   rejected: "REJECTED",
-  confirm_needed: "CONFIRM NEEDED",
+  confirm_needed: "MANUAL REVIEW",
   failed: "FAILED",
-  review: "POLICY REVIEW",
+  review: "MANUAL REVIEW",
 };
+
+export function getStatusLabel(status: StatusBadgeProps["status"]): string {
+  return statusLabels[status];
+}
 
 export const StatusBadge = ({ status, label }: StatusBadgeProps) => {
   return (
     <span
       className={`inline-flex h-6 items-center whitespace-nowrap rounded-md border px-2 font-mono text-[11px] font-semibold ${statusStyles[status]}`}
     >
-      {label ?? statusLabels[status]}
+      {label ?? getStatusLabel(status)}
     </span>
   );
 };
