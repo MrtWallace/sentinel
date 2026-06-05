@@ -1,7 +1,7 @@
 # Sentinel Hackathon — 后端 & 合约进度
 
 > 目的：只记录短期状态，包括 checkpoint 进度表、当前阻塞、最近完成项。
-> 最后更新：2026-06-05 18:11
+> 最后更新：2026-06-05 18:25
 > 稳定方向和 checkpoint 定义见 `hackathon/docs/backend-plan.md`。
 
 ## 更新约定
@@ -26,18 +26,53 @@
 | CP6 | CAW Execution Backend + Real Transfer | 6-10h | 2026-06-05 17:00 | 2026-06-05 17:53 | Done | `/api/execute` 已真实触发 CAW transfer，policy deny 已返回 reject |
 | CP7 | Demo Evidence + README + Script | 2-4h | 2026-06-05 18:02 | 2026-06-05 18:04 | Done | README + demo script + proposal 进度已校准 |
 | CP7.5 | Provider-agnostic LLM Reviewers | 3-5h | 2026-06-05 18:04 | 2026-06-05 18:11 | Done | OpenAI-compatible LLM client + real reviewer smoke 完成 |
+| CP7.6 | LLM Reproposal + Real Integration Smoke | 1-2h | 2026-06-05 18:14 | 2026-06-05 18:25 | Done | `REPROPOSAL_MODE=llm` 已接 API，真实 LLM reproposal + LLM reviewers + CAW deny 组合烟测完成 |
 | CP8 | Stretch：合约事件 / contract_call swap / polish | 2-5h | 待开始 | 待完成 | Stretch | 时间允许再做，不阻塞 Cobo MVP |
 
 ## 当前阻塞
 
 - 无明确外部阻塞。
-- 当前进行：CP8 stretch / final polish；CP5-CP7.5 后端 demo 主链路、材料、真实 LLM reviewer 已完成。
+- 当前进行：CP8 stretch / final polish；CP5-CP7.6 后端 demo 主链路、材料、真实 LLM reviewer、真实 LLM reproposal 已完成。
 - Cobo 赛道新增工作量约 10-16h；其中真实 CAW setup + `transfer_tokens` 是硬门槛，不能用 mock/simulator 替代。
 - agentic 优化新增约 3-5h，主要集中在 ReproposalAgent、MutationGuard 和 loop 测试。
 - 提交截止：2026-06-13 12:00。当前判断仍可完成；执行顺序调整为 CP6 real transfer -> CP5 Audit detail -> CP7 evidence/script -> CP7.5 real LLM reviewers -> CP8 stretch。
 - 前端需要后续同步：DecisionChain 支持 attempts；状态栏从 SmartAccount 主视角调整为 CAW wallet / pact 主视角；Audit 展示 CAW request id、policy result、tx hash。
 
 ## 最近完成项
+
+### 2026-06-05 CP7.6：LLM Reproposal + Real Integration Smoke 完成
+
+- 已新增 `LLMReproposalAgent`：
+  - 使用 provider-agnostic `LLMClient`。
+  - 输入原始 `TxProposal` + rejection suggestions。
+  - 要求 LLM 输出完整 revised proposal，而不是机械替换单字段。
+  - 禁止修改 `action` / `to_contract` / `recipient`，异常时回退原 proposal。
+  - 最终仍由 `MutationGuard` 验证降低风险，不信任 LLM 自说自话。
+- 已新增 API mode switch：
+  - `REPROPOSAL_MODE=mock` 默认稳定 demo。
+  - `REPROPOSAL_MODE=llm` 启用真实 LLM 重提案。
+- 已完成真实 LLM reproposal smoke：
+  - intent: `Swap 0.2 ETH to USDC`
+  - attempt 1: reject, amount `0.2`
+  - attempt 2: execute, amount `0.01`
+  - execution backend: mock skipped
+- 已完成真实 LLM reviewers + 真实 CAW policy deny 组合 smoke：
+  - reviewer mode: `llm`
+  - execution backend: `caw`
+  - Sentinel decision: `execute`
+  - CAW execution status: `policy_denied`
+  - API final decision: `reject`
+  - CAW reason: `matched_pact_transfer_deny_if`
+- 当前验证：
+
+```bash
+PYTHONPATH=agent agent/venv/bin/python -m unittest discover -s agent -p 'test_*.py'
+```
+
+```text
+Ran 96 tests
+OK
+```
 
 ### 2026-06-05 CP7.5：Provider-agnostic LLM Reviewers 完成
 

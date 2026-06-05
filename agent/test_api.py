@@ -102,6 +102,17 @@ class ExecuteApiTest(unittest.TestCase):
         self.assertEqual(body["execution"]["status"], "policy_denied")
         self.assertIn("CAW policy denied", body["decision_reason"])
 
+    def test_execute_can_use_llm_reproposal_mode(self):
+        with patch.dict("os.environ", {"REPROPOSAL_MODE": "llm"}):
+            with patch("api.build_default_llm_client") as build_llm:
+                build_llm.return_value = FakeReproposalLLMClient()
+
+                body = execute(ExecuteRequest(intent="Swap 0.2 ETH to USDC"))
+
+        self.assertEqual(body["status"], "executed")
+        self.assertEqual(len(body["attempts"]), 2)
+        self.assertEqual(body["attempts"][1]["proposal"]["amount"], "0.01")
+
 
 class PolicyDeniedBackend:
     def execute(self, tx, tx_id):
@@ -112,3 +123,17 @@ class PolicyDeniedBackend:
             reason="Operation denied by the pact's policy.",
             policy_reason="matched_pact_transfer_deny_if",
         )
+
+
+class FakeReproposalLLMClient:
+    def complete_json(self, system_prompt, user_prompt):
+        return {
+            "action": "swap",
+            "amount": "0.01",
+            "from_token": "ETH",
+            "to_token": "USDC",
+            "to_contract": "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E",
+            "slippage": 0.02,
+            "deadline": 180,
+            "reasoning": "Reduced amount after Sentinel rejection.",
+        }

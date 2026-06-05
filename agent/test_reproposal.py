@@ -1,6 +1,6 @@
 import unittest
 from models import Suggestion, TxProposal
-from reproposal import MockReproposalAgent, MutationGuard
+from reproposal import LLMReproposalAgent, MockReproposalAgent, MutationGuard
 
 
 class MockReproposalAgentTest(unittest.TestCase):
@@ -101,7 +101,137 @@ class MockReproposalAgentTest(unittest.TestCase):
         result = MutationGuard().validate(old_tx, new_tx, suggestions)
         self.assertFalse(result.passed)
 
-    def test_guard_slippage_too_high_suggestion_is_ignored(self):
+
+class LLMReproposalAgentTest(unittest.TestCase):
+    def test_revises_from_llm_json_response(self):
+        tx = TxProposal(
+            action="swap",
+            amount="0.2",
+            from_token="ETH",
+            to_token="USDC",
+            to_contract="0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E",
+            slippage=0.03,
+            deadline=300,
+        )
+        suggestions = [
+            Suggestion(
+                field="amount",
+                suggested_value="0.01",
+                reason="Reduce exposure",
+                rejection_code="amount_too_high",
+            )
+        ]
+
+        revised = LLMReproposalAgent(
+            FakeLLMClient(
+                {
+                    "action": "swap",
+                    "amount": "0.01",
+                    "from_token": "ETH",
+                    "to_token": "USDC",
+                    "to_contract": "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E",
+                    "slippage": 0.02,
+                    "deadline": 180,
+                    "reasoning": "Reduced amount and tightened execution settings.",
+                }
+            )
+        ).revise(tx, suggestions)
+
+        self.assertEqual(revised.action, "swap")
+        self.assertEqual(revised.amount, "0.01")
+        self.assertEqual(revised.to_contract, tx.to_contract)
+        self.assertEqual(revised.slippage, 0.02)
+        self.assertEqual(revised.deadline, 180)
+
+    def test_returns_original_tx_when_llm_changes_action(self):
+        tx = TxProposal(action="swap", amount="0.2")
+        suggestions = [
+            Suggestion(
+                field="amount",
+                suggested_value="0.01",
+                reason="Reduce exposure",
+                rejection_code="amount_too_high",
+            )
+        ]
+
+        revised = LLMReproposalAgent(
+            FakeLLMClient({"action": "transfer", "amount": "0.01"})
+        ).revise(tx, suggestions)
+
+        self.assertIs(revised, tx)
+
+    def test_returns_original_tx_when_llm_changes_contract(self):
+        tx = TxProposal(
+            action="swap",
+            amount="0.2",
+            to_contract="0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E",
+        )
+        suggestions = [
+            Suggestion(
+                field="amount",
+                suggested_value="0.01",
+                reason="Reduce exposure",
+                rejection_code="amount_too_high",
+            )
+        ]
+
+        revised = LLMReproposalAgent(
+            FakeLLMClient(
+                {
+                    "action": "swap",
+                    "amount": "0.01",
+                    "to_contract": "0x1111111111111111111111111111111111111111",
+                }
+            )
+        ).revise(tx, suggestions)
+
+        self.assertIs(revised, tx)
+
+    def test_returns_original_tx_when_llm_changes_recipient(self):
+        tx = TxProposal(
+            action="transfer",
+            amount="0.2",
+            recipient="0x927f175c85d61237f817b499f739336b498384fe",
+        )
+        suggestions = [
+            Suggestion(
+                field="amount",
+                suggested_value="0.01",
+                reason="Reduce exposure",
+                rejection_code="amount_too_high",
+            )
+        ]
+
+        revised = LLMReproposalAgent(
+            FakeLLMClient(
+                {
+                    "action": "transfer",
+                    "amount": "0.01",
+                    "recipient": "0x1111111111111111111111111111111111111111",
+                }
+            )
+        ).revise(tx, suggestions)
+
+        self.assertIs(revised, tx)
+
+    def test_returns_original_tx_when_llm_fails(self):
+        tx = TxProposal(action="swap", amount="0.2")
+        suggestions = [
+            Suggestion(
+                field="amount",
+                suggested_value="0.01",
+                reason="Reduce exposure",
+                rejection_code="amount_too_high",
+            )
+        ]
+
+        revised = LLMReproposalAgent(FailingLLMClient()).revise(tx, suggestions)
+
+        self.assertIs(revised, tx)
+
+
+class MutationGuardTest(unittest.TestCase):
+    def test_guard_accepts_slippage_reduction(self):
         old_tx = TxProposal(action="swap", amount="0.2", slippage=1.0)
         new_tx = TxProposal(action="swap", amount="0.2", slippage=0.5)
         suggestions = [
@@ -114,8 +244,8 @@ class MockReproposalAgentTest(unittest.TestCase):
         ]
         result = MutationGuard().validate(old_tx, new_tx, suggestions)
         self.assertTrue(result.passed)
-    
-    def test_guard_accepts_slippage_reduction(self):
+
+    def test_guard_accepts_deadline_reduction(self):
         old_tx = TxProposal(action="swap", amount="0.2", deadline=300)
         new_tx = TxProposal(action="swap", amount="0.2", deadline=100)
         suggestions = [
@@ -128,8 +258,8 @@ class MockReproposalAgentTest(unittest.TestCase):
         ]
         result = MutationGuard().validate(old_tx, new_tx, suggestions)
         self.assertTrue(result.passed)
-    
-    def test_guard_accepts_deadline_reduction(self):
+
+    def test_guard_rejects_contract_change(self):
         old_tx = TxProposal(
             action="swap",
             amount="0.5",
@@ -150,3 +280,16 @@ class MockReproposalAgentTest(unittest.TestCase):
         ]
         result = MutationGuard().validate(old_tx, new_tx, suggestions)
         self.assertFalse(result.passed)
+
+
+class FakeLLMClient:
+    def __init__(self, response):
+        self.response = response
+
+    def complete_json(self, system_prompt, user_prompt):
+        return self.response
+
+
+class FailingLLMClient:
+    def complete_json(self, system_prompt, user_prompt):
+        raise RuntimeError("llm unavailable")

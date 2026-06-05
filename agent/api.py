@@ -14,6 +14,7 @@ from intent import proposal_from_dict
 from llm import build_default_llm_client
 from loop import AgenticLoop
 from models import AgentResult, Suggestion, TxProposal
+from reproposal import LLMReproposalAgent
 from reviewers import LLMSecurityAuditor, LLMRiskAnalyst, MockSecurityAuditor
 from risk.pipeline import RiskPipeline
 from risk.rules import AmountRule, ApprovalRule, FrequencyRule, SlippageRule, WhitelistRule
@@ -104,6 +105,7 @@ def confirm(request: ConfirmRequest):
 
 def _build_loop() -> AgenticLoop:
     security_auditor, risk_analyst = _build_reviewers()
+    reproposal_agent = _build_reproposal_agent()
     return AgenticLoop(
         risk_pipeline=RiskPipeline(
             [
@@ -116,6 +118,7 @@ def _build_loop() -> AgenticLoop:
         ),
         security_auditor=security_auditor,
         risk_analyst=risk_analyst,
+        reproposal_agent=reproposal_agent,
     )
 
 
@@ -129,6 +132,13 @@ def _build_reviewers():
         llm = build_default_llm_client()
         return LLMSecurityAuditor(llm), LLMRiskAnalyst(llm)
     return MockSecurityAuditor(mode="safe"), DemoRiskAnalyst()
+
+
+def _build_reproposal_agent():
+    reproposal_mode = os.getenv("REPROPOSAL_MODE", "mock").lower()
+    if reproposal_mode == "llm":
+        return LLMReproposalAgent(build_default_llm_client())
+    return None
 
 
 def _proposal_from_request(request: ExecuteRequest) -> TxProposal:
