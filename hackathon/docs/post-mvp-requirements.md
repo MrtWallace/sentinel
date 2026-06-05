@@ -403,22 +403,468 @@ Task 4: Audit log SQLite persistence
 - Reference: agent/audit.py for current JSON implementation
 ```
 
-### Batch 3（P2-P3）
+### Batch 3（P1 — Agent 系统增强）
 
 ```
-Task 5: Prompt injection protection
+Task 5: Agent tool calling framework
+- agent/tools.py: AgentTool dataclass + tool registry
+- agent/tools_chain.py: check_contract_verified, check_address_history, get_token_price, estimate_swap_output, check_gas_price
+- agent/llm.py: add complete_with_tools() method (OpenAI function calling)
+- agent/reviewers.py: refactor LLMSecurityAuditor/LLMRiskAnalyst to use tools
+- Tests for each tool (mock API responses) + tool-calling integration test
+- Reference: agent/llm.py for existing LLMClient, agent/reviewers.py for existing reviewers
+
+Task 6: Agent memory system
+- agent/memory.py: AgentMemory class with SQLite storage
+- record(): save each transaction decision
+- get_patterns(): analyze user history (avg amount, typical contracts, rejection rate)
+- detect_anomaly(): compare current proposal against user patterns
+- Integrate into reviewers: inject memory context into LLM prompt
+- Tests for pattern detection and anomaly detection
+
+Task 7: MCP tool interface
+- agent/mcp_server.py: standalone MCP server wrapping Sentinel capabilities
+- Tools: evaluate_transaction, get_risk_config, update_risk_config, get_audit_log
+- Uses existing AgenticLoop, AuditLogger, RiskPipeline
+- Independent process, no changes to existing backend
+- Test: MCP client can call tools and get valid responses
+```
+
+### Batch 4（P2 — 高级 Agent）
+
+```
+Task 8: Agent planner (task decomposition)
+- agent/planner.py: AgentPlanner class
+- Decompose multi-step intents into ExecutionPlan with ordered ExecutionSteps
+- AgenticLoop.run() accepts ExecutionPlan, processes steps sequentially
+- Stop on first reject, return merged results
+- Tests: single-step passthrough, multi-step decomposition, stop-on-reject
+
+Task 9: Agent reflection
+- agent/reflection.py: AgentReflector class
+- After execution, compare Agent prediction vs actual outcome
+- Write reflection results to AgentMemory
+- Demo: show Agent self-critique after transaction completes
+```
+
+### Batch 5（P2-P3 — 基础设施）
+
+```
+Task 10: Prompt injection protection
 - Input sanitizer: length limit, control char filter, pattern detection
 - Output validator: strict schema check on LLM JSON output
 - Anomaly detector: compare proposal vs original intent
 
-Task 6: API authentication (JWT)
+Task 11: API authentication (JWT)
 - MetaMask signature login
 - JWT middleware on /api/execute, /api/config, /api/wallet/*
 
-Task 7: Rate limiting
+Task 12: Rate limiting
 - 30 requests/minute per IP
 - FastAPI middleware
 ```
+
+---
+
+## 3.5 Agent 系统增强
+
+### 3.8 MCP Tool 接口
+
+**优先级**：P1 — 生态互操作性
+
+**目标**：将 Sentinel 风控能力暴露为 MCP (Model Context Protocol) Tool，让其他 AI Agent 可以调用 Sentinel 评估交易风险。
+
+**暴露的 Tools**：
+
+```python
+# sentinel_mcp_server.py
+
+@mcp_tool("evaluate_transaction")
+def evaluate_transaction(intent: str) -> dict:
+    """评估一笔 DeFi 交易的风险。返回决策和推理过程。"""
+    proposal = parse_tx_proposal(intent)
+    result = agentic_loop.run(proposal)
+    return {
+        "decision": result.final_decision.decision,
+        "reason": result.final_decision.reason,
+        "attempts": len(result.attempts),
+        "risk_summary": _summarize_risks(result)
+    }
+
+@mcp_tool("get_risk_config")
+def get_risk_config(user_address: str) -> dict:
+    """读取用户的风控配置。"""
+    return db.get_user_config(user_address)
+
+@mcp_tool("update_risk_config")
+def update_risk_config(user_address: str, config: dict) -> dict:
+    """更新用户的风控配置。"""
+    return db.update_user_config(user_address, config)
+
+@mcp_tool("get_audit_log")
+def get_audit_log(tx_id: str) -> dict:
+    """查询审计记录。"""
+    return db.get_audit(tx_id)
+```
+
+**实现要点**：
+- 使用 `mcp` Python SDK
+- 独立进程运行，通过 stdio 或 HTTP 与 MCP client 通信
+- 复用现有 `AgenticLoop`、`AuditLogger`、`RiskPipeline`
+- 不需要改动现有后端代码，是独立的 MCP server 包装层
+
+**Demo 效果**：
+```
+其他 Agent: "我要 swap 0.5 ETH，先问问 Sentinel"
+  → 调用 MCP tool: evaluate_transaction("swap 0.5 ETH to USDC")
+  → Sentinel 返回: { decision: "reject", reason: "AmountRule: 超过 0.2 ETH 上限" }
+  → 其他 Agent: "Sentinel 说不行，我降金额到 0.1 ETH 再试"
+```
+
+**工时**：1 天
+
+---
+
+### 3.9 Agent 工具调用
+
+**优先级**：P1 — Agent 从"猜"变成"查"
+
+**目标**：Agent B/C 可以调用链上查询工具收集证据，基于真实数据做判断。
+
+**工具列表**：
+
+| 工具 | 功能 | 数据源 | Agent |
+|---|---|---|---|
+| `check_contract_verified` | 合约是否在 Etherscan 验证 | Etherscan API | B |
+| `check_address_history` | 地址交易历史和标记 | Etherscan API | B |
+| `get_token_price` | token 当前价格 | CoinGecko / Chainlink | C |
+| `estimate_swap_output` | swap 预期输出量 | Uniswap Quote API | C |
+| `check_gas_price` | 当前 gas 价格 | RPC call | C |
+
+**工具框架**：
+
+```python
+# agent/tools.py
+@dataclass
+class AgentTool:
+    name: str
+    description: str
+    parameters: dict  # JSON Schema
+    func: Callable
+
+# agent/tools_chain.py — 链上查询工具
+def check_contract_verified(address: str) -> dict:
+    """查询合约是否在 Etherscan 验证了源码。"""
+    resp = requests.get(ETHERSCAN_API, params={
+        "module": "contract", "action": "getabi", "address": address
+    })
+    return {"verified": resp.status_code == 200, "address": address}
+
+def get_token_price(token_symbol: str) -> dict:
+    """查询 token 当前 USD 价格。"""
+    resp = requests.get(f"https://api.coingecko.com/api/v3/simple/price", params={
+        "ids": TOKEN_MAP.get(token_symbol, token_symbol), "vs_currencies": "usd"
+    })
+    return {"token": token_symbol, "price_usd": resp.json()}
+
+def estimate_swap_output(amount_eth: float, to_token: str) -> dict:
+    """估算 Uniswap swap 输出量。"""
+    # Uniswap Quote API 或链上 quoter 合约调用
+    ...
+```
+
+**LLM Tool Calling 集成**：
+
+```python
+# agent/llm.py 增加
+class OpenAICompatibleLLMClient:
+    def complete_with_tools(self, messages, tools: list[AgentTool]) -> dict:
+        tool_schemas = [{
+            "type": "function",
+            "function": {"name": t.name, "description": t.description, "parameters": t.parameters}
+        } for t in tools]
+        
+        response = self.client.chat.completions.create(
+            model=self.model, messages=messages, tools=tool_schemas, tool_choice="auto"
+        )
+        
+        message = response.choices[0].message
+        if message.tool_calls:
+            results = []
+            for call in message.tool_calls:
+                tool = next(t for t in tools if t.name == call.function.name)
+                result = tool.func(**json.loads(call.function.arguments))
+                results.append({"tool": call.function.name, "result": result})
+            # 把工具结果喂回 LLM 做最终判断
+            messages.append({"role": "assistant", "tool_calls": message.tool_calls})
+            for tc_result in results:
+                messages.append({"role": "tool", "content": json.dumps(tc_result["result"])})
+            final = self.client.chat.completions.create(model=self.model, messages=messages)
+            return {"tool_calls": results, "final_content": final.choices[0].message.content}
+        
+        return {"tool_calls": [], "final_content": message.content}
+```
+
+**Reviewer 改造**：
+
+```python
+# agent/reviewers.py 改造
+class LLMSecurityAuditor:
+    TOOLS = [check_contract_verified, check_address_history]
+    
+    def review(self, intent, proposal):
+        messages = [
+            {"role": "system", "content": SECURITY_AUDITOR_PROMPT},
+            {"role": "user", "content": f"Intent: {intent}\nProposal: {proposal}"}
+        ]
+        result = self.llm.complete_with_tools(messages, self.TOOLS)
+        return self._parse_result(result["final_content"])
+
+class LLMRiskAnalyst:
+    TOOLS = [get_token_price, estimate_swap_output, check_gas_price]
+    
+    def review(self, intent, proposal):
+        # 同上模式
+        ...
+```
+
+**工时**：3 天（工具框架 1 天 + 5 个工具实现 1 天 + Reviewer 改造 1 天）
+
+---
+
+### 3.10 Agent 记忆系统
+
+**优先级**：P1 — Agent 从历史中学习
+
+**目标**：Agent 记住每个用户的交易历史和行为模式，检测异常交易。
+
+**数据模型**：
+
+```python
+# agent/memory.py
+class AgentMemory:
+    """Per-user transaction memory with pattern detection."""
+    
+    def __init__(self, db_path: str = "memory.db"):
+        self.db = sqlite3.connect(db_path)
+        self.db.execute("""
+            CREATE TABLE IF NOT EXISTS transaction_memory (
+                id INTEGER PRIMARY KEY,
+                user_address TEXT NOT NULL,
+                action TEXT NOT NULL,
+                amount TEXT NOT NULL,
+                token TEXT,
+                target_contract TEXT,
+                decision TEXT NOT NULL,
+                risk_level TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+    
+    def record(self, user_address: str, proposal: TxProposal, decision: DecisionResult):
+        """记录交易决策到记忆。"""
+        self.db.execute(
+            "INSERT INTO transaction_memory (user_address, action, amount, token, target_contract, decision, risk_level) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (user_address, proposal.action, proposal.amount, proposal.to_token, proposal.to_contract, decision.decision, ...)
+        )
+        self.db.commit()
+    
+    def get_patterns(self, user_address: str) -> dict:
+        """分析用户历史交易模式。"""
+        rows = self.db.execute(
+            "SELECT action, amount, token, target_contract FROM transaction_memory WHERE user_address = ? ORDER BY timestamp DESC LIMIT 50",
+            (user_address,)
+        ).fetchall()
+        return {
+            "avg_amount": sum(float(r[1]) for r in rows) / len(rows) if rows else 0,
+            "typical_contracts": list(set(r[3] for r in rows if r[3])),
+            "typical_tokens": list(set(r[2] for r in rows if r[2])),
+            "total_transactions": len(rows),
+            "rejection_rate": sum(1 for r in rows if r[4] == "reject") / len(rows) if rows else 0
+        }
+    
+    def detect_anomaly(self, user_address: str, proposal: TxProposal) -> list[str]:
+        """检测当前交易是否偏离用户历史模式。"""
+        patterns = self.get_patterns(user_address)
+        anomalies = []
+        if patterns["total_transactions"] >= 3:
+            if float(proposal.amount) > patterns["avg_amount"] * 3:
+                anomalies.append(f"金额 ({proposal.amount}) 是历史平均 ({patterns['avg_amount']:.4f}) 的 {float(proposal.amount)/patterns['avg_amount']:.1f} 倍")
+            if proposal.to_contract and proposal.to_contract not in patterns["typical_contracts"]:
+                anomalies.append(f"目标合约 {proposal.to_contract[:10]}... 不在用户常用列表")
+        return anomalies
+```
+
+**Agent 使用记忆**：
+
+```python
+class LLMSecurityAuditor:
+    def review(self, intent, proposal, user_address):
+        memory = AgentMemory()
+        patterns = memory.get_patterns(user_address)
+        anomalies = memory.detect_anomaly(user_address, proposal)
+        
+        context = f"用户历史模式：{json.dumps(patterns, ensure_ascii=False)}\n"
+        if anomalies:
+            context += f"⚠️ 异常检测：{'、'.join(anomalies)}\n"
+        
+        messages = [
+            {"role": "system", "content": SECURITY_AUDITOR_PROMPT},
+            {"role": "user", "content": f"{context}\n当前交易：{proposal}"}
+        ]
+        # ... LLM 调用
+```
+
+**Demo 效果**：
+```
+用户历史：10 笔交易，平均 0.02 ETH，常用 Uniswap
+当前交易：swap 0.5 ETH → Agent B: "金额是历史平均 25 倍，建议确认"
+```
+
+**工时**：2 天（记忆框架 1 天 + 异常检测 1 天）
+
+---
+
+### 3.11 Agent 规划系统（任务分解）
+
+**优先级**：P2 — 复杂任务处理
+
+**目标**：将包含多步操作的复杂 intent 分解为独立的执行步骤。
+
+**数据模型**：
+
+```python
+# agent/planner.py
+@dataclass
+class ExecutionStep:
+    step_index: int
+    proposal: TxProposal
+    depends_on: list[int]  # 前置步骤索引
+
+@dataclass
+class ExecutionPlan:
+    steps: list[ExecutionStep]
+    reasoning: str
+    is_multi_step: bool
+```
+
+**实现**：
+
+```python
+class AgentPlanner:
+    """将复杂 intent 分解为可执行步骤。"""
+    
+    PLANNER_PROMPT = """你是一个交易规划器。分析用户的意图，判断是单步还是多步操作。
+    
+    多步操作的典型模式：
+    - "swap A to B then transfer to address" → 两步
+    - "approve and swap" → 两步
+    - "bridge and swap" → 两步
+    
+    输出 JSON:
+    {
+        "is_multi_step": true/false,
+        "steps": [
+            {"step_index": 0, "action": "swap", "amount": "0.1", ...},
+            {"step_index": 1, "action": "transfer", "depends_on": [0], ...}
+        ],
+        "reasoning": "..."
+    }
+    """
+    
+    def plan(self, intent: str) -> ExecutionPlan:
+        result = self.llm.complete_json([
+            {"role": "system", "content": self.PLANNER_PROMPT},
+            {"role": "user", "content": intent}
+        ])
+        return self._parse_plan(result)
+```
+
+**AgenticLoop 集成**：
+
+```python
+class AgenticLoop:
+    def run(self, tx_or_plan):
+        if isinstance(tx_or_plan, ExecutionPlan):
+            results = []
+            for step in tx_or_plan.steps:
+                step_result = self._run_single(step.proposal)
+                results.append(step_result)
+                if step_result.final_decision.decision == "reject":
+                    break  # 某步被拒，停止后续步骤
+            return self._merge_plan_results(results)
+        else:
+            return self._run_single(tx_or_plan)
+```
+
+**Demo 效果**：
+```
+用户: "Swap 0.1 ETH to USDC then send to 0x742d..."
+
+Execution Plan (2 steps):
+  Step 1: swap 0.1 ETH → USDC
+  Step 2: transfer USDC → 0x742d... (depends on Step 1)
+
+  Step 1 → Agent B PASS, Agent C PASS → EXECUTE ✓
+  Step 2 → Agent B: "大额 transfer 需确认" → CONFIRM ⚠️
+```
+
+**工时**：2 天（Planner 1 天 + AgenticLoop 改造 1 天）
+
+---
+
+### 3.12 Agent 反思系统
+
+**优先级**：P2 — 自我改进
+
+**目标**：交易执行后，Agent 回顾自己的判断是否准确，记录学习。
+
+**实现**：
+
+```python
+# agent/reflection.py
+class AgentReflector:
+    """交易执行后，Agent 反思自己的判断。"""
+    
+    REFLECTION_PROMPT = """你之前对一笔交易做了风险评估。
+    
+    你的判断：passed={passed}, risk_level={risk_level}
+    你的理由：{reasoning}
+    
+    实际结果：status={outcome_status}, gas_used={gas}, reverted={reverted}
+    
+    反思：
+    1. 你的判断准确吗？
+    2. 有什么信息是你当时没考虑到的？
+    3. 下次类似交易你会怎么调整？
+    
+    输出 JSON: {{"was_correct": true/false, "confidence": 0-1, "lessons": "...", "would_adjust": "..."}}
+    """
+    
+    def reflect(self, agent_result: AgentResult, outcome: dict) -> dict:
+        prompt = self.REFLECTION_PROMPT.format(
+            passed=agent_result.passed,
+            risk_level=agent_result.risk_level,
+            reasoning=agent_result.reasoning,
+            outcome_status=outcome.get("status"),
+            gas=outcome.get("gas_used"),
+            reverted=outcome.get("reverted", False)
+        )
+        return self.llm.complete_json([{"role": "user", "content": prompt}])
+```
+
+**记忆集成**：反思结果写入 `AgentMemory`，影响后续判断。
+
+**Demo 效果**：
+```
+交易执行后 Agent B 自动反思：
+  "我判断为 medium risk，因为金额略高于用户平均。
+   实际交易成功，gas 正常。
+   教训：对于该用户，0.05-0.1 ETH 范围应视为 low risk。
+   下次调整：类似金额降为 low risk。"
+```
+
+**工时**：1-2 天
 
 ---
 
@@ -428,10 +874,11 @@ Task 7: Rate limiting
 
 - ❌ 多链支持（只做 Sepolia）
 - ❌ 通知系统（Telegram bot / 邮件）
-- ❌ x402 支付协议集成
+- ❌ x402 支付协议集成（口头叙事，不写代码）
 - ❌ 多 Agent 独立 CAW 钱包（每个 Agent 一个钱包）
 - ❌ DAO 治理 / 多签审批
 - ❌ 生产级部署（Docker / K8s / CI/CD）
+- ❌ Agent 声誉系统（仅 2 个 Agent B/C，加权投票无实际意义）
 
 ---
 
@@ -464,12 +911,21 @@ Sentinel Backend (FastAPI)
   ├── /api/confirm         → 确认流程
   └── /api/audit-log       → 审计查询
   │
-  ├── RiskPipeline         → 从 config 读取阈值
-  ├── Agent B/C (LLM)      → 输入清洗 + 输出验证
-  ├── DecisionEngine       → 不变
-  ├── AgenticLoop          → 不变
+  ├── AgentPlanner         → 多步意图分解
+  ├── AgentMemory          → 用户历史模式 + 异常检测
+  ├── RiskPipeline         → 从 config 读取动态阈值
+  ├── Agent B (Security)   → 工具调用（合约验证、地址历史）+ LLM 推理
+  ├── Agent C (Risk)       → 工具调用（价格、滑点、gas）+ LLM 推理
+  ├── DecisionEngine       → 执行/确认/拒绝
+  ├── AgenticLoop          → bounded retry + MutationGuard
+  ├── AgentReflector       → 执行后反思 + 记忆更新
   ├── FallbackExecutor     → CAW → SmartAccount → pending
   └── AuditLogger          → SQLite
+  │
+  ▼
+MCP Server (独立进程)
+  └── evaluate_transaction / get_risk_config / get_audit_log
+      → 外部 Agent 可调用 Sentinel 风控能力
   │
   ▼
 Cobo Agentic Wallet (per-user)
@@ -480,6 +936,6 @@ Cobo Agentic Wallet (per-user)
 
 ---
 
-> **Last updated**: 2026-06-06
+> **Last updated**: 2026-06-06 (v2 — added Agent system: MCP, tool calling, memory, planner, reflection)
 > **Author**: MrtWallace
 > **Status**: 待开发
