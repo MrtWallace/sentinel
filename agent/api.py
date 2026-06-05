@@ -6,6 +6,7 @@ from uuid import uuid4
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
+from execution import build_execution_backend
 from intent import proposal_from_dict
 from loop import AgenticLoop
 from models import AgentResult, Suggestion, TxProposal
@@ -37,6 +38,7 @@ def execute(request: ExecuteRequest):
     result = loop.run(tx)
     tx_id = str(uuid4())
     status = _status_from_decision(result.final_decision.decision)
+    execution = _execute_if_allowed(result, tx_id)
 
     return {
         "tx_id": tx_id,
@@ -45,13 +47,7 @@ def execute(request: ExecuteRequest):
         "decision_reason": result.final_decision.reason,
         "attempts": [_attempt_to_dict(attempt) for attempt in result.attempts],
         "decision_chain": _legacy_decision_chain(result),
-        "execution": {
-            "backend": "mock",
-            "status": "not_submitted",
-            "request_id": None,
-            "tx_hash": None,
-            "reason": "CP5 minimal API does not submit CAW transactions yet.",
-        },
+        "execution": asdict(execution),
     }
 
 
@@ -76,6 +72,17 @@ def _proposal_from_request(request: ExecuteRequest) -> TxProposal:
         return proposal_from_dict(request.proposal)
 
     return _demo_proposal_from_intent(request.intent)
+
+
+def _execute_if_allowed(result, tx_id: str):
+    if result.final_decision.decision != "execute":
+        return build_execution_backend().execute(
+            TxProposal(action="unknown", amount="0"),
+            tx_id,
+        )
+
+    final_tx = result.attempts[-1].tx_proposal
+    return build_execution_backend().execute(final_tx, tx_id)
 
 
 def _demo_proposal_from_intent(intent: str) -> TxProposal:
