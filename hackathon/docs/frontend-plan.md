@@ -1,6 +1,6 @@
 # Sentinel 前端 MVP 更新计划
 
-> 最后更新：2026-06-04 21:54
+> 最后更新：2026-06-05 23:27
 
 ## 总结
 
@@ -8,7 +8,7 @@
 
 后端在 2026-06-04 已切到 Cobo 赛道主线：**CAW 是 Cobo demo 的主资金执行路径**，`SmartAccount.sol` 保留为 baseline / fallback / 技术展示。因此前端后续计划也要从“SmartAccount dashboard + 单条 decision chain”调整为“Sentinel 风控 + CAW execution evidence + attempts audit”的 demo 叙事。
 
-同时新增一个专门的 **前端理解层**：让项目作者能讲清楚每个组件在干什么、接口传什么数据、数据如何从 API 变成页面展示。这个部分用于内部学习和项目介绍，不进入评委 demo 主流程。
+同时新增一个专门的 **前端理解层**：让项目作者能讲清楚每个组件在干什么、接口传什么数据、数据如何从 API 变成页面展示。这个部分用于内部学习和项目介绍，不进入评委 demo 主流程。按 2026-06-05 的收尾决策，Checkpoint 6 可以顺延到前端 MVP 之后，不阻塞真实后端联调和 demo 主路径。
 
 给项目作者看的开发计划和文档用中文；前端 UI 和对外 demo 文案用英文。
 
@@ -505,7 +505,51 @@ yarn workspace @se-2/nextjs lint
 - 为什么 Audit v1 先展示 API/mock audit record，而不是链上 `Executed` 事件。
 - 为什么 CAW request id、pact id、policy deny reason 也是审计证据。
 
+### Checkpoint 5.5：真实后端联调
+
+背景：
+
+- 后端在 2026-06-05 已启动 FastAPI，并提供完整 MVP API：
+  - `GET /health`
+  - `POST /api/execute`
+  - `GET /api/audit-log`
+  - `GET /api/audit-log/{tx_id}`
+  - `POST /api/confirm`
+- 前端 CP4.5 已接入 `/api/execute`，CP5 已让 Audit UI 具备展开完整 detail 的能力。
+- 当前 checkpoint 只做联调和 contract 收敛，不新增主 demo 页面。
+
+产物：
+
+- 将后端 base URL 收敛到 `SENTINEL_BACKEND_URL`，默认 `http://127.0.0.1:8000`。
+- 通过 Next proxy 对接后端：
+  - `/api/sentinel/execute` -> `/api/execute`
+  - `/api/sentinel/audit-log` -> `/api/audit-log`
+  - `/api/sentinel/audit-log/[txId]` -> `/api/audit-log/{tx_id}`
+  - `/api/sentinel/confirm` -> `/api/confirm`
+- `getAuditLog()` 优先读取真实后端 audit summary，失败时回退 mock。
+- `getAuditLogItem(txId)` 优先读取真实后端 audit detail，失败时回退 mock。
+- `confirmExecution(txId, approved)` 优先调用真实后端 confirm API，失败时回退 mock。
+- 增加后端 audit summary/detail 的 DTO mapper 和类型契约测试。
+
+审查重点：
+
+- 首页四个 demo presets 是否仍和后端真实行为一致。
+- Audit 页是否显示后端真实 audit records，而不是静态 mock。
+- confirm approve/reject 是否能在 UI 中显示“operator decision recorded”，但不暗示真实链上执行。
+- 后端返回 `execution.status = "skipped" | "dry_run" | "policy_denied"` 时，前端是否能稳定展示。
+
+学习点：
+
+- 为什么浏览器不直接访问 FastAPI，而是通过 Next proxy。
+- 为什么联调阶段保留 mock fallback。
+- 为什么 audit list summary 不能直接当作 detail 展示。
+
 ### Checkpoint 6：前端理解层
+
+状态说明：
+
+- 这是 post-MVP 学习层，可在前端 MVP 验证完成后补做。
+- 不阻塞首页执行控制台、Audit 页、真实后端联调和最终 demo。
 
 产物：
 

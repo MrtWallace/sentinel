@@ -1,6 +1,6 @@
 # Sentinel 前端进度记录
 
-> 最后更新：2026-06-05 01:47
+> 最后更新：2026-06-05 23:36
 
 ## 进度记录约定
 
@@ -23,20 +23,205 @@
 | CP3 | 首页执行控制台接入 mock API | 2-4h | 2026-06-01 16:44 | 2026-06-01 16:56 | Code Done / Auto Screenshot Passed / User QA Pending | `executeIntent` 已接入；成功、拦截、确认状态可点击触发；WSL Playwright 截图可用，Codex in-app browser 仍受本地 sandbox 影响 |
 | CP4 | `confirm_needed` 与错误态 | 2-3h | 2026-06-02 04:44 | 2026-06-02 04:58 | Code Done / User QA Pending | Approve / Reject mock 确认流已接入；网络、超时、执行失败错误文案已分类处理；已修复 safe swap 被误判为 blocked 的 QA bug |
 | CP4.5 | 后端契约重新对齐 | 1-2h | 2026-06-04 22:02 | 2026-06-04 22:36 | Code Done / CLI QA Partial | 已对齐 minimal `/api/execute`、`attempts[]`、`execution`、CAW evidence、更新 presets；typecheck/lint 通过；3000 端口 CLI 请求仍超时 |
-| CP5 | Audit 页接入 mock/API | 2-3h | 待开始 | 待开始 | Todo | 点击行展开 attempts timeline + execution evidence |
-| CP6 | 前端理解层 | 2-4h | 待开始 | 待开始 | Todo | `frontend-implementation-guide.md` + `/frontend-map` |
-| CP7 | 验证与小修 | 1-3h | 待开始 | 待开始 | Todo | 类型检查、lint、关键路径手动验收 |
+| CP5 | Audit 页接入 mock/API | 2-3h | 2026-06-05 21:35 | 2026-06-05 22:04 | Code Done / Browser Reachable / User QA Pending | 点击行展开 attempts timeline + execution evidence；展开区复用 `DecisionChain` |
+| CP5.5 | 后端联调接入 | 1-2h | 2026-06-05 22:38 | 2026-06-05 22:56 | Code Done / Backend Proxy Verified / User QA Pending | 已对接后端 `/api/audit-log`、`/api/audit-log/{tx_id}`、`/api/confirm`，复核 execute contract |
+| CP6 | 前端理解层 | 2-4h | 待开始 | 待开始 | Deferred / Post-MVP | `frontend-implementation-guide.md` + `/frontend-map`；按用户要求顺延，不阻塞前端 MVP |
+| CP7 | 验证与小修 | 1-3h | 2026-06-05 23:05 | 2026-06-05 23:27 | MVP Code Done / Build Passed / User QA Pending | CP6 顺延；前端 MVP 已完成真实后端 smoke、typecheck、lint、build |
 
 当前整体判断：
 
-- 前端 MVP 约完成 35%-45%，视觉骨架和旧数据 contract 已完成，真实链上 SmartAccount 状态栏代码已接入。
-- 后端在 2026-06-04 已出现重大方向变化：CAW 成为 Cobo demo 主执行路径，`attempts[]` 和 `execution` 成为前端必须展示的新证据字段。
-- 下一步不应直接进入旧 CP5 Audit 页实现，应先做新增 CP4.5，把前端类型、mock、API mapper、presets、状态栏叙事与后端 minimal `/api/execute` 对齐。
-- 本地 dev server 之前出现过监听后 `curl` timeout，但用户侧浏览器现已能加载页面。
-- CP3 代码层已完成。当前需要用户在浏览器中手动点击三个 preset，确认 decision chain 是否按预期切换。
-- CP4 代码层已完成。当前需要用户在浏览器中手动检查 Manual review 的 Approve / Reject 两条路径，以及输入 `timeout`、`network`、`daily limit` 关键词时的错误文案。
+- 前端 MVP 约完成 60%-70%，首页执行控制台、确认流、CAW/attempts 后端契约对齐、Audit 页展开详情已完成。
+- CP5 已把 Audit 页从静态 mock 表格改为调用 `getAuditLog()` / `getAuditLogItem()`，并在展开区复用首页 `DecisionChain` 展示 attempts timeline 与 execution evidence。
+- 当前后端 FastAPI 已在 `http://127.0.0.1:8000` 启动，`GET /health` 返回 `{"status":"ok"}`。
+- CP5.5 已完成真实后端 audit/confirm 联调。
+- CP6 前端理解层按用户要求顺延，不阻塞 MVP。
+- CP7 已完成前端 MVP 验证：真实后端 smoke、Next proxy、首页/Audit 页面、typecheck、lint、production build 均已跑过。
+- 当前还需要用户做浏览器侧主观 QA：检查页面视觉、文案和 demo 讲述是否符合预期。
 
 ## 当前进度详情
+
+### 2026-06-05 前端 Checkpoint 7：验证与小修
+
+- 开始时间：2026-06-05 23:05。
+- 完成时间：2026-06-05 23:27。
+- 已完成：
+  - 暂缓 CP6 学习页，优先完成前端 MVP。
+  - 验证真实后端健康状态、Next proxy、首页和 Audit 页面。
+  - 跑 `check-types`、`lint`、`build`。
+  - 确认真实后端关键路径：
+    - safe swap。
+    - agent retry swap。
+    - hard-rule rejected swap。
+    - confirm approve。
+    - confirm reject。
+    - audit list 和 detail。
+  - 确认首页 `/` 和 Audit `/audit` 在 Windows/browser 同侧返回 HTTP 200。
+
+真实后端 smoke 结果：
+
+```text
+health: ok
+safeStatus: executed
+safeAttempts: 1
+retryStatus: executed
+retryAttempts: 2
+blockedStatus: rejected
+confirmApproveInitial: confirm_needed
+approveConfirmation: approved
+confirmRejectInitial: confirm_needed
+rejectStatus: rejected
+rejectConfirmation: rejected
+auditCount: 15
+detailAttempts: 2
+```
+
+验证命令：
+
+```bash
+yarn workspace @se-2/nextjs check-types
+yarn workspace @se-2/nextjs lint
+yarn workspace @se-2/nextjs build
+git diff --check
+```
+
+当前测试结果：
+
+```text
+check-types: passed
+lint: passed, no ESLint warnings or errors
+build: passed
+git diff --check: passed
+Windows localhost /: HTTP 200
+Windows localhost /audit: HTTP 200
+```
+
+Build 备注：
+
+- `next build` exit code 为 0。
+- build 输出存在 Scaffold-ETH / RainbowKit 依赖链 warning：
+  - `@reown/appkit ... Critical dependency: the request of a dependency is an expression`
+  - `@coinbase/cdp-sdk ... Critical dependency: the request of a dependency is an expression`
+- warning 来自现有 wallet/provider 依赖，不是本轮 Sentinel 页面、proxy 或 mapper 代码错误。
+
+当前限制：
+
+- 未安装 WSL 侧 Playwright wrapper，本轮未新增浏览器截图自动化；已用 Windows/browser 同侧 HTTP、Next proxy smoke、typecheck、lint、production build 覆盖 MVP 可运行性。
+- 仍需用户做主观浏览器 QA：视觉、文案、展开行高度、demo 叙事是否符合预期。
+
+提交 / push 记录：
+
+- 时间：2026-06-05 23:36。
+- 范围：CP5 Audit 页、CP5.5 真实后端联调、CP7 前端 MVP 验证与文档记录。
+- 目标分支：`feature/frontend-risk-console`。
+- 提交信息计划：`feat(frontend): complete backend integrated MVP`。
+
+### 2026-06-05 前端 Checkpoint 5.5：后端联调接入
+
+- 开始时间：2026-06-05 22:38。
+- 完成时间：2026-06-05 22:56。
+- 已完成：
+  - 读取后端 OpenAPI 与后端 worktree 代码，确认 `/api/execute`、`/api/audit-log`、`/api/audit-log/{tx_id}`、`/api/confirm` 实际字段。
+  - 将前端 backend URL 收敛到 `SENTINEL_BACKEND_URL`，默认 `http://127.0.0.1:8000`。
+  - 新增 `backendProxy.ts`，统一 Next proxy 转发逻辑。
+  - 新增 Next proxy routes：
+    - `/api/sentinel/audit-log`
+    - `/api/sentinel/audit-log/[txId]`
+    - `/api/sentinel/confirm`
+  - `getAuditLog()` / `getAuditLogItem()` / `confirmExecution()` 优先走后端，失败时保留 mock fallback。
+  - 新增 `backendAuditMapper.test.ts`，约束后端 audit summary/detail 能映射到现有 `AuditLogItem` / `ExecuteResponse`。
+  - 扩展前端类型以覆盖后端真实字段：
+    - `execution.status = skipped | dry_run | pending_approval | policy_denied` 等。
+    - `execution.tx_id`。
+    - `execution.raw`。
+  - `confirmExecution()` 接真实后端 `/api/confirm`；approve/reject 后前端展示 operator decision recorded，不暗示真实链上执行。
+
+已确认后端接口：
+
+```text
+GET /health -> {"status":"ok"}
+POST /api/execute -> 返回 tx_id/status/decision/decision_reason/sentinel_decision/attempts/decision_chain/execution
+GET /api/audit-log -> 返回 audit summary list
+GET /api/audit-log/{tx_id} -> 返回完整 audit detail
+POST /api/confirm -> 返回更新后的完整 audit detail
+```
+
+已验证真实样例：
+
+```text
+Swap 0.2 ETH to USDC -> executed, 2 attempts, execution.status=skipped
+Swap 1 ETH to USDC -> rejected, hard rule AmountRule rejected
+Send 0.03 ETH to 0x742d... -> confirm_needed
+Send 0.005 ETH -> executed, execution.backend=caw, execution.status=dry_run, request_id=sentinel-...
+```
+
+验证命令：
+
+```bash
+yarn workspace @se-2/nextjs check-types
+yarn workspace @se-2/nextjs lint
+git diff --check
+Invoke-WebRequest -UseBasicParsing -TimeoutSec 20 http://localhost:3000/api/sentinel/audit-log
+Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 -Method POST -ContentType 'application/json' -Body '{"intent":"Swap 0.2 ETH to USDC"}' http://localhost:3000/api/sentinel/execute
+Invoke-WebRequest -UseBasicParsing -TimeoutSec 20 http://localhost:3000/api/sentinel/audit-log/{tx_id}
+Invoke-WebRequest -UseBasicParsing -TimeoutSec 20 -Method POST -ContentType 'application/json' -Body '{"tx_id":"...","action":"reject"}' http://localhost:3000/api/sentinel/confirm
+Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 http://localhost:3000/audit
+```
+
+当前测试结果：
+
+```text
+check-types: passed
+lint: passed, no ESLint warnings or errors
+git diff --check: passed
+Next proxy /api/sentinel/audit-log: HTTP 200
+Next proxy /api/sentinel/execute: HTTP 200
+Next proxy /api/sentinel/audit-log/{tx_id}: HTTP 200
+Next proxy /api/sentinel/confirm: HTTP 200
+Windows localhost /audit: HTTP 200
+```
+
+当前限制：
+
+- 为验证 `/api/sentinel/confirm`，已对后端现有 confirm record `d8dfe53e-e74f-4404-97b0-00b4499b14da` 执行一次 `reject`；后续如需演示 approve，可重新在首页执行 `Send 0.03 ETH to 0x742d...` 生成新的 confirm_needed 记录。
+- WSL 内部访问 Next dev server 的 timeout 现象仍可能存在；本轮使用 Windows/browser 同侧 `localhost:3000` 验证 Next proxy。
+
+### 2026-06-05 前端 Checkpoint 5：Audit 页接入 mock/API
+
+- 开始时间：2026-06-05 21:35。
+- 完成时间：2026-06-05 22:04。
+- 已完成：
+  - `/audit` 页面从静态 rows 改为加载 `getAuditLog()`。
+  - 点击 audit row 后调用 `getAuditLogItem(txId)` 获取完整记录。
+  - 展开区复用 `DecisionChain`，展示最终状态、原因、attempts timeline、proposal/rules/reviews/suggestions 与 CAW/mock execution evidence。
+  - 新增 `AuditTable` client component，负责 loading / empty / detail error / expanded row 状态。
+  - 新增 `auditItemToExecuteResponse()`，把 audit detail 转成首页复用的 `ExecuteResponse` view model。
+  - 新增轻量类型契约测试，约束 audit detail 转换保留 attempts 与 execution evidence。
+  - audit table 支持整行点击或键盘 Enter / Space 展开详情。
+  - 修复 audit mock 数据：加入 `agent_retry_swap` 记录，并把 failed 记录改为唯一 `demo-005`，避免详情查找命中错误记录。
+
+验证命令：
+
+```bash
+yarn workspace @se-2/nextjs check-types
+yarn workspace @se-2/nextjs lint
+git diff --check
+Invoke-WebRequest -UseBasicParsing -TimeoutSec 20 http://localhost:3000/audit
+```
+
+当前测试结果：
+
+```text
+check-types: passed
+lint: passed, no ESLint warnings or errors
+git diff --check: passed
+Windows localhost /audit: HTTP 200
+WSL curl 127.0.0.1:3000/audit: timed out after 20s, consistent with earlier WSL/Next local access issue
+```
+
+当前限制：
+
+- 本轮没有引入真实 backend audit endpoint；`getAuditLog()` / `getAuditLogItem()` 仍使用本地 mock，保持 CP1 API-shaped boundary。
+- 前端 dev server 当前监听 `http://localhost:3000`，用户可在浏览器打开 `/audit` 做手动 QA。
 
 ### 2026-06-04 前端计划同步：后端 CAW + agentic API 变更
 

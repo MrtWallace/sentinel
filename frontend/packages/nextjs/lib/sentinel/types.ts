@@ -99,14 +99,25 @@ export type AttemptRecord = {
 
 export type ExecutionResult = {
   backend: "mock" | "caw" | "local" | string;
-  status: "not_submitted" | "dry_run" | "submitted" | "succeeded" | "policy_denied" | "failed" | string;
+  status:
+    | "not_submitted"
+    | "skipped"
+    | "dry_run"
+    | "submitted"
+    | "succeeded"
+    | "pending_approval"
+    | "policy_denied"
+    | "failed"
+    | string;
   requestId: string | null;
+  txId?: string | null;
   txHash: string | null;
   reason?: string;
   walletId?: string | null;
   walletAddress?: string | null;
   pactId?: string | null;
   policyReason?: string | null;
+  raw?: Record<string, unknown>;
 };
 
 export type ExecuteResponse = {
@@ -193,12 +204,14 @@ export type BackendExecutionResult = {
   backend: string;
   status: string;
   request_id: string | null;
+  tx_id?: string | null;
   tx_hash: string | null;
   reason?: string | null;
   wallet_id?: string | null;
   wallet_address?: string | null;
   pact_id?: string | null;
   policy_reason?: string | null;
+  raw?: Record<string, unknown>;
 };
 
 export type BackendLegacyDecisionChain = {
@@ -225,10 +238,35 @@ export type BackendLegacyDecisionChain = {
 
 export type BackendExecuteResponse = {
   tx_id: string;
+  timestamp?: string;
+  intent?: string;
+  input_proposal?: Record<string, unknown> | null;
   status: ExecutionStatus;
   decision: BackendDecision;
   decision_reason: string;
+  sentinel_decision?: BackendDecision;
+  sentinel_decision_reason?: string;
   attempts: BackendAttemptRecord[];
   decision_chain: BackendLegacyDecisionChain | null;
   execution: BackendExecutionResult;
+};
+
+export type BackendAuditLogSummary = {
+  tx_id: string;
+  timestamp: string;
+  intent: string;
+  status: ExecutionStatus;
+  decision: BackendDecision;
+  sentinel_decision?: BackendDecision;
+  execution_status?: string | null;
+  tx_hash: string | null;
+};
+
+export type BackendAuditLogRecord = BackendExecuteResponse & {
+  timestamp: string;
+  intent: string;
+  confirmation?: {
+    action: "approve" | "reject";
+    status: "approved" | "rejected";
+  };
 };

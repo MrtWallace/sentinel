@@ -420,10 +420,11 @@ export const MOCK_EXECUTE_RESPONSES: Record<IntentScenario, ExecuteResponse> = {
 
 export const MOCK_AUDIT_LOG: AuditLogItem[] = [
   responseToAuditItem(MOCK_EXECUTE_RESPONSES.safe_swap),
+  responseToAuditItem(MOCK_EXECUTE_RESPONSES.agent_retry_swap),
   responseToAuditItem(MOCK_EXECUTE_RESPONSES.blocked_swap),
   responseToAuditItem(MOCK_EXECUTE_RESPONSES.confirm_transfer),
   {
-    txId: "demo-004",
+    txId: "demo-005",
     timestamp: "2026-05-28T09:22:11.000Z",
     intent: "Quote WETH to USDC",
     status: "failed",
@@ -439,6 +440,11 @@ export const MOCK_AUDIT_LOG: AuditLogItem[] = [
       },
     },
     attempts: blockedSwapAttempts,
+    execution: {
+      ...mockExecutionNotSubmitted,
+      status: "failed",
+      reason: "Request timed out before CAW submission.",
+    },
   },
 ];
 

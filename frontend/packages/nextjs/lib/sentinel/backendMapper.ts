@@ -1,8 +1,11 @@
 import type {
   AgentReview,
   AttemptRecord,
+  AuditLogItem,
   BackendAgentResult,
   BackendAttemptRecord,
+  BackendAuditLogRecord,
+  BackendAuditLogSummary,
   BackendDecision,
   BackendExecuteResponse,
   BackendExecutionResult,
@@ -32,14 +35,29 @@ export function mapBackendExecuteResponse(dto: BackendExecuteResponse, intent: s
 
   return {
     txId: dto.tx_id,
-    timestamp: new Date().toISOString(),
-    intent,
+    timestamp: dto.timestamp ?? new Date().toISOString(),
+    intent: dto.intent ?? intent,
     status: dto.status,
     reason: dto.decision_reason,
     decisionChain,
     attempts,
     execution,
   };
+}
+
+export function mapBackendAuditSummary(dto: BackendAuditLogSummary): AuditLogItem {
+  return {
+    txId: dto.tx_id,
+    timestamp: dto.timestamp,
+    intent: dto.intent,
+    status: dto.status,
+    reason: auditSummaryReason(dto),
+    txHash: dto.tx_hash,
+  };
+}
+
+export function mapBackendAuditRecord(dto: BackendAuditLogRecord): ExecuteResponse {
+  return mapBackendExecuteResponse(dto, dto.intent);
 }
 
 export function mapBackendAttempt(attempt: BackendAttemptRecord): AttemptRecord {
@@ -121,13 +139,23 @@ export function mapBackendExecution(execution: BackendExecutionResult | null | u
     backend: execution.backend,
     status: execution.status,
     requestId: execution.request_id,
+    txId: execution.tx_id ?? undefined,
     txHash: execution.tx_hash,
     reason: execution.reason ?? undefined,
     walletId: execution.wallet_id ?? undefined,
     walletAddress: execution.wallet_address ?? undefined,
     pactId: execution.pact_id ?? undefined,
     policyReason: execution.policy_reason ?? undefined,
+    raw: execution.raw,
   };
+}
+
+function auditSummaryReason(dto: BackendAuditLogSummary): string {
+  if (dto.execution_status) {
+    return `Decision: ${dto.decision}; execution: ${dto.execution_status}`;
+  }
+
+  return `Decision: ${dto.decision}`;
 }
 
 function mapBackendDecisionChain(dto: BackendExecuteResponse, attempts: AttemptRecord[]): DecisionChain {

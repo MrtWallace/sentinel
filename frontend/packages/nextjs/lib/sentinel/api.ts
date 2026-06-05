@@ -1,8 +1,14 @@
-import { mapBackendExecuteResponse } from "~~/lib/sentinel/backendMapper";
+import {
+  mapBackendAuditRecord,
+  mapBackendAuditSummary,
+  mapBackendExecuteResponse,
+} from "~~/lib/sentinel/backendMapper";
 import { MOCK_AUDIT_LOG, MOCK_EXECUTE_RESPONSES, responseToAuditItem } from "~~/lib/sentinel/mockData";
 import type {
   ApiError,
   AuditLogItem,
+  BackendAuditLogRecord,
+  BackendAuditLogSummary,
   BackendExecuteResponse,
   ConfirmExecutionResponse,
   ExecuteResponse,
@@ -11,6 +17,8 @@ import type {
 
 const MOCK_LATENCY_MS = 350;
 const EXECUTE_PROXY_PATH = "/api/sentinel/execute";
+const AUDIT_LOG_PROXY_PATH = "/api/sentinel/audit-log";
+const CONFIRM_PROXY_PATH = "/api/sentinel/confirm";
 
 // 这个函数是页面唯一需要依赖的执行入口；后端完成后只替换函数内部实现。
 export async function executeIntent(intent: string): Promise<ExecuteResponse> {
@@ -35,8 +43,44 @@ export async function executeIntent(intent: string): Promise<ExecuteResponse> {
 
 // MVP 的确认接口只记录用户选择，不假设会触发真实链上交易。
 export async function confirmExecution(txId: string, approved: boolean): Promise<ConfirmExecutionResponse> {
+  const backendResponse = await confirmExecutionViaBackend(txId, approved);
+
+  if (backendResponse) {
+    return backendResponse;
+  }
+
   await waitForMockLatency();
 
+  return mockConfirmExecution(txId, approved);
+}
+
+async function confirmExecutionViaBackend(txId: string, approved: boolean): Promise<ConfirmExecutionResponse | null> {
+  try {
+    const response = await fetch(CONFIRM_PROXY_PATH, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        tx_id: txId,
+        action: approved ? "approve" : "reject",
+      }),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const body = (await response.json()) as BackendAuditLogRecord;
+    const mappedResponse = mapBackendAuditRecord(body);
+
+    return normalizeConfirmedResponse(mappedResponse, approved);
+  } catch {
+    return null;
+  }
+}
+
+function mockConfirmExecution(txId: string, approved: boolean): ConfirmExecutionResponse {
   const baseResponse = cloneResponse(MOCK_EXECUTE_RESPONSES.confirm_transfer);
   const status = approved ? "executed" : "rejected";
   const reason = approved ? "Operator approved. Audit state updated." : "Operator rejected. Audit state updated.";
@@ -67,6 +111,40 @@ export async function confirmExecution(txId: string, approved: boolean): Promise
     execution: {
       ...baseResponse.execution,
       txHash: null,
+      reason,
+    },
+  };
+}
+
+function normalizeConfirmedResponse(response: ExecuteResponse, approved: boolean): ConfirmExecutionResponse {
+  const status = approved ? "executed" : "rejected";
+  const reason = approved ? "Operator approved. Audit state updated." : "Operator rejected. Audit state updated.";
+
+  return {
+    ...response,
+    approved,
+    status,
+    reason,
+    decisionChain: {
+      ...response.decisionChain,
+      finalDecision: status,
+      decisionReason: reason,
+      txHash: response.decisionChain.txHash,
+      confirmation: {
+        required: false,
+        reason,
+        riskNote:
+          "Backend confirmation records the operator decision in audit state and does not imply real on-chain execution.",
+      },
+    },
+    attempts: response.attempts.map(attempt => ({
+      ...attempt,
+      decision: approved ? "execute" : "reject",
+      decisionReason: reason,
+      rejectionSource: approved ? "none" : "sentinel",
+    })),
+    execution: {
+      ...response.execution,
       reason,
     },
   };
@@ -125,6 +203,12 @@ function throwApiError(error: ApiError): never {
 }
 
 export async function getAuditLog(): Promise<AuditLogItem[]> {
+  const backendItems = await getAuditLogViaBackend();
+
+  if (backendItems) {
+    return backendItems;
+  }
+
   await waitForMockLatency();
 
   return MOCK_AUDIT_LOG.map(item => {
@@ -142,6 +226,12 @@ export async function getAuditLog(): Promise<AuditLogItem[]> {
 }
 
 export async function getAuditLogItem(txId: string): Promise<AuditLogItem> {
+  const backendItem = await getAuditLogItemViaBackend(txId);
+
+  if (backendItem) {
+    return backendItem;
+  }
+
   await waitForMockLatency();
 
   const item = MOCK_AUDIT_LOG.find(auditItem => auditItem.txId === txId);
@@ -155,6 +245,42 @@ export async function getAuditLogItem(txId: string): Promise<AuditLogItem> {
     txId,
     reason: "Generated fallback audit record.",
   });
+}
+
+async function getAuditLogViaBackend(): Promise<AuditLogItem[] | null> {
+  try {
+    const response = await fetch(AUDIT_LOG_PROXY_PATH, {
+      method: "GET",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const body = (await response.json()) as BackendAuditLogSummary[];
+
+    return body.map(mapBackendAuditSummary).sort((left, right) => right.timestamp.localeCompare(left.timestamp));
+  } catch {
+    return null;
+  }
+}
+
+async function getAuditLogItemViaBackend(txId: string): Promise<AuditLogItem | null> {
+  try {
+    const response = await fetch(`${AUDIT_LOG_PROXY_PATH}/${encodeURIComponent(txId)}`, {
+      method: "GET",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const body = (await response.json()) as BackendAuditLogRecord;
+
+    return responseToAuditItem(mapBackendAuditRecord(body));
+  } catch {
+    return null;
+  }
 }
 
 function detectIntentScenario(intent: string): IntentScenario {
