@@ -134,17 +134,17 @@ Sentinel = **AI 风控层** + **Cobo Agentic Wallet (CAW)**，实现受控边界
 | SmartAccount 合约 | ✅ 完成 | Sepolia 部署 + 验证 + 14 Foundry 测试 |
 | Agent A (Intent Parser) | ✅ 完成 | 结构化 JSON 输出 + 6 个 intent 测试 |
 | RiskPipeline 硬规则 | ✅ 完成 | 5 条规则 + 37 个单元测试 |
-| DecisionEngine | 🔨 进行中 | skeleton 完成，正在补 Agent B/C mock |
-| CAW 集成 | ⏳ 待开始 | CP6，预计 6-10h，真实 `transfer_tokens` 是 Cobo MVP gate |
-| FastAPI 后端 | ⏳ 待开始 | CP5，先做 minimal `/api/execute` + audit detail |
+| DecisionEngine + AgenticLoop | ✅ 完成 | bounded retry、suggestions、MutationGuard、attempts |
+| CAW 集成 | ✅ 完成 | CAW wallet/pact/SDK/API transfer/policy deny 已验通 |
+| FastAPI 后端 | ✅ 完成 | `/api/execute`、audit list/detail、CAW execution result |
 | 前端 UI | 🔨 进行中 | 独立 worktree 开发中 |
-| E2E Demo | ⏳ 待开始 | CP8 |
+| E2E Demo | 🔨 进行中 | demo script / evidence checklist 已补 |
 
-**测试覆盖**: 53 个单元测试通过 (intent + risk rules + pipeline + decision + mock reviewers)
+**测试覆盖**: 82 个后端单元测试通过 (intent + risk rules + pipeline + decision + reviewers + reproposal + loop + API + audit + execution)
 
 ## 8. 验证方式
 
-- 测试网交易记录：至少 1 笔 CAW 真实 safe transfer + 若时间允许补 swap tx
+- 测试网交易记录：已有 CAW 真实 safe transfer tx hash；若时间允许补 swap tx
 - CAW Pact 演示：展示 pact 预设 → 真实 CAW transfer → policy denied 场景
 - Demo 视频：完整展示"正常执行"、"被拦截"、"人工确认"三个场景
 - Repo：README 说明架构、部署步骤、风控逻辑、CAW 集成
@@ -170,7 +170,7 @@ Cobo 赛道核心要求：**Agent 在受控边界内参与经济活动**。
 | 维度 | 分值 | Sentinel 得分点 |
 |------|------|----------------|
 | **Innovation 创新性** | 10 | 多 Agent 风控 + CAW 双层防护 + Bounded AgenticLoop（LLM 想 + 代码验的 MutationGuard）。不是单 LLM 多 prompt，而是 Agent 审查 → 建议 → 自动修正 → 代码验证的完整闭环 |
-| **Technical Execution 技术实现** | 10 | 后端 53+ 单元测试（intent/risk/pipeline/decision/reviewers）、合约 14 Foundry 测试、Sepolia 真实部署 + 验证、Minimal FastAPI、CAW 真实 `transfer_tokens` 集成。核心 demo 功能全部可运行 |
+| **Technical Execution 技术实现** | 10 | 后端 82 个单元测试（intent/risk/pipeline/decision/reviewers/reproposal/loop/API/audit/execution）、合约 14 Foundry 测试、Sepolia 真实部署 + 验证、FastAPI、CAW 真实 `transfer_tokens` 集成。核心 demo 功能全部可运行 |
 | **User Experience 用户体验** | 10 | NL 输入 → Agent 推理可视化 → 决策链路展示 → 审计日志。用户路径清晰：输入意图 → 看到 Agent 如何决策 → 理解为什么通过/拒绝 → 查看链上证据 |
 | **Ecosystem Impact 生态影响** | 10 | Sentinel 定义了"AI Agent 安全参与链上经济活动"的基础设施范式。后续可扩展：多链支持、更多 DeFi 协议、DAO 金库自动化、Agent 市场准入标准 |
 | **Demo Quality 演示质量** | 10 | 三个场景完整覆盖：✅ 正常执行（低风险 CAW safe transfer）→ 🚫 风控拦截（超限额被拒 + Agent 给出修正建议）→ ⚠️ CAW 双层防护（Sentinel 通过但 CAW Pact 拒绝）|

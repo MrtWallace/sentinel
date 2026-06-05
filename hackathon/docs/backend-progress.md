@@ -1,7 +1,7 @@
 # Sentinel Hackathon — 后端 & 合约进度
 
 > 目的：只记录短期状态，包括 checkpoint 进度表、当前阻塞、最近完成项。
-> 最后更新：2026-06-05 17:53
+> 最后更新：2026-06-05 18:11
 > 稳定方向和 checkpoint 定义见 `hackathon/docs/backend-plan.md`。
 
 ## 更新约定
@@ -22,22 +22,120 @@
 | CP4b | ReproposalAgent + MutationGuard | 1.5-2.5h | 2026-06-04 00:21 | 2026-06-04 21:06 | Done | 11 个 reproposal 单元测试通过 |
 | CP4c | AgenticLoop + in-memory attempts | 1.5-2.5h | 2026-06-04 21:06 | 2026-06-04 21:06 | Done | 4 个 loop 单元测试通过，attempts 先存在返回值 |
 | CP4.5 | CAW Setup Spike | 1-3h | 2026-06-05 16:16 | 2026-06-05 16:37 | Done | CAW wallet/pact/policy deny/allowed transfer 已验通 |
-| CP5 | Minimal FastAPI mock API + AuditLogger + attempts[] | 2-3h | 2026-06-04 21:22 | 待完成 | In Progress | 最小 `/api/execute` 已完成；AuditLogger / detail API 待补 |
+| CP5 | Minimal FastAPI mock API + AuditLogger + attempts[] | 2-3h | 2026-06-04 21:22 | 2026-06-05 18:02 | Done | `/api/execute` + audit list/detail + attempts 已完成 |
 | CP6 | CAW Execution Backend + Real Transfer | 6-10h | 2026-06-05 17:00 | 2026-06-05 17:53 | Done | `/api/execute` 已真实触发 CAW transfer，policy deny 已返回 reject |
-| CP7 | Demo Evidence + README + Script | 2-4h | 待开始 | 待完成 | Todo | CAW evidence checklist + 3-5 分钟 demo script |
-| CP7.5 | Provider-agnostic LLM Reviewers | 3-5h | 待开始 | 待完成 | Todo | OpenAI-compatible client + real Agent B/C，mock 保留 fallback |
+| CP7 | Demo Evidence + README + Script | 2-4h | 2026-06-05 18:02 | 2026-06-05 18:04 | Done | README + demo script + proposal 进度已校准 |
+| CP7.5 | Provider-agnostic LLM Reviewers | 3-5h | 2026-06-05 18:04 | 2026-06-05 18:11 | Done | OpenAI-compatible LLM client + real reviewer smoke 完成 |
 | CP8 | Stretch：合约事件 / contract_call swap / polish | 2-5h | 待开始 | 待完成 | Stretch | 时间允许再做，不阻塞 Cobo MVP |
 
 ## 当前阻塞
 
 - 无明确外部阻塞。
-- 当前进行：CP5 Audit detail / `/api/audit-log/{tx_id}`；CP6 已完成真实 CAW API transfer 和 policy deny。
+- 当前进行：CP8 stretch / final polish；CP5-CP7.5 后端 demo 主链路、材料、真实 LLM reviewer 已完成。
 - Cobo 赛道新增工作量约 10-16h；其中真实 CAW setup + `transfer_tokens` 是硬门槛，不能用 mock/simulator 替代。
 - agentic 优化新增约 3-5h，主要集中在 ReproposalAgent、MutationGuard 和 loop 测试。
 - 提交截止：2026-06-13 12:00。当前判断仍可完成；执行顺序调整为 CP6 real transfer -> CP5 Audit detail -> CP7 evidence/script -> CP7.5 real LLM reviewers -> CP8 stretch。
 - 前端需要后续同步：DecisionChain 支持 attempts；状态栏从 SmartAccount 主视角调整为 CAW wallet / pact 主视角；Audit 展示 CAW request id、policy result、tx hash。
 
 ## 最近完成项
+
+### 2026-06-05 CP7.5：Provider-agnostic LLM Reviewers 完成
+
+- 已新增 provider-agnostic LLM 层：
+  - `LLMClient` protocol。
+  - `OpenAICompatibleLLMClient`。
+  - `OpenAICompatibleConfig`。
+  - `extract_json_object()`。
+  - `build_default_llm_client()`。
+- 已新增 LLM-backed reviewers：
+  - `LLMSecurityAuditor`
+  - `LLMRiskAnalyst`
+- 已接入 API mode switch：
+  - `REVIEWER_MODE=mock` 默认稳定 demo。
+  - `REVIEWER_MODE=llm` 启用真实 LLM reviewer。
+- LLM 安全边界：
+  - LLM 超时 / 缺 key / 非法 JSON / 字段类型错误均 fail-closed。
+  - `passed` 必须是 bool，避免字符串 `"false"` 被误判为 truthy。
+  - mock reviewer 保留为 fallback。
+- 已新增 `agent/llm_smoke.py`。
+- 已完成真实 LLM smoke：
+  - provider: OpenAI-compatible DeepSeek endpoint。
+  - SecurityAuditor 对测试收款地址判 high risk。
+  - RiskAnalyst 对低金额 transfer 判 low risk。
+  - 结果已记录到本地私有 evidence。
+- 当前验证：
+
+```bash
+PYTHONPATH=agent agent/venv/bin/python -m unittest discover -s agent -p 'test_*.py'
+```
+
+```text
+Ran 90 tests
+OK
+```
+
+### 2026-06-05 CP7：Demo Evidence + README + Script 完成
+
+- 已重写 README，更新为当前 Cobo / CAW 主执行路径：
+  - Sentinel + CAW 双层防护。
+  - `/api/execute`、audit list/detail。
+  - execution modes。
+  - demo scenarios。
+  - 当前测试状态。
+- 已新增 `hackathon/docs/demo-script.md`：
+  - safe CAW transfer。
+  - Sentinel hard-rule reject。
+  - Agentic retry。
+  - CAW policy deny。
+  - evidence checklist。
+- 已更新 `hackathon/proposal.md` 进度：
+  - DecisionEngine + AgenticLoop Done。
+  - CAW 集成 Done。
+  - FastAPI 后端 Done。
+  - 后端测试数更新为 82。
+- 当前验证：
+
+```bash
+PYTHONPATH=agent agent/venv/bin/python -m unittest discover -s agent -p 'test_*.py'
+```
+
+```text
+Ran 82 tests
+OK
+```
+
+### 2026-06-05 CP5：AuditLogger + Audit API 完成
+
+- 已新增 `AuditLogger`：
+  - 本地 JSON 存储。
+  - 默认目录 `agent/logs/audit/`。
+  - 支持 `write(record)`、`get(tx_id)`、`list()`。
+- `/api/execute` 已写入完整 audit record：
+  - `tx_id`
+  - `intent`
+  - `input_proposal`
+  - final `status` / `decision` / `decision_reason`
+  - `sentinel_decision` / `sentinel_decision_reason`
+  - `attempts[]`
+  - `decision_chain`
+  - `execution`
+- 已新增 API：
+  - `GET /api/audit-log`
+  - `GET /api/audit-log/{tx_id}`
+- 已验证：
+  - `/api/execute` 生成 `tx_id`。
+  - 用 `tx_id` 可读回完整 audit detail。
+  - audit list 返回摘要，包括 `execution_status` 和 `tx_hash`。
+- 当前验证：
+
+```bash
+PYTHONPATH=agent agent/venv/bin/python -m unittest discover -s agent -p 'test_*.py'
+```
+
+```text
+Ran 82 tests
+OK
+```
 
 ### 2026-06-05 CP6：CAW Execution Backend 完成
 

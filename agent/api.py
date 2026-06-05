@@ -1,16 +1,20 @@
 from dataclasses import asdict
 from decimal import Decimal, InvalidOperation
-from typing import Any
+import os
+from typing import Any, Literal
 from uuid import uuid4
 
 from fastapi import FastAPI
+from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
+from audit import AuditLogger
 from execution import build_execution_backend
 from intent import proposal_from_dict
+from llm import build_default_llm_client
 from loop import AgenticLoop
 from models import AgentResult, Suggestion, TxProposal
-from reviewers import MockSecurityAuditor
+from reviewers import LLMSecurityAuditor, LLMRiskAnalyst, MockSecurityAuditor
 from risk.pipeline import RiskPipeline
 from risk.rules import AmountRule, ApprovalRule, FrequencyRule, SlippageRule, WhitelistRule
 
@@ -24,6 +28,11 @@ app = FastAPI(title="Sentinel Backend API", version="0.1.0")
 class ExecuteRequest(BaseModel):
     intent: str = Field(default="")
     proposal: dict[str, Any] | None = None
+
+
+class ConfirmRequest(BaseModel):
+    tx_id: str
+    action: Literal["approve", "reject"]
 
 
 @app.get("/health")
@@ -43,8 +52,10 @@ def execute(request: ExecuteRequest):
         execution,
     )
 
-    return {
+    response = {
         "tx_id": tx_id,
+        "intent": request.intent,
+        "input_proposal": request.proposal,
         "status": status,
         "decision": final_decision,
         "decision_reason": decision_reason,
@@ -54,9 +65,45 @@ def execute(request: ExecuteRequest):
         "decision_chain": _legacy_decision_chain(result),
         "execution": asdict(execution),
     }
+    build_audit_logger().write(response)
+    return response
+
+
+@app.get("/api/audit-log")
+def list_audit_log():
+    return build_audit_logger().list()
+
+
+@app.get("/api/audit-log/{tx_id}")
+def get_audit_log(tx_id: str):
+    record = build_audit_logger().get(tx_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Audit record not found")
+    return record
+
+
+@app.post("/api/confirm")
+def confirm(request: ConfirmRequest):
+    logger = build_audit_logger()
+    record = logger.get(request.tx_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Audit record not found")
+
+    record["confirmation"] = {
+        "action": request.action,
+        "status": "approved" if request.action == "approve" else "rejected",
+    }
+    if request.action == "reject":
+        record["status"] = "rejected"
+        record["decision"] = "reject"
+        record["decision_reason"] = "User rejected confirmation request."
+
+    logger.write(record)
+    return record
 
 
 def _build_loop() -> AgenticLoop:
+    security_auditor, risk_analyst = _build_reviewers()
     return AgenticLoop(
         risk_pipeline=RiskPipeline(
             [
@@ -67,9 +114,21 @@ def _build_loop() -> AgenticLoop:
                 FrequencyRule(),
             ]
         ),
-        security_auditor=MockSecurityAuditor(mode="safe"),
-        risk_analyst=DemoRiskAnalyst(),
+        security_auditor=security_auditor,
+        risk_analyst=risk_analyst,
     )
+
+
+def build_audit_logger() -> AuditLogger:
+    return AuditLogger()
+
+
+def _build_reviewers():
+    reviewer_mode = os.getenv("REVIEWER_MODE", "mock").lower()
+    if reviewer_mode == "llm":
+        llm = build_default_llm_client()
+        return LLMSecurityAuditor(llm), LLMRiskAnalyst(llm)
+    return MockSecurityAuditor(mode="safe"), DemoRiskAnalyst()
 
 
 def _proposal_from_request(request: ExecuteRequest) -> TxProposal:
