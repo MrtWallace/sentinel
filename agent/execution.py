@@ -256,7 +256,10 @@ class CawExecutor:
         return WalletAPIClient(base_url=base_url, api_key=api_key)
 
 
-def build_execution_backend() -> ExecutionBackend:
+def build_execution_backend(config: CawConfig | None = None) -> ExecutionBackend:
+    if config is not None:
+        return CawExecutor(config=config)
+
     backend = os.getenv("EXECUTION_BACKEND", "mock").lower()
     if backend == "caw":
         return CawExecutor()

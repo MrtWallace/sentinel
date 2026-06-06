@@ -1,7 +1,7 @@
 # Sentinel Hackathon — 后端 & 合约进度
 
 > 目的：只记录短期状态，包括 checkpoint 进度表、当前阻塞、最近完成项。
-> 最后更新：2026-06-06 07:32
+> 最后更新：2026-06-07 03:27
 > 稳定方向和 checkpoint 定义见 `hackathon/docs/backend-plan.md`。
 
 ## 更新约定
@@ -30,10 +30,10 @@
 | CP8 | Stretch：合约事件 / contract_call swap / polish | 2-5h | 待开始 | 待完成 | Stretch | 时间允许再做，不阻塞 Cobo MVP |
 | CP9 | User CAW Account Lifecycle | 3-5h | 2026-06-06 06:43 | 2026-06-06 06:51 | Done | per-user CAW wallet store + `/api/wallet/*` 已完成；执行路由留到 CP11 |
 | Shared CP1 | CAW status + execute response contract | 0.5-1h | 2026-06-06 07:17 | 2026-06-06 07:17 | Done | 锁定 `/api/execute` 的 `caw` object、execution evidence、no_wallet/pact_not_active/policy_denied/pending shape |
-| CP10 | Intent Input Guard | 1-2h | 待开始 | 待完成 | Next | 后端安全边界：sanitize、schema validation、prompt injection pattern、intent/proposal anomaly；异常 fail closed |
-| CP11 | User-Scoped CAW Execution + Evidence | 2-4h | 待开始 | 待完成 | Next | `/api/execute` 改为按 JWT/user_address 选择用户 CAW wallet + active pact；Sentinel reject 不触发 CAW |
-| CP12 | User Risk Config + CAW Pact Sync | 2-4h | 待开始 | 待完成 | Planned | SQLite user config、config version、pact snapshot、`config_status=synced|needs_pact_update` |
-| CP13 | SQLite Audit + CAW Evidence Query | 2-4h | 待开始 | 待完成 | Planned | JSON audit 升级为 per-user SQLite audit，支持分页/过滤和敏感字段脱敏 |
+| CP10 | Intent Input Guard | 1-2h | 2026-06-06 07:54 | 2026-06-06 07:57 | Done | sanitize、schema validation、prompt injection pattern、intent/proposal anomaly 已接入 `/api/execute`；异常 fail closed |
+| CP11 | User-Scoped CAW Execution + Evidence | 2-4h | 2026-06-06 08:00 | 2026-06-06 08:02 | Done | `/api/execute` 已按 user_address 选择用户 CAW wallet + active pact；Sentinel reject 不触发 CAW |
+| CP12 | User Risk Config + CAW Pact Sync | 2-4h | 2026-06-06 08:05 | 2026-06-06 08:09 | Done | SQLite user config、config version、pact snapshot、`config_status=synced|needs_pact_update` 已完成 |
+| CP13 | SQLite Audit + CAW Evidence Query | 2-4h | 2026-06-07 03:24 | 2026-06-07 03:27 | Done | SQLite audit 主存储、per-user/status 分页过滤、CAW evidence query、敏感字段脱敏已完成 |
 | CP14 | CAW contract_call Demo Path | 2-4h | 待开始 | 待完成 | Stretch | 受控 MockDEX/Sepolia 合约优先；不强求真实 Uniswap，transfer 主线稳定后再做 |
 | CP15 | Read-only MCP Server | 1.5-3h | 待开始 | 待完成 | Planned | 只读 tools：evaluate_transaction、get_risk_config、get_audit_log；不开放写操作 |
 | CP16 | Basic Agent Tool Calling | 2-4h | 待开始 | 待完成 | Planned | 稳定可 mock 的工具调用 + audit evidence；外部不稳定工具后置 |
@@ -52,13 +52,128 @@
 ## 当前阻塞
 
 - 无明确外部阻塞。
-- 当前进行：CP10 Input Guard 和 CP11 User-Scoped CAW Execution 是下一组优先任务；建议先 CP10，再 CP11，CP18 最小 auth 可穿插。
+- 当前进行：CP14 CAW contract_call Demo Path 或 CP15 Read-only MCP Server 待选；CP13 SQLite Audit + CAW Evidence Query 已完成。
 - Cobo 赛道新增工作量约 10-16h；其中真实 CAW setup + `transfer_tokens` 是硬门槛，不能用 mock/simulator 替代。
 - agentic 优化当前只保留 MCP、tool calling、memory anomaly 作为证据层；Planner/Reflector/多步自治明确后置到 CP19 / P3。
 - 提交截止：2026-06-13 12:00。当前判断仍可完成；后续执行顺序调整为 CP10 input guard -> CP11 user-scoped CAW execution -> CP18 minimal auth/rate limit -> CP12 config/pact sync -> CP13 SQLite audit；CP15-CP17 作为 Agent 证据层穿插，CP14/CP19 后置。
 - 前端需要后续同步：DecisionChain 支持 attempts；状态栏从 SmartAccount 主视角调整为 CAW wallet / pact 主视角；Audit 展示 CAW request id、policy result、tx hash。
 
 ## 最近完成项
+
+### 2026-06-07 CP13：SQLite Audit + CAW Evidence Query 完成
+
+- 已将 `AuditLogger` 升级为 SQLite 主存储：
+  - 新增 `audit_logs` 表。
+  - 保留 `attempts_json`、`execution_json`、完整 `detail_json`。
+  - 保留 JSON audit 文件作为开发 fallback 副本。
+- 已支持 audit list 分页和过滤：
+  - `user_address`
+  - `status`
+  - `limit`
+  - `offset`
+- 已补充 audit summary CAW evidence：
+  - `execution_backend`
+  - `execution_status`
+  - `tx_hash`
+  - `caw_wallet_id`
+  - `pact_id`
+  - `policy_reason`
+- 已接入 `/api/audit-log`：
+  - `GET /api/audit-log?user_address=...&status=...&limit=20&offset=0`
+  - `GET /api/audit-log/{tx_id}`
+- 已在写入前脱敏敏感字段：
+  - API key
+  - authorization / headers
+  - secret/token/credential/private_key 类字段。
+- 当前验证：
+
+```bash
+PYTHONPATH=agent agent/venv/bin/python -m unittest discover -s agent -p 'test_*.py'
+# Ran 136 tests
+# OK
+```
+
+### 2026-06-06 CP12：User Risk Config + CAW Pact Sync 完成
+
+- 已新增 `agent/config_store.py`：
+  - SQLite `user_configs` 表。
+  - 默认风险配置。
+  - `config_version` / `pact_config_version`。
+  - `pact_limits_snapshot`。
+  - `config_status=synced|needs_pact_update`。
+- 已新增 config API：
+  - `GET /api/config`
+  - `PUT /api/config`
+  - `POST /api/config/reset`
+- 已接入 Pact sync：
+  - `/api/wallet/pact` 成功后调用 `mark_pact_synced()`，将当前 Pact limits snapshot 和 config version 对齐。
+  - 修改 config 不自动修改 CAW Pact，只返回 `needs_pact_update`。
+- 已让 RiskPipeline 从用户 config 构建：
+  - `AmountRule` 使用用户 transfer/swap pass/confirm threshold。
+  - `SlippageRule` 使用用户 slippage threshold。
+  - `FrequencyRule` 使用用户 frequency limit。
+  - `WhitelistRule` 使用内置白名单 + 用户 custom whitelist。
+- 当前刻意未做：
+  - 不自动生成真实 CAW PactSpec；CP12 只维护状态和 snapshot。
+  - 不做完整 settings UI；前端按 shared contract 开发。
+- 当前验证：
+
+```bash
+PYTHONPATH=agent agent/venv/bin/python -m unittest discover -s agent -p 'test_*.py'
+# Ran 133 tests
+# OK
+```
+
+### 2026-06-06 CP11：User-Scoped CAW Execution + Evidence 完成
+
+- 已扩展 `ExecuteRequest`：
+  - 支持 `user_address`。
+  - 不传 `user_address` 时保持历史 mock/demo 兼容路径。
+- 已接入 user-scoped CAW readiness gate：
+  - 无钱包返回 `status=no_wallet`，不调用 execution backend。
+  - wallet paired 但 Pact 未 active 返回 `status=pact_not_active`，不调用 execution backend。
+  - active wallet + active Pact 才进入 `AgenticLoop` 后的 CAW execution。
+- 已实现 active user CAW routing：
+  - 从 `user_wallets` 读取 `caw_wallet_id`、`caw_wallet_address`、`pact_id`。
+  - 注入 `CawConfig`，用户级执行优先走 `CawExecutor`。
+  - `ENABLE_REAL_TX=false` 时仍 dry-run，不触发真实 CAW 交易。
+- 已补 audit / response evidence：
+  - 顶层 `user_address`、`caw`。
+  - `execution.caw_wallet_id`、`execution.caw_wallet_address`、`execution.pact_id`。
+  - `execution.caw_transaction_id` 兼容 shared contract。
+- 已确保 Sentinel reject 不调用 CAW/mock execution backend。
+- 当前刻意未做：
+  - JWT 解析和 rate limit 留到 CP18。
+  - 用户风险配置和 Pact sync 留到 CP12。
+- 当前验证：
+
+```bash
+PYTHONPATH=agent agent/venv/bin/python -m unittest discover -s agent -p 'test_*.py'
+# Ran 122 tests
+# OK
+```
+
+### 2026-06-06 CP10：Intent Input Guard 完成
+
+- 已新增 `agent/input_guard.py`：
+  - `sanitize_user_input(intent)`：限制长度、拒绝非法控制字符、拦截常见 prompt injection hint，并归一化空白。
+  - `validate_agent_output(raw_json, TxProposal)`：LLM/外部 proposal 必须严格转成有效 `TxProposal`，否则 fail closed。
+  - `detect_intent_proposal_anomaly(intent, proposal)`：检测 action、amount、target 与用户 intent 明显不一致。
+- 已接入 `/api/execute`：
+  - 在 `AgenticLoop` 和执行后端之前运行 input guard。
+  - 发现 prompt injection 或 intent/proposal anomaly 时直接返回 `rejected`。
+  - 不调用 CAW/mock execution backend，并写入 audit。
+  - response 增加 `security` 和 `memory_anomalies` evidence。
+- 当前刻意未做：
+  - 不把用户级 CAW wallet 路由混进 CP10，留到 CP11。
+  - 不引入复杂策略引擎或外部安全服务。
+- 当前验证：
+
+```bash
+PYTHONPATH=agent agent/venv/bin/python -m unittest discover -s agent -p 'test_*.py'
+# Ran 118 tests
+# OK
+```
 
 ### 2026-06-06 Shared CP1：CAW status + execute response contract 完成
 

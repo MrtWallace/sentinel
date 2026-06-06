@@ -55,6 +55,19 @@ class AmountRuleTest(unittest.TestCase):
         tx = TxProposal(action="unknown", amount="0.01")
         result = self.rule.check(tx)
         self.assertEqual(result.status, "skipped")
+
+    def test_uses_custom_transfer_thresholds(self):
+        rule = AmountRule(
+            transfer_pass_threshold="0.001",
+            transfer_confirm_threshold="0.003",
+        )
+
+        confirm_result = rule.check(TxProposal(action="transfer", amount="0.002"))
+        reject_result = rule.check(TxProposal(action="transfer", amount="0.005"))
+
+        self.assertEqual(confirm_result.status, "confirm")
+        self.assertEqual(reject_result.status, "rejected")
+        self.assertIn("0.003", reject_result.reason)
     
     def test_swap_amount_boundary_passed_at_005(self):
         tx = TxProposal(action="swap", amount="0.05")
@@ -100,6 +113,14 @@ class SlippageRuleTest(unittest.TestCase):
         result = self.rule.check(tx)
         self.assertEqual(result.status, "skipped")
 
+    def test_uses_custom_slippage_thresholds(self):
+        rule = SlippageRule(pass_threshold=0.01, confirm_threshold=0.02)
+
+        result = rule.check(TxProposal(action="swap", amount="0.01", slippage="0.03"))
+
+        self.assertEqual(result.status, "rejected")
+        self.assertIn("2.00%", result.reason)
+
 class WhitelistRuleTest(unittest.TestCase):
     def setUp(self):
         self.rule = WhitelistRule()
@@ -142,6 +163,14 @@ class WhitelistRuleTest(unittest.TestCase):
         result = self.rule.check(tx)
         self.assertEqual(result.status, "rejected")
         self.assertEqual(result.severity, "critical")
+
+    def test_uses_custom_whitelist(self):
+        custom = "0x2222222222222222222222222222222222222222"
+        rule = WhitelistRule(custom_whitelist=[custom])
+
+        result = rule.check(TxProposal(action="swap", amount="0.01", to_contract=custom))
+
+        self.assertEqual(result.status, "passed")
 
 class ApprovalRuleTest(unittest.TestCase):
     def setUp(self):

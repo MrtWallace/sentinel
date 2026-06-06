@@ -7,6 +7,18 @@ from models import RuleResult, TxProposal
 class AmountRule:
     name = "AmountRule"
 
+    def __init__(
+        self,
+        swap_pass_threshold="0.05",
+        swap_confirm_threshold="0.2",
+        transfer_pass_threshold="0.02",
+        transfer_confirm_threshold="0.1",
+    ):
+        self.swap_pass_threshold = Decimal(str(swap_pass_threshold))
+        self.swap_confirm_threshold = Decimal(str(swap_confirm_threshold))
+        self.transfer_pass_threshold = Decimal(str(transfer_pass_threshold))
+        self.transfer_confirm_threshold = Decimal(str(transfer_confirm_threshold))
+
     def check(self, tx: TxProposal) -> RuleResult:
         try:
             amount = Decimal(tx.amount)
@@ -19,14 +31,14 @@ class AmountRule:
             )
         
         if tx.action == "swap":
-            if amount > Decimal("0.2"):
+            if amount > self.swap_confirm_threshold:
                 return RuleResult(
                     rule_name=self.name,
                     status="rejected",
-                    reason="Swap amount exceeds 0.2 ETH limit",
+                    reason=f"Swap amount exceeds {self.swap_confirm_threshold} ETH limit",
                     severity="critical",
                 )
-            if amount > Decimal("0.05"):
+            if amount > self.swap_pass_threshold:
                 return RuleResult(
                     rule_name=self.name,
                     status="confirm",
@@ -39,14 +51,14 @@ class AmountRule:
                 reason="Swap amount within limit",
             )
         if tx.action == "transfer":
-            if amount > Decimal("0.1"):
+            if amount > self.transfer_confirm_threshold:
                 return RuleResult(
                     rule_name=self.name,
                     status="rejected",
-                    reason="Transfer amount exceeds 0.1 ETH limit",
+                    reason=f"Transfer amount exceeds {self.transfer_confirm_threshold} ETH limit",
                     severity="critical",
                 )
-            if amount > Decimal("0.02"):
+            if amount > self.transfer_pass_threshold:
                 return RuleResult(
                     rule_name=self.name,
                     status="confirm",
@@ -67,6 +79,10 @@ class AmountRule:
 
 class SlippageRule:
     name = "SlippageRule"
+
+    def __init__(self, pass_threshold=0.03, confirm_threshold=0.05):
+        self.pass_threshold = Decimal(str(pass_threshold))
+        self.confirm_threshold = Decimal(str(confirm_threshold))
 
     def check(self, tx: TxProposal) -> RuleResult:
         if tx.action != "swap":
@@ -94,14 +110,14 @@ class SlippageRule:
                 severity="critical",
             )
         
-        if slippage > Decimal("0.05"):
+        if slippage > self.confirm_threshold:
             return RuleResult(
                 rule_name=self.name,
                 status="rejected",
-                reason="Slippage exceeds 5%",
+                reason=f"Slippage exceeds {self.confirm_threshold * 100}%",
                 severity="critical",
             )
-        elif slippage <= Decimal("0.03"):
+        elif slippage <= self.pass_threshold:
             return RuleResult(
                 rule_name=self.name,
                 status="passed",
@@ -126,6 +142,12 @@ class WhitelistRule:
         ]
     }
 
+    def __init__(self, custom_whitelist=None):
+        configured = set(self.WHITELISTED_CONTRACTS)
+        if custom_whitelist:
+            configured.update(address.lower() for address in custom_whitelist)
+        self.whitelisted_contracts = configured
+
     def check(self, tx: TxProposal) -> RuleResult:
         if tx.action not in {"swap", "approve"}:
             return RuleResult(
@@ -142,7 +164,7 @@ class WhitelistRule:
                 severity="critical",
             )
 
-        if tx.to_contract.lower() in self.WHITELISTED_CONTRACTS:
+        if tx.to_contract.lower() in self.whitelisted_contracts:
             return RuleResult(
                 rule_name=self.name,
                 status="passed",
