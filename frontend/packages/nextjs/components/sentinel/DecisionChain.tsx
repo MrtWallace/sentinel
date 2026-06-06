@@ -105,6 +105,11 @@ export const DecisionChain = ({
               <StatusBadge status={chain.finalDecision} />
               <p className="m-0 text-sm leading-6 text-[#e2e2e8]">{chain.decisionReason}</p>
             </div>
+            {isSecurityRejection(response) && (
+              <div className="mt-2 rounded-md border border-rose-300/20 bg-rose-300/10 px-3 py-2 text-xs leading-5 text-rose-100">
+                Security rejection: {response.reason}
+              </div>
+            )}
           </StepBlock>
         )}
 
@@ -691,4 +696,22 @@ function decisionToStatus(decision: "execute" | "reject" | "confirm"): Execution
   }
 
   return "rejected";
+}
+
+// CP10: Detect backend input guard / security rejections for distinct UI treatment.
+function isSecurityRejection(response: ExecuteResponse): boolean {
+  if (response.status !== "rejected") {
+    return false;
+  }
+
+  const reason = (response.reason ?? "").toLowerCase();
+  const sentinelReason = (response.decisionChain.decisionReason ?? "").toLowerCase();
+
+  return (
+    reason.includes("input guard") ||
+    reason.includes("prompt injection") ||
+    reason.includes("control character") ||
+    sentinelReason.includes("input guard") ||
+    sentinelReason.includes("prompt injection")
+  );
 }

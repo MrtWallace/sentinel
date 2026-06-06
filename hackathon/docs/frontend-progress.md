@@ -1,6 +1,6 @@
 # Sentinel 前端进度记录
 
-> 最后更新：2026-06-07 05:04
+> 最后更新：2026-06-07 05:15
 
 ## 进度记录约定
 
@@ -30,6 +30,7 @@
 | CP7.1 | MVP quick wins | 0.5h | 2026-06-05 23:53 | 2026-06-06 00:03 | Code Done / QA Pending | 修复 info panel 空态、状态标签、死代码、textarea aria、global paragraph margin，并补轻量移动端状态栏/Audit 表格适配 |
 | CP8 | Shared Contract / Docs 对齐 | 1-2h | 2026-06-07 03:49 | 2026-06-07 03:58 | Code Done / Tests Passed | 已对齐 CAW wallet lifecycle、risk config、tool/memory evidence 类型、mock、mapper、API wrapper 和 Next proxy routes |
 | CP9 | CAW Account Lifecycle UI | 2-4h | 2026-06-07 03:58 | 2026-06-07 04:41 | Code Done / Build + HTTP Smoke Passed | CAW Account 改为顶部连接钱包式二级菜单；首屏不再占用 Intent Workbench 空间 |
+| CP10 | Intent Input Guard UX | 1-2h | 2026-06-07 05:15 | 2026-06-07 05:25 | Code Done / Tests Passed | 前端输入校验：长度限制(500)、控制字符、prompt injection 提示；后端 security rejection 展示 |
 
 当前整体判断：
 
@@ -43,6 +44,32 @@
 - 当前还需要用户做浏览器侧主观 QA：检查页面视觉、文案和 demo 讲述是否符合预期。
 
 ## 当前进度详情
+
+### 2026-06-07 前端 Checkpoint 10：Intent Input Guard UX
+
+- 开始时间：2026-06-07 05:15。
+- 完成时间：2026-06-07 05:25。
+- 当前状态：Code Done / Tests Passed。
+- 已完成：
+  - `page.tsx` 新增 `validateIntentInput()` 函数：
+    - 空输入不显示 error（Run 按钮已 disabled）。
+    - 超过 500 字符 → error 级别，阻断提交。
+    - 控制字符（ord < 32，排除 \n\r\t）→ error 级别。
+    - prompt injection 模式（6 个 regex，与后端 input_guard.py 对齐）→ warning 级别，不阻断提交。
+  - textarea 下方新增 inline error/warning 文案，颜色区分 error（rose）和 warning（amber）。
+  - Run 按钮 `disabled` 条件加入 `hasBlockingError`。
+  - `runIntent()` 前置检查加入 `hasBlockingError`。
+  - `DecisionChain.tsx` 新增 `isSecurityRejection()` 检测：
+    - 当后端返回 `status: "rejected"` 且 `reason` 或 `decisionReason` 包含 "input guard" / "prompt injection" / "control character" 时，在 Final Decision 区域显示 "Security rejection" 专属面板。
+    - 与普通 policy reject 视觉区分。
+- 设计决策：
+  - 前端校验只是 UX 层，安全边界在后端。prompt injection 用 warning 而非 error，因为后端才是真正的拦截层。
+  - 前端 500 字符限制 vs 后端 1200 字符限制：前端更严格，减少无效提交。
+  - `isSecurityRejection` 通过文案关键词匹配，不依赖后端新增字段，保持 contract 稳定。
+- 测试结果：
+  - `yarn workspace @se-2/nextjs check-types` passed。
+  - `yarn workspace @se-2/nextjs lint` passed, no ESLint warnings or errors。
+  - `git diff --check` passed。
 
 ### 2026-06-07 前端 Checkpoint 9：CAW Account Lifecycle UI
 

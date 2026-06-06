@@ -15,6 +15,61 @@ import { StatusBadge } from "~~/components/sentinel/StatusBadge";
 import { confirmExecution, executeIntent } from "~~/lib/sentinel/api";
 import type { ApiError, ExecuteResponse, ExecutionStatus } from "~~/lib/sentinel/types";
 
+// CP10: Frontend input validation — UX layer only, security boundary is the backend.
+const MAX_INTENT_LENGTH = 500;
+
+const PROMPT_INJECTION_PATTERNS = [
+  /\bignore\s+(all\s+)?previous\s+instructions\b/i,
+  /\bdisregard\s+(all\s+)?previous\s+instructions\b/i,
+  /\bsystem\s+prompt\b/i,
+  /\bdeveloper\s+message\b/i,
+  /\breveal\s+(the\s+)?prompt\b/i,
+  /\boverride\s+(the\s+)?policy\b/i,
+];
+
+type InputValidationError = {
+  message: string;
+  severity: "error" | "warning";
+};
+
+function validateIntentInput(intent: string): InputValidationError | null {
+  const trimmed = intent.trim();
+
+  if (!trimmed) {
+    return null; // empty input — Run button disabled, no error shown
+  }
+
+  if (trimmed.length > MAX_INTENT_LENGTH) {
+    return {
+      message: `Intent must be under ${MAX_INTENT_LENGTH} characters (currently ${trimmed.length}).`,
+      severity: "error",
+    };
+  }
+
+  // Control characters: same logic as backend input_guard.py
+  for (const char of trimmed) {
+    if (char.charCodeAt(0) < 32 && char !== "\n" && char !== "\r" && char !== "\t") {
+      return {
+        message: "Unsupported control characters detected.",
+        severity: "error",
+      };
+    }
+  }
+
+  // Prompt injection hints — warn but don't block submission (backend is the real guard)
+  const lowered = trimmed.toLowerCase();
+  for (const pattern of PROMPT_INJECTION_PATTERNS) {
+    if (pattern.test(lowered)) {
+      return {
+        message: "High-risk input pattern detected. The backend will reject prompt injection attempts.",
+        severity: "warning",
+      };
+    }
+  }
+
+  return null;
+}
+
 const presets = [
   {
     label: "Safe swap",
@@ -87,12 +142,14 @@ const Home: NextPage = () => {
   const [decisionItems, setDecisionItems] = useState<RecentDecision[]>([...recentDecisions]);
   const [pendingConfirmationAction, setPendingConfirmationAction] = useState<ConfirmationAction | null>(null);
 
+  const inputError = validateIntentInput(intent);
+  const hasBlockingError = inputError?.severity === "error";
   const isBusy = isExecuting || pendingConfirmationAction !== null;
 
   const runIntent = async (nextIntent = intent) => {
     const trimmedIntent = nextIntent.trim();
 
-    if (!trimmedIntent || isBusy) {
+    if (!trimmedIntent || isBusy || hasBlockingError) {
       return;
     }
 
@@ -158,6 +215,13 @@ const Home: NextPage = () => {
                 onChange={event => setIntent(event.target.value)}
                 value={intent}
               />
+              {inputError && (
+                <span
+                  className={`font-mono text-xs ${inputError.severity === "error" ? "text-[#ffb4ab]" : "text-amber-200"}`}
+                >
+                  {inputError.message}
+                </span>
+              )}
             </label>
 
             <div className="grid gap-2">
@@ -196,7 +260,7 @@ const Home: NextPage = () => {
 
             <button
               className="flex h-11 items-center justify-center gap-2 rounded-lg border border-[#88d6b6] bg-[#88d6b6] px-4 text-sm font-semibold text-[#003828] transition hover:bg-[#a4f3d1]"
-              disabled={isBusy || !intent.trim()}
+              disabled={isBusy || !intent.trim() || hasBlockingError}
               onClick={() => runIntent()}
               type="button"
             >
