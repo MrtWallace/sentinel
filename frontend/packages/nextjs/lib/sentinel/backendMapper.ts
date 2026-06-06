@@ -6,17 +6,28 @@ import type {
   BackendAttemptRecord,
   BackendAuditLogRecord,
   BackendAuditLogSummary,
+  BackendCawWalletBinding,
   BackendDecision,
   BackendExecuteResponse,
   BackendExecutionResult,
+  BackendMemoryAnomaly,
+  BackendRiskConfig,
+  BackendRiskConfigResponse,
   BackendRuleResult,
   BackendSuggestion,
+  BackendToolCallEvidence,
   BackendTxProposal,
+  CawPactLimits,
+  CawWalletBinding,
   DecisionChain,
   ExecuteResponse,
   ExecutionResult,
+  MemoryAnomaly,
+  RiskConfig,
+  RiskConfigResponse,
   RuleCheck,
   Suggestion,
+  ToolCallEvidence,
   TxProposal,
 } from "./types";
 
@@ -42,6 +53,8 @@ export function mapBackendExecuteResponse(dto: BackendExecuteResponse, intent: s
     decisionChain,
     attempts,
     execution,
+    toolCalls: (dto.tool_calls ?? []).map(mapBackendToolCall),
+    memoryAnomalies: (dto.memory_anomalies ?? []).map(mapBackendMemoryAnomaly),
   };
 }
 
@@ -58,6 +71,32 @@ export function mapBackendAuditSummary(dto: BackendAuditLogSummary): AuditLogIte
 
 export function mapBackendAuditRecord(dto: BackendAuditLogRecord): ExecuteResponse {
   return mapBackendExecuteResponse(dto, dto.intent);
+}
+
+export function mapBackendWalletBinding(dto: BackendCawWalletBinding): CawWalletBinding {
+  return {
+    userAddress: dto.user_address,
+    walletStatus: dto.wallet_status,
+    pairingStatus: dto.pairing_status,
+    pactStatus: dto.pact_status,
+    configStatus: dto.config_status,
+    cawWalletId: dto.caw_wallet_id ?? undefined,
+    cawWalletAddress: dto.caw_wallet_address ?? undefined,
+    pactId: dto.pact_id ?? undefined,
+    pairingUrl: dto.pairing_url ?? undefined,
+    expiresAt: dto.expires_at ?? undefined,
+    pactLimits: dto.pact_limits ? mapBackendPactLimits(dto.pact_limits) : undefined,
+  };
+}
+
+export function mapBackendRiskConfigResponse(dto: BackendRiskConfigResponse): RiskConfigResponse {
+  return {
+    userAddress: dto.user_address,
+    configStatus: dto.config_status,
+    configVersion: dto.config_version,
+    pactConfigVersion: dto.pact_config_version,
+    config: mapBackendRiskConfig(dto.config),
+  };
 }
 
 export function mapBackendAttempt(attempt: BackendAttemptRecord): AttemptRecord {
@@ -147,6 +186,47 @@ export function mapBackendExecution(execution: BackendExecutionResult | null | u
     pactId: execution.pact_id ?? undefined,
     policyReason: execution.policy_reason ?? undefined,
     raw: execution.raw,
+  };
+}
+
+export function mapBackendToolCall(toolCall: BackendToolCallEvidence): ToolCallEvidence {
+  return {
+    agent: toolCall.agent,
+    tool: toolCall.tool,
+    status: toolCall.status,
+    result: toolCall.result,
+    reason: toolCall.reason ?? undefined,
+  };
+}
+
+export function mapBackendMemoryAnomaly(memoryAnomaly: BackendMemoryAnomaly): MemoryAnomaly {
+  return {
+    kind: memoryAnomaly.kind,
+    severity: memoryAnomaly.severity,
+    reason: memoryAnomaly.reason,
+  };
+}
+
+function mapBackendPactLimits(limits: NonNullable<BackendCawWalletBinding["pact_limits"]>): CawPactLimits {
+  return {
+    transferAmountThresholdConfirm: limits.transfer_amount_threshold_confirm,
+    swapAmountThresholdConfirm: limits.swap_amount_threshold_confirm,
+    frequencyLimit: limits.frequency_limit,
+  };
+}
+
+function mapBackendRiskConfig(config: BackendRiskConfig): RiskConfig {
+  return {
+    swapAmountThresholdPass: config.swap_amount_threshold_pass,
+    swapAmountThresholdConfirm: config.swap_amount_threshold_confirm,
+    transferAmountThresholdPass: config.transfer_amount_threshold_pass,
+    transferAmountThresholdConfirm: config.transfer_amount_threshold_confirm,
+    slippageThresholdPass: config.slippage_threshold_pass,
+    slippageThresholdConfirm: config.slippage_threshold_confirm,
+    frequencyLimit: config.frequency_limit,
+    whitelistMode: config.whitelist_mode,
+    customWhitelist: config.custom_whitelist,
+    autoApproveLowRisk: config.auto_approve_low_risk,
   };
 }
 

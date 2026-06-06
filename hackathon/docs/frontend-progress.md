@@ -1,6 +1,6 @@
 # Sentinel 前端进度记录
 
-> 最后更新：2026-06-06 00:03
+> 最后更新：2026-06-07 05:04
 
 ## 进度记录约定
 
@@ -28,6 +28,8 @@
 | CP6 | 前端理解层 | 2-4h | 待开始 | 待开始 | Deferred / Post-MVP | `frontend-implementation-guide.md` + `/frontend-map`；按用户要求顺延，不阻塞前端 MVP |
 | CP7 | 验证与小修 | 1-3h | 2026-06-05 23:05 | 2026-06-05 23:27 | MVP Code Done / Build Passed / User QA Pending | CP6 顺延；前端 MVP 已完成真实后端 smoke、typecheck、lint、build |
 | CP7.1 | MVP quick wins | 0.5h | 2026-06-05 23:53 | 2026-06-06 00:03 | Code Done / QA Pending | 修复 info panel 空态、状态标签、死代码、textarea aria、global paragraph margin，并补轻量移动端状态栏/Audit 表格适配 |
+| CP8 | Shared Contract / Docs 对齐 | 1-2h | 2026-06-07 03:49 | 2026-06-07 03:58 | Code Done / Tests Passed | 已对齐 CAW wallet lifecycle、risk config、tool/memory evidence 类型、mock、mapper、API wrapper 和 Next proxy routes |
+| CP9 | CAW Account Lifecycle UI | 2-4h | 2026-06-07 03:58 | 2026-06-07 04:41 | Code Done / Build + HTTP Smoke Passed | CAW Account 改为顶部连接钱包式二级菜单；首屏不再占用 Intent Workbench 空间 |
 
 当前整体判断：
 
@@ -41,6 +43,60 @@
 - 当前还需要用户做浏览器侧主观 QA：检查页面视觉、文案和 demo 讲述是否符合预期。
 
 ## 当前进度详情
+
+### 2026-06-07 前端 Checkpoint 9：CAW Account Lifecycle UI
+
+- 开始时间：2026-06-07 03:58。
+- 完成时间：2026-06-07 04:41。
+- 当前状态：Code Done / Build + HTTP Smoke Passed。
+- 已完成：
+  - 根据用户反馈，将 CAW Account 从首页大面板改为顶部状态栏里的连接钱包式二级菜单，避免占用首屏。
+  - 菜单内显示 `Connect existing CAW` 和 `Create CAW wallet` 两条 setup 路径。
+  - 顶部状态栏展示 connected user address、CAW wallet id/address、pairing status、pact status/id、config sync status。
+  - 增加 `Refresh status` 操作，使用 CP8 的 wallet API wrapper。
+  - SmartAccount baseline 信息保持 secondary，不抢 CAW 主叙事。
+- 测试结果：
+  - RED：`check-types` 先因缺失 `walletViewModel` / `getCawMenuButtonLabel` 失败，符合预期。
+  - GREEN：`yarn workspace @se-2/nextjs check-types` passed。
+  - `yarn workspace @se-2/nextjs lint` passed, no ESLint warnings or errors。
+  - `git diff --check` passed。
+  - `node node_modules/next/dist/bin/next build` passed；保留 RainbowKit/Wagmi 依赖链已有 dynamic dependency warnings。
+  - 本地服务 `http://127.0.0.1:3000` 与 `/audit` HTTP smoke 均返回 200。
+  - Playwright 静态截图 `output/playwright/caw-menu-home-ready.png` 已生成，确认首屏只显示右上角 CAW menu button，不再显示大块 CAW Account 面板。
+  - `playwright-cli` daemon 需要 `/opt/google/chrome/chrome`；安装 Chrome 卡在 `sudo`，已停止挂起安装进程。使用 `npx playwright screenshot --browser=chromium` 完成可用截图验证。
+
+后续 polish（2026-06-07 05:04）：
+
+- 根据用户反馈进一步压缩 header：
+  - `CAW active` 状态按钮固定在右上角，同时作为 CAW 二级菜单入口。
+  - header 只保留 `NETWORK`、`EXECUTION`、`PACT` 三个高层 demo 状态。
+  - `USER`、`WALLET_STATUS`、`CAW_WALLET`、`PAIRING_STATUS`、`CONFIG_STATUS` 等 lifecycle 细节移动到 CAW 二级菜单。
+- 新增 `getCawHeaderStatusItems()` view-model contract test，约束 header 不再展示 wallet lifecycle 详情。
+- 验证结果：
+  - `yarn workspace @se-2/nextjs check-types` passed。
+  - `yarn workspace @se-2/nextjs lint` passed, no ESLint warnings or errors。
+  - `git diff --check` passed。
+  - `node node_modules/next/dist/bin/next build` passed；保留既有 RainbowKit/Wagmi dynamic dependency warnings。
+  - 本地服务 `http://127.0.0.1:3000` 与 `/audit` HTTP smoke 均返回 200。
+  - Playwright 截图 `output/playwright/caw-menu-header-fixed.png` 已生成，确认 `CAW active` 位于右上角。
+
+### 2026-06-07 前端 Checkpoint 8：Shared Contract / Docs 对齐
+
+- 开始时间：2026-06-07 03:49。
+- 完成时间：2026-06-07 03:58。
+- 当前状态：Code Done / Tests Passed。
+- 已完成：
+  - 按 `shared-api-contract.md` 增加 CAW wallet lifecycle 类型、mock 和 API 封装。
+  - 覆盖 `wallet_status`、`pairing_status`、`pact_status`、`config_status`。
+  - 增加 risk config 类型、mock 与 GET/PUT API wrapper。
+  - 增加 `tool_calls`、`memory_anomalies` 前端类型与 mapper。
+  - 新增 `/api/sentinel/wallet/*` 与 `/api/sentinel/config` Next proxy routes。
+  - 保持前端只依赖 shared contract 字段，不发明后端字段。
+- 测试结果：
+  - RED：`check-types` 先因缺失 wallet/config/tool/memory 类型和 API 导出失败，符合预期。
+  - GREEN：`yarn workspace @se-2/nextjs check-types` passed。
+  - `yarn workspace @se-2/nextjs lint` passed, no ESLint warnings or errors。
+  - `git diff --check` passed。
 
 ### 2026-06-05 前端 Checkpoint 7.1：MVP quick wins
 

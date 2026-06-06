@@ -2,27 +2,51 @@ import {
   mapBackendAuditRecord,
   mapBackendAuditSummary,
   mapBackendExecuteResponse,
+  mapBackendRiskConfigResponse,
+  mapBackendWalletBinding,
 } from "~~/lib/sentinel/backendMapper";
-import { MOCK_AUDIT_LOG, MOCK_EXECUTE_RESPONSES, responseToAuditItem } from "~~/lib/sentinel/mockData";
+import {
+  DEMO_USER_ADDRESS,
+  MOCK_AUDIT_LOG,
+  MOCK_EXECUTE_RESPONSES,
+  MOCK_RISK_CONFIG,
+  MOCK_WALLET_BINDINGS,
+  responseToAuditItem,
+} from "~~/lib/sentinel/mockData";
 import type {
   ApiError,
   AuditLogItem,
   BackendAuditLogRecord,
   BackendAuditLogSummary,
+  BackendCawWalletBinding,
   BackendExecuteResponse,
+  BackendRiskConfig,
+  BackendRiskConfigResponse,
+  CawWalletBinding,
   ConfirmExecutionResponse,
+  ConnectExistingCawWalletRequest,
+  CreateCawWalletRequest,
   ExecuteResponse,
   IntentScenario,
+  RefreshWalletStatusRequest,
+  RiskConfig,
+  RiskConfigResponse,
+  UpdateRiskConfigRequest,
 } from "~~/lib/sentinel/types";
 
 const MOCK_LATENCY_MS = 350;
 const EXECUTE_PROXY_PATH = "/api/sentinel/execute";
 const AUDIT_LOG_PROXY_PATH = "/api/sentinel/audit-log";
 const CONFIRM_PROXY_PATH = "/api/sentinel/confirm";
+const WALLET_STATUS_PROXY_PATH = "/api/sentinel/wallet/status";
+const WALLET_CONNECT_EXISTING_PROXY_PATH = "/api/sentinel/wallet/connect-existing";
+const WALLET_CREATE_PROXY_PATH = "/api/sentinel/wallet/create";
+const WALLET_REFRESH_STATUS_PROXY_PATH = "/api/sentinel/wallet/refresh-status";
+const CONFIG_PROXY_PATH = "/api/sentinel/config";
 
 // 这个函数是页面唯一需要依赖的执行入口；后端完成后只替换函数内部实现。
-export async function executeIntent(intent: string): Promise<ExecuteResponse> {
-  const backendResponse = await executeIntentViaBackend(intent);
+export async function executeIntent(intent: string, userAddress = DEMO_USER_ADDRESS): Promise<ExecuteResponse> {
+  const backendResponse = await executeIntentViaBackend(intent, userAddress);
 
   if (backendResponse) {
     return backendResponse;
@@ -38,6 +62,104 @@ export async function executeIntent(intent: string): Promise<ExecuteResponse> {
   return {
     ...response,
     intent,
+  };
+}
+
+export async function getWalletStatus(userAddress = DEMO_USER_ADDRESS): Promise<CawWalletBinding> {
+  const backendResponse = await getWalletStatusViaBackend(userAddress);
+
+  if (backendResponse) {
+    return backendResponse;
+  }
+
+  await waitForMockLatency();
+
+  return cloneWalletBinding(MOCK_WALLET_BINDINGS.active);
+}
+
+export async function connectExistingCawWallet(request: ConnectExistingCawWalletRequest): Promise<CawWalletBinding> {
+  const backendResponse = await postWalletAction(WALLET_CONNECT_EXISTING_PROXY_PATH, {
+    user_address: request.userAddress,
+    caw_wallet_id: request.cawWalletId,
+  });
+
+  if (backendResponse) {
+    return backendResponse;
+  }
+
+  await waitForMockLatency();
+
+  return {
+    ...cloneWalletBinding(MOCK_WALLET_BINDINGS.paired),
+    userAddress: request.userAddress,
+    cawWalletId: request.cawWalletId,
+  };
+}
+
+export async function createCawWallet(request: CreateCawWalletRequest): Promise<CawWalletBinding> {
+  const backendResponse = await postWalletAction(WALLET_CREATE_PROXY_PATH, {
+    user_address: request.userAddress,
+  });
+
+  if (backendResponse) {
+    return backendResponse;
+  }
+
+  await waitForMockLatency();
+
+  return {
+    ...cloneWalletBinding(MOCK_WALLET_BINDINGS.pairingPending),
+    userAddress: request.userAddress,
+  };
+}
+
+export async function refreshWalletStatus(request: RefreshWalletStatusRequest): Promise<CawWalletBinding> {
+  const backendResponse = await postWalletAction(WALLET_REFRESH_STATUS_PROXY_PATH, {
+    user_address: request.userAddress,
+  });
+
+  if (backendResponse) {
+    return backendResponse;
+  }
+
+  await waitForMockLatency();
+
+  return {
+    ...cloneWalletBinding(MOCK_WALLET_BINDINGS.active),
+    userAddress: request.userAddress,
+  };
+}
+
+export async function getRiskConfig(userAddress = DEMO_USER_ADDRESS): Promise<RiskConfigResponse> {
+  const backendResponse = await getRiskConfigViaBackend(userAddress);
+
+  if (backendResponse) {
+    return backendResponse;
+  }
+
+  await waitForMockLatency();
+
+  return cloneRiskConfig(MOCK_RISK_CONFIG);
+}
+
+export async function updateRiskConfig(request: UpdateRiskConfigRequest): Promise<RiskConfigResponse> {
+  const backendResponse = await updateRiskConfigViaBackend(request);
+
+  if (backendResponse) {
+    return backendResponse;
+  }
+
+  await waitForMockLatency();
+
+  return {
+    ...cloneRiskConfig(MOCK_RISK_CONFIG),
+    userAddress: request.userAddress,
+    configStatus: "needs_pact_update",
+    configVersion: MOCK_RISK_CONFIG.configVersion + 1,
+    config: {
+      ...MOCK_RISK_CONFIG.config,
+      ...request.config,
+    },
   };
 }
 
@@ -150,14 +272,14 @@ function normalizeConfirmedResponse(response: ExecuteResponse, approved: boolean
   };
 }
 
-async function executeIntentViaBackend(intent: string): Promise<ExecuteResponse | null> {
+async function executeIntentViaBackend(intent: string, userAddress: string): Promise<ExecuteResponse | null> {
   try {
     const response = await fetch(EXECUTE_PROXY_PATH, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ intent }),
+      body: JSON.stringify({ user_address: userAddress, intent }),
     });
 
     if (!response.ok) {
@@ -167,6 +289,89 @@ async function executeIntentViaBackend(intent: string): Promise<ExecuteResponse 
     const body = (await response.json()) as BackendExecuteResponse;
 
     return mapBackendExecuteResponse(body, intent);
+  } catch {
+    return null;
+  }
+}
+
+async function getWalletStatusViaBackend(userAddress: string): Promise<CawWalletBinding | null> {
+  try {
+    const response = await fetch(`${WALLET_STATUS_PROXY_PATH}?user_address=${encodeURIComponent(userAddress)}`, {
+      method: "GET",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const body = (await response.json()) as BackendCawWalletBinding;
+
+    return mapBackendWalletBinding(body);
+  } catch {
+    return null;
+  }
+}
+
+async function postWalletAction(path: string, body: Record<string, unknown>): Promise<CawWalletBinding | null> {
+  try {
+    const response = await fetch(path, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const responseBody = (await response.json()) as BackendCawWalletBinding;
+
+    return mapBackendWalletBinding(responseBody);
+  } catch {
+    return null;
+  }
+}
+
+async function getRiskConfigViaBackend(userAddress: string): Promise<RiskConfigResponse | null> {
+  try {
+    const response = await fetch(`${CONFIG_PROXY_PATH}?user_address=${encodeURIComponent(userAddress)}`, {
+      method: "GET",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const body = (await response.json()) as BackendRiskConfigResponse;
+
+    return mapBackendRiskConfigResponse(body);
+  } catch {
+    return null;
+  }
+}
+
+async function updateRiskConfigViaBackend(request: UpdateRiskConfigRequest): Promise<RiskConfigResponse | null> {
+  try {
+    const response = await fetch(CONFIG_PROXY_PATH, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        user_address: request.userAddress,
+        config: mapRiskConfigToBackend(request.config),
+      }),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const body = (await response.json()) as BackendRiskConfigResponse;
+
+    return mapBackendRiskConfigResponse(body);
   } catch {
     return null;
   }
@@ -326,4 +531,27 @@ function cloneResponse(response: ExecuteResponse): ExecuteResponse {
 
 function cloneAuditItem(item: AuditLogItem): AuditLogItem {
   return JSON.parse(JSON.stringify(item)) as AuditLogItem;
+}
+
+function cloneWalletBinding(binding: CawWalletBinding): CawWalletBinding {
+  return JSON.parse(JSON.stringify(binding)) as CawWalletBinding;
+}
+
+function cloneRiskConfig(config: RiskConfigResponse): RiskConfigResponse {
+  return JSON.parse(JSON.stringify(config)) as RiskConfigResponse;
+}
+
+function mapRiskConfigToBackend(config: Partial<RiskConfig>): Partial<BackendRiskConfig> {
+  return {
+    swap_amount_threshold_pass: config.swapAmountThresholdPass,
+    swap_amount_threshold_confirm: config.swapAmountThresholdConfirm,
+    transfer_amount_threshold_pass: config.transferAmountThresholdPass,
+    transfer_amount_threshold_confirm: config.transferAmountThresholdConfirm,
+    slippage_threshold_pass: config.slippageThresholdPass,
+    slippage_threshold_confirm: config.slippageThresholdConfirm,
+    frequency_limit: config.frequencyLimit,
+    whitelist_mode: config.whitelistMode,
+    custom_whitelist: config.customWhitelist,
+    auto_approve_low_risk: config.autoApproveLowRisk,
+  };
 }

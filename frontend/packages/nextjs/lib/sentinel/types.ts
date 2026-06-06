@@ -12,6 +12,93 @@ export type ApiError = {
   parsedReason?: string;
 };
 
+export type WalletStatus = "none" | "pairing_pending" | "paired" | "active" | "revoked" | "expired";
+
+export type PairingStatus = "none" | "pending" | "paired" | "failed";
+
+export type PactStatus = "none" | "pending_approval" | "active" | "expired" | "revoked";
+
+export type ConfigStatus = "synced" | "needs_pact_update";
+
+export type CawPactLimits = {
+  transferAmountThresholdConfirm?: string;
+  swapAmountThresholdConfirm?: string;
+  frequencyLimit?: number;
+};
+
+export type CawWalletBinding = {
+  userAddress: string;
+  walletStatus: WalletStatus;
+  pairingStatus: PairingStatus;
+  pactStatus: PactStatus;
+  configStatus: ConfigStatus;
+  cawWalletId?: string | null;
+  cawWalletAddress?: string | null;
+  pactId?: string | null;
+  pairingUrl?: string | null;
+  expiresAt?: string | null;
+  pactLimits?: CawPactLimits;
+};
+
+export type ConnectExistingCawWalletRequest = {
+  userAddress: string;
+  cawWalletId: string;
+};
+
+export type CreateCawWalletRequest = {
+  userAddress: string;
+};
+
+export type RefreshWalletStatusRequest = {
+  userAddress: string;
+};
+
+export type RiskConfig = {
+  swapAmountThresholdPass?: string;
+  swapAmountThresholdConfirm?: string;
+  transferAmountThresholdPass?: string;
+  transferAmountThresholdConfirm?: string;
+  slippageThresholdPass?: number;
+  slippageThresholdConfirm?: number;
+  frequencyLimit?: number;
+  whitelistMode?: "strict" | "permissive" | string;
+  customWhitelist?: string[];
+  autoApproveLowRisk?: boolean;
+};
+
+export type RiskConfigResponse = {
+  userAddress: string;
+  configStatus: ConfigStatus;
+  configVersion: number;
+  pactConfigVersion: number;
+  config: RiskConfig;
+};
+
+export type UpdateRiskConfigRequest = {
+  userAddress: string;
+  config: Partial<RiskConfig>;
+};
+
+export type ToolCallEvidence = {
+  agent: string;
+  tool: string;
+  status: "succeeded" | "failed" | "skipped" | string;
+  result: Record<string, unknown>;
+  reason?: string | null;
+};
+
+export type MemoryAnomaly = {
+  kind: string;
+  severity: "info" | "warning" | "critical" | string;
+  reason: string;
+};
+
+export type McpEvaluationResult = {
+  tool: "evaluate_transaction" | "get_risk_config" | "get_audit_log" | string;
+  status: "succeeded" | "failed" | string;
+  result: Record<string, unknown>;
+};
+
 export type TxProposal = {
   action: "swap" | "transfer" | "approve" | "deposit" | "withdraw" | "unknown";
   amount: string;
@@ -129,6 +216,8 @@ export type ExecuteResponse = {
   decisionChain: DecisionChain;
   attempts: AttemptRecord[];
   execution: ExecutionResult;
+  toolCalls: ToolCallEvidence[];
+  memoryAnomalies: MemoryAnomaly[];
   error?: ApiError;
 };
 
@@ -142,6 +231,8 @@ export type AuditLogItem = {
   decisionChain?: DecisionChain;
   attempts?: AttemptRecord[];
   execution?: ExecutionResult;
+  toolCalls?: ToolCallEvidence[];
+  memoryAnomalies?: MemoryAnomaly[];
 };
 
 export type ConfirmExecutionResponse = ExecuteResponse & {
@@ -214,6 +305,61 @@ export type BackendExecutionResult = {
   raw?: Record<string, unknown>;
 };
 
+export type BackendCawPactLimits = {
+  transfer_amount_threshold_confirm?: string;
+  swap_amount_threshold_confirm?: string;
+  frequency_limit?: number;
+};
+
+export type BackendCawWalletBinding = {
+  user_address: string;
+  wallet_status: WalletStatus;
+  pairing_status: PairingStatus;
+  pact_status: PactStatus;
+  config_status: ConfigStatus;
+  caw_wallet_id?: string | null;
+  caw_wallet_address?: string | null;
+  pact_id?: string | null;
+  pairing_url?: string | null;
+  expires_at?: string | null;
+  pact_limits?: BackendCawPactLimits;
+};
+
+export type BackendRiskConfig = {
+  swap_amount_threshold_pass?: string;
+  swap_amount_threshold_confirm?: string;
+  transfer_amount_threshold_pass?: string;
+  transfer_amount_threshold_confirm?: string;
+  slippage_threshold_pass?: number;
+  slippage_threshold_confirm?: number;
+  frequency_limit?: number;
+  whitelist_mode?: "strict" | "permissive" | string;
+  custom_whitelist?: string[];
+  auto_approve_low_risk?: boolean;
+};
+
+export type BackendRiskConfigResponse = {
+  user_address: string;
+  config_status: ConfigStatus;
+  config_version: number;
+  pact_config_version: number;
+  config: BackendRiskConfig;
+};
+
+export type BackendToolCallEvidence = {
+  agent: string;
+  tool: string;
+  status: ToolCallEvidence["status"];
+  result: Record<string, unknown>;
+  reason?: string | null;
+};
+
+export type BackendMemoryAnomaly = {
+  kind: string;
+  severity: MemoryAnomaly["severity"];
+  reason: string;
+};
+
 export type BackendLegacyDecisionChain = {
   agent_a?: {
     proposal?: BackendTxProposal;
@@ -249,6 +395,8 @@ export type BackendExecuteResponse = {
   attempts: BackendAttemptRecord[];
   decision_chain: BackendLegacyDecisionChain | null;
   execution: BackendExecutionResult;
+  tool_calls?: BackendToolCallEvidence[];
+  memory_anomalies?: BackendMemoryAnomaly[];
 };
 
 export type BackendAuditLogSummary = {

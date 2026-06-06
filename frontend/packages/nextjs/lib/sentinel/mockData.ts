@@ -1,11 +1,108 @@
 import type {
   AttemptRecord,
   AuditLogItem,
+  CawWalletBinding,
   DecisionChain,
   ExecuteResponse,
   ExecutionResult,
   IntentScenario,
+  RiskConfigResponse,
 } from "~~/lib/sentinel/types";
+
+export const DEMO_USER_ADDRESS = "0x1111111111111111111111111111111111111111";
+
+export const MOCK_WALLET_BINDINGS = {
+  none: {
+    userAddress: DEMO_USER_ADDRESS,
+    walletStatus: "none",
+    pairingStatus: "none",
+    pactStatus: "none",
+    configStatus: "synced",
+  },
+  pairingPending: {
+    userAddress: DEMO_USER_ADDRESS,
+    walletStatus: "pairing_pending",
+    pairingStatus: "pending",
+    pactStatus: "none",
+    configStatus: "synced",
+    cawWalletId: "wallet_pairing_demo",
+    pairingUrl: "cobo://pair/sentinel-demo",
+    expiresAt: "2026-06-07T04:30:00Z",
+  },
+  paired: {
+    userAddress: DEMO_USER_ADDRESS,
+    walletStatus: "paired",
+    pairingStatus: "paired",
+    pactStatus: "none",
+    configStatus: "synced",
+    cawWalletId: "wallet_paired_demo",
+    cawWalletAddress: "0xCAFE00000000000000000000000000000000CAFE",
+  },
+  pactPending: {
+    userAddress: DEMO_USER_ADDRESS,
+    walletStatus: "paired",
+    pairingStatus: "paired",
+    pactStatus: "pending_approval",
+    configStatus: "needs_pact_update",
+    cawWalletId: "wallet_pact_demo",
+    cawWalletAddress: "0xCAFE00000000000000000000000000000000CAFE",
+    pactId: "pact_pending_demo",
+  },
+  active: {
+    userAddress: DEMO_USER_ADDRESS,
+    walletStatus: "active",
+    pairingStatus: "paired",
+    pactStatus: "active",
+    configStatus: "synced",
+    cawWalletId: "wallet_active_demo",
+    cawWalletAddress: "0xCAFE00000000000000000000000000000000CAFE",
+    pactId: "pact_active_demo",
+    pactLimits: {
+      transferAmountThresholdConfirm: "0.1",
+      swapAmountThresholdConfirm: "0.2",
+      frequencyLimit: 3,
+    },
+  },
+  revoked: {
+    userAddress: DEMO_USER_ADDRESS,
+    walletStatus: "revoked",
+    pairingStatus: "paired",
+    pactStatus: "revoked",
+    configStatus: "needs_pact_update",
+    cawWalletId: "wallet_revoked_demo",
+    cawWalletAddress: "0xCAFE00000000000000000000000000000000CAFE",
+    pactId: "pact_revoked_demo",
+  },
+  expired: {
+    userAddress: DEMO_USER_ADDRESS,
+    walletStatus: "expired",
+    pairingStatus: "failed",
+    pactStatus: "expired",
+    configStatus: "needs_pact_update",
+    cawWalletId: "wallet_expired_demo",
+    cawWalletAddress: "0xCAFE00000000000000000000000000000000CAFE",
+    pactId: "pact_expired_demo",
+  },
+} as const satisfies Record<string, CawWalletBinding>;
+
+export const MOCK_RISK_CONFIG: RiskConfigResponse = {
+  userAddress: DEMO_USER_ADDRESS,
+  configStatus: "synced",
+  configVersion: 3,
+  pactConfigVersion: 3,
+  config: {
+    swapAmountThresholdPass: "0.05",
+    swapAmountThresholdConfirm: "0.2",
+    transferAmountThresholdPass: "0.02",
+    transferAmountThresholdConfirm: "0.1",
+    slippageThresholdPass: 0.03,
+    slippageThresholdConfirm: 0.05,
+    frequencyLimit: 3,
+    whitelistMode: "strict",
+    customWhitelist: [],
+    autoApproveLowRisk: true,
+  },
+};
 
 export const DEMO_INTENTS: Record<IntentScenario, string> = {
   safe_swap: "Swap 0.01 ETH to USDC",
@@ -21,6 +118,11 @@ const mockExecutionNotSubmitted: ExecutionResult = {
   txHash: null,
   reason: "CP4.5 mock mirrors the backend minimal API before CAW submission is enabled.",
 };
+
+const emptyEvidence = {
+  toolCalls: [],
+  memoryAnomalies: [],
+} satisfies Pick<ExecuteResponse, "toolCalls" | "memoryAnomalies">;
 
 const safeSwapChain: DecisionChain = {
   agentProposal: {
@@ -385,6 +487,7 @@ export const MOCK_EXECUTE_RESPONSES: Record<IntentScenario, ExecuteResponse> = {
       ...mockExecutionNotSubmitted,
       txHash: safeSwapChain.txHash,
     },
+    ...emptyEvidence,
   },
   agent_retry_swap: {
     txId: "demo-002",
@@ -395,6 +498,7 @@ export const MOCK_EXECUTE_RESPONSES: Record<IntentScenario, ExecuteResponse> = {
     decisionChain: agentRetryChain,
     attempts: agentRetryAttempts,
     execution: mockExecutionNotSubmitted,
+    ...emptyEvidence,
   },
   blocked_swap: {
     txId: "demo-003",
@@ -405,6 +509,7 @@ export const MOCK_EXECUTE_RESPONSES: Record<IntentScenario, ExecuteResponse> = {
     decisionChain: blockedSwapChain,
     attempts: blockedSwapAttempts,
     execution: mockExecutionNotSubmitted,
+    ...emptyEvidence,
   },
   confirm_transfer: {
     txId: "demo-004",
@@ -415,6 +520,7 @@ export const MOCK_EXECUTE_RESPONSES: Record<IntentScenario, ExecuteResponse> = {
     decisionChain: confirmTransferChain,
     attempts: confirmTransferAttempts,
     execution: mockExecutionNotSubmitted,
+    ...emptyEvidence,
   },
 };
 
@@ -445,6 +551,7 @@ export const MOCK_AUDIT_LOG: AuditLogItem[] = [
       status: "failed",
       reason: "Request timed out before CAW submission.",
     },
+    ...emptyEvidence,
   },
 ];
 
@@ -459,5 +566,7 @@ export function responseToAuditItem(response: ExecuteResponse): AuditLogItem {
     decisionChain: response.decisionChain,
     attempts: response.attempts,
     execution: response.execution,
+    toolCalls: response.toolCalls,
+    memoryAnomalies: response.memoryAnomalies,
   };
 }

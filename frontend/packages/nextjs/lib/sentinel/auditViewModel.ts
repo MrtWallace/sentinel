@@ -19,6 +19,8 @@ export function auditItemToExecuteResponse(item: AuditLogItem): ExecuteResponse 
     decisionChain,
     attempts: item.attempts ?? [fallbackAttempt(item, decisionChain)],
     execution: item.execution ?? fallbackExecution(item),
+    toolCalls: item.toolCalls ?? [],
+    memoryAnomalies: item.memoryAnomalies ?? [],
   };
 }
 
