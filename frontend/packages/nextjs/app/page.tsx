@@ -149,7 +149,9 @@ const Home: NextPage = () => {
   const runIntent = async (nextIntent = intent) => {
     const trimmedIntent = nextIntent.trim();
 
-    if (!trimmedIntent || isBusy || hasBlockingError) {
+    // Validate the actual intent being submitted, not the textarea state.
+    const submitError = validateIntentInput(trimmedIntent);
+    if (!trimmedIntent || isBusy || submitError?.severity === "error") {
       return;
     }
 
@@ -259,9 +261,11 @@ const Home: NextPage = () => {
             )}
 
             <button
-              className="flex h-11 items-center justify-center gap-2 rounded-lg border border-[#88d6b6] bg-[#88d6b6] px-4 text-sm font-semibold text-[#003828] transition hover:bg-[#a4f3d1]"
+              className="flex h-11 items-center justify-center gap-2 rounded-lg border border-[#88d6b6] bg-[#88d6b6] px-4 text-sm font-semibold text-[#003828] transition hover:bg-[#a4f3d1] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-[#89938d]"
               disabled={isBusy || !intent.trim() || hasBlockingError}
-              onClick={() => runIntent()}
+              onClick={() => {
+                if (!hasBlockingError) runIntent();
+              }}
               type="button"
             >
               {isExecuting ? <ArrowPathIcon className="h-4 w-4 animate-spin" /> : <PlayIcon className="h-4 w-4" />}
