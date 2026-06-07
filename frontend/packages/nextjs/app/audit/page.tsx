@@ -161,7 +161,7 @@ const AuditPage: NextPage = () => {
           isLoadingDetail={isExpandedDetailLoading}
           isLoadingList={isLoadingList}
           items={visibleItems}
-          onSelect={setSelectedTxId}
+          onSelect={txId => setSelectedTxId(current => (current === txId ? null : txId))}
         />
       </div>
     </SentinelShell>
