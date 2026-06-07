@@ -10,10 +10,12 @@ import {
   ShieldExclamationIcon,
 } from "@heroicons/react/24/outline";
 import { StatusBadge } from "~~/components/sentinel/StatusBadge";
+import { getCawAuditEvidence, isCawPolicyDenied } from "~~/lib/sentinel/auditEvidenceViewModel";
 import type { AgentReview, ExecuteResponse, ExecutionStatus, RuleCheck, TxProposal } from "~~/lib/sentinel/types";
 
 type DecisionChainProps = {
   actionError?: string | null;
+  auditUserAddress?: string;
   isLoading: boolean;
   onConfirm?: (approved: boolean) => void;
   pendingConfirmationAction?: ConfirmationAction | null;
@@ -26,6 +28,7 @@ const STEP_COUNT = 6;
 
 export const DecisionChain = ({
   actionError,
+  auditUserAddress,
   isLoading,
   onConfirm,
   pendingConfirmationAction,
@@ -110,12 +113,17 @@ export const DecisionChain = ({
                 Security rejection: {response.reason}
               </div>
             )}
+            {isCawPolicyDenied(response.execution) && (
+              <div className="mt-2 rounded-md border border-rose-300/25 bg-rose-300/10 px-3 py-2 text-xs leading-5 text-rose-100">
+                Sentinel allowed, CAW Pact blocked execution.
+              </div>
+            )}
           </StepBlock>
         )}
 
         {visibleSteps >= 6 && (
           <StepBlock index="06" status={chain.finalDecision} title="Transaction / Audit Result">
-            <AuditResult response={response} />
+            <AuditResult response={response} userAddress={auditUserAddress} />
           </StepBlock>
         )}
       </div>
@@ -270,8 +278,12 @@ const AttemptsTimeline = ({ response }: { response: ExecuteResponse }) => {
   );
 };
 
-const AuditResult = ({ response }: { response: ExecuteResponse }) => {
+const AuditResult = ({ response, userAddress }: { response: ExecuteResponse; userAddress?: string }) => {
   const { decisionChain } = response;
+
+  if (hasCawEvidence(response)) {
+    return <CawEvidencePanel response={response} userAddress={userAddress} />;
+  }
 
   if (decisionChain.txHash) {
     const etherscanUrl = `https://sepolia.etherscan.io/tx/${decisionChain.txHash}`;
@@ -297,22 +309,6 @@ const AuditResult = ({ response }: { response: ExecuteResponse }) => {
         >
           Blockscout backup
         </a>
-      </div>
-    );
-  }
-
-  if (response.execution.requestId || response.execution.walletId || response.execution.pactId) {
-    return (
-      <div className="grid gap-2 md:grid-cols-2">
-        <DataPoint label="Backend" value={response.execution.backend} />
-        <DataPoint label="Execution Status" value={response.execution.status} />
-        <DataPoint
-          label="CAW Wallet"
-          value={response.execution.walletAddress ?? response.execution.walletId ?? "N/A"}
-        />
-        <DataPoint label="Pact" value={response.execution.pactId ?? "N/A"} />
-        <DataPoint label="Request ID" value={response.execution.requestId ?? "N/A"} />
-        <DataPoint label="Policy Reason" value={response.execution.policyReason ?? "N/A"} />
       </div>
     );
   }
@@ -366,6 +362,61 @@ const AuditResult = ({ response }: { response: ExecuteResponse }) => {
   return (
     <div className="rounded-lg border border-[#ffb4ab]/25 bg-[#ffb4ab]/10 p-3 text-sm text-[#ffdad6]">
       Execution skipped. The rejected decision and rule reason remain available in the audit log.
+    </div>
+  );
+};
+
+const CawEvidencePanel = ({ response, userAddress }: { response: ExecuteResponse; userAddress?: string }) => {
+  const evidence = getCawAuditEvidence(response, userAddress);
+
+  return (
+    <div className="grid gap-3">
+      <div
+        className={`rounded-lg border p-3 ${
+          evidence.isPolicyDenied
+            ? "border-rose-300/25 bg-rose-300/10 text-rose-100"
+            : "border-[#88d6b6]/25 bg-[#88d6b6]/10 text-[#d8f8e8]"
+        }`}
+      >
+        <div className="flex items-start gap-2">
+          {evidence.isPolicyDenied ? (
+            <ShieldExclamationIcon className="mt-0.5 h-4 w-4 shrink-0 text-rose-200" />
+          ) : (
+            <ShieldCheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-[#88d6b6]" />
+          )}
+          <div>
+            <p className="m-0 text-sm font-semibold">{evidence.title}</p>
+            <p className="m-0 mt-1 text-xs leading-5 opacity-80">{evidence.body}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-2 md:grid-cols-2">
+        {evidence.points.map(point => (
+          <DataPoint
+            className={evidencePointClass(point.tone)}
+            key={point.label}
+            label={point.label}
+            value={point.value}
+          />
+        ))}
+      </div>
+
+      {evidence.explorerLinks.length > 0 && (
+        <div className="grid gap-2 md:grid-cols-2">
+          {evidence.explorerLinks.map(link => (
+            <a
+              className="rounded-md border border-[#88d6b6]/30 bg-[#88d6b6]/10 px-3 py-2 font-mono text-xs text-[#a4f3d1] transition hover:border-[#88d6b6]"
+              href={link.href}
+              key={link.href}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {link.label}
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -481,9 +532,9 @@ const SummaryItem = ({
   );
 };
 
-const DataPoint = ({ label, value }: { label: string; value: string }) => {
+const DataPoint = ({ className = "", label, value }: { className?: string; label: string; value: string }) => {
   return (
-    <div className="rounded-md border border-white/10 bg-[#0c0e12] px-3 py-2">
+    <div className={`rounded-md border border-white/10 bg-[#0c0e12] px-3 py-2 ${className}`}>
       <div className="font-mono text-[10px] uppercase text-[#89938d]">{label}</div>
       <div className="mt-1 truncate text-sm text-[#e2e2e8]">{value}</div>
     </div>
@@ -660,6 +711,32 @@ function simulationLabel(simulation: ExecuteResponse["decisionChain"]["simulatio
 
 function shortHash(hash: string): string {
   return `${hash.slice(0, 10)}...${hash.slice(-8)}`;
+}
+
+function hasCawEvidence(response: ExecuteResponse): boolean {
+  return (
+    response.execution.backend === "caw" ||
+    Boolean(response.execution.requestId) ||
+    Boolean(response.execution.walletId) ||
+    Boolean(response.execution.walletAddress) ||
+    Boolean(response.execution.pactId)
+  );
+}
+
+function evidencePointClass(tone: "neutral" | "success" | "warning" | "danger" | undefined): string {
+  if (tone === "danger") {
+    return "border-rose-300/20 bg-rose-300/10";
+  }
+
+  if (tone === "warning") {
+    return "border-amber-300/20 bg-amber-300/10";
+  }
+
+  if (tone === "success") {
+    return "border-[#88d6b6]/20 bg-[#88d6b6]/10";
+  }
+
+  return "";
 }
 
 function statusIcon(status: "passed" | "review" | ExecutionStatus) {

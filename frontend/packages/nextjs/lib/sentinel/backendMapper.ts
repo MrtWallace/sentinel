@@ -66,6 +66,8 @@ export function mapBackendAuditSummary(dto: BackendAuditLogSummary): AuditLogIte
     status: dto.status,
     reason: auditSummaryReason(dto),
     txHash: dto.tx_hash,
+    executionBackend: dto.execution_backend ?? null,
+    executionStatus: dto.execution_status ?? null,
   };
 }
 
@@ -181,8 +183,8 @@ export function mapBackendExecution(execution: BackendExecutionResult | null | u
     txId: execution.tx_id ?? undefined,
     txHash: execution.tx_hash,
     reason: execution.reason ?? undefined,
-    walletId: execution.wallet_id ?? undefined,
-    walletAddress: execution.wallet_address ?? undefined,
+    walletId: execution.caw_wallet_id ?? execution.wallet_id ?? undefined,
+    walletAddress: execution.caw_wallet_address ?? execution.wallet_address ?? undefined,
     pactId: execution.pact_id ?? undefined,
     policyReason: execution.policy_reason ?? undefined,
     raw: execution.raw,
@@ -231,6 +233,10 @@ function mapBackendRiskConfig(config: BackendRiskConfig): RiskConfig {
 }
 
 function auditSummaryReason(dto: BackendAuditLogSummary): string {
+  if (dto.decision_reason) {
+    return dto.decision_reason;
+  }
+
   if (dto.execution_status) {
     return `Decision: ${dto.decision}; execution: ${dto.execution_status}`;
   }

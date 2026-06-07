@@ -9,6 +9,7 @@ import {
   PlayIcon,
   ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
+import { ConfigSyncWarning } from "~~/components/sentinel/ConfigSyncWarning";
 import { DecisionChain } from "~~/components/sentinel/DecisionChain";
 import { SentinelShell } from "~~/components/sentinel/SentinelShell";
 import { StatusBadge } from "~~/components/sentinel/StatusBadge";
@@ -197,6 +198,7 @@ const Home: NextPage = () => {
   return (
     <SentinelShell active="execute">
       <div className="grid min-h-[calc(100vh-48px)] gap-4 overflow-y-auto bg-[#0c0e12] p-4 lg:grid-cols-[360px_minmax(0,1fr)] xl:grid-cols-[380px_minmax(0,1fr)_300px]">
+        <ConfigSyncWarning className="lg:col-span-2 xl:col-span-3" />
         <section className="flex min-h-[560px] flex-col rounded-lg border border-white/10 bg-[#111318]">
           <div className="border-b border-white/10 px-4 py-3">
             <div className="flex items-center gap-2 text-[#88d6b6]">

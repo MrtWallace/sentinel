@@ -356,6 +356,61 @@ const confirmTransferChain: DecisionChain = {
   },
 };
 
+const cawPolicyDenyChain: DecisionChain = {
+  agentProposal: {
+    agent: "Agent A",
+    proposal: {
+      action: "transfer",
+      amount: "0.005 ETH",
+      tokenPair: "ETH transfer",
+      targetContract: "CAW transfer",
+      recipient: "0x1111111111111111111111111111111111111111",
+      expectedOutput: "CAW transfer request",
+    },
+    reasoning: "Sentinel allowed a small transfer proposal and submitted it to the CAW execution backend.",
+  },
+  hardRules: [
+    {
+      rule: "AmountRule",
+      passed: true,
+      severity: "pass",
+      reason: "0.005 ETH is inside the Sentinel autonomous transfer limit.",
+    },
+    {
+      rule: "WhitelistRule",
+      passed: true,
+      severity: "pass",
+      reason: "Recipient is valid for Sentinel risk evaluation.",
+    },
+  ],
+  agentReviews: [
+    {
+      agent: "Agent B",
+      role: "Security Auditor",
+      passed: true,
+      riskLevel: "low",
+      findings: ["No malicious calldata detected"],
+      reasoning: "Security review found no browser-side or contract-routing anomaly.",
+      suggestions: [],
+    },
+    {
+      agent: "Agent C",
+      role: "Risk Analyst",
+      passed: true,
+      riskLevel: "low",
+      findings: ["Amount is low"],
+      reasoning: "Risk review allowed submission to CAW, where Pact policy remains the final enforcement layer.",
+      suggestions: [],
+    },
+  ],
+  finalDecision: "rejected",
+  decisionReason: "CAW policy denied execution: matched_pact_transfer_deny_if",
+  simulation: {
+    success: true,
+  },
+  txHash: null,
+};
+
 const safeSwapAttempts: AttemptRecord[] = [
   {
     attemptIndex: 1,
@@ -474,6 +529,19 @@ const confirmTransferAttempts: AttemptRecord[] = [
   },
 ];
 
+const cawPolicyDenyAttempts: AttemptRecord[] = [
+  {
+    attemptIndex: 1,
+    proposal: cawPolicyDenyChain.agentProposal.proposal,
+    hardRules: cawPolicyDenyChain.hardRules,
+    agentReviews: cawPolicyDenyChain.agentReviews,
+    decision: "execute",
+    decisionReason: "Sentinel allowed submission to CAW.",
+    suggestions: [],
+    rejectionSource: "caw",
+  },
+];
+
 export const MOCK_EXECUTE_RESPONSES: Record<IntentScenario, ExecuteResponse> = {
   safe_swap: {
     txId: "demo-001",
@@ -531,6 +599,35 @@ export const MOCK_AUDIT_LOG: AuditLogItem[] = [
   responseToAuditItem(MOCK_EXECUTE_RESPONSES.confirm_transfer),
   {
     txId: "demo-005",
+    timestamp: "2026-05-28T09:27:33.000Z",
+    intent: "Send 0.005 ETH to 0x1111111111111111111111111111111111111111",
+    status: "rejected",
+    reason: "CAW policy denied execution: matched_pact_transfer_deny_if",
+    txHash: null,
+    executionBackend: "caw",
+    executionStatus: "policy_denied",
+    decisionChain: cawPolicyDenyChain,
+    attempts: cawPolicyDenyAttempts,
+    execution: {
+      backend: "caw",
+      status: "policy_denied",
+      requestId: "sentinel-demo-request-005",
+      txId: null,
+      txHash: null,
+      reason: "matched_pact_transfer_deny_if",
+      walletId: "wallet_active_demo",
+      walletAddress: "0xCAFE00000000000000000000000000000000CAFE",
+      pactId: "pact_active_demo",
+      policyReason: "TRANSFER_LIMIT_EXCEEDED",
+      raw: {
+        user_address: DEMO_USER_ADDRESS,
+        pact_status: "active",
+      },
+    },
+    ...emptyEvidence,
+  },
+  {
+    txId: "demo-006",
     timestamp: "2026-05-28T09:22:11.000Z",
     intent: "Quote WETH to USDC",
     status: "failed",
@@ -563,6 +660,8 @@ export function responseToAuditItem(response: ExecuteResponse): AuditLogItem {
     status: response.status,
     reason: response.reason,
     txHash: response.decisionChain.txHash,
+    executionBackend: response.execution.backend,
+    executionStatus: response.execution.status,
     decisionChain: response.decisionChain,
     attempts: response.attempts,
     execution: response.execution,

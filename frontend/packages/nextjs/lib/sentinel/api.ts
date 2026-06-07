@@ -16,6 +16,9 @@ import {
 import type {
   ApiError,
   AuditLogItem,
+  AuditLogPage,
+  AuditLogQuery,
+  BackendAuditLogPage,
   BackendAuditLogRecord,
   BackendAuditLogSummary,
   BackendCawWalletBinding,
@@ -407,8 +410,8 @@ function throwApiError(error: ApiError): never {
   throw error;
 }
 
-export async function getAuditLog(): Promise<AuditLogItem[]> {
-  const backendItems = await getAuditLogViaBackend();
+export async function getAuditLog(query: AuditLogQuery = {}): Promise<AuditLogPage> {
+  const backendItems = await getAuditLogViaBackend(query);
 
   if (backendItems) {
     return backendItems;
@@ -416,18 +419,30 @@ export async function getAuditLog(): Promise<AuditLogItem[]> {
 
   await waitForMockLatency();
 
-  return MOCK_AUDIT_LOG.map(item => {
-    const clonedItem = cloneAuditItem(item);
+  const filteredItems = MOCK_AUDIT_LOG.filter(item => !query.status || item.status === query.status);
+  const offset = query.offset ?? 0;
+  const limit = query.limit ?? filteredItems.length;
+  const pageItems = filteredItems.slice(offset, offset + limit);
 
-    return {
-      txId: clonedItem.txId,
-      timestamp: clonedItem.timestamp,
-      intent: clonedItem.intent,
-      status: clonedItem.status,
-      reason: clonedItem.reason,
-      txHash: clonedItem.txHash,
-    };
-  });
+  return {
+    items: pageItems.map(item => {
+      const clonedItem = cloneAuditItem(item);
+
+      return {
+        txId: clonedItem.txId,
+        timestamp: clonedItem.timestamp,
+        intent: clonedItem.intent,
+        status: clonedItem.status,
+        reason: clonedItem.reason,
+        txHash: clonedItem.txHash,
+        executionBackend: clonedItem.execution?.backend ?? clonedItem.executionBackend ?? null,
+        executionStatus: clonedItem.execution?.status ?? clonedItem.executionStatus ?? null,
+      };
+    }),
+    limit,
+    offset,
+    total: filteredItems.length,
+  };
 }
 
 export async function getAuditLogItem(txId: string): Promise<AuditLogItem> {
@@ -452,9 +467,9 @@ export async function getAuditLogItem(txId: string): Promise<AuditLogItem> {
   });
 }
 
-async function getAuditLogViaBackend(): Promise<AuditLogItem[] | null> {
+async function getAuditLogViaBackend(query: AuditLogQuery): Promise<AuditLogPage | null> {
   try {
-    const response = await fetch(AUDIT_LOG_PROXY_PATH, {
+    const response = await fetch(`${AUDIT_LOG_PROXY_PATH}${auditQueryString(query)}`, {
       method: "GET",
     });
 
@@ -462,9 +477,29 @@ async function getAuditLogViaBackend(): Promise<AuditLogItem[] | null> {
       return null;
     }
 
-    const body = (await response.json()) as BackendAuditLogSummary[];
+    const body = (await response.json()) as BackendAuditLogSummary[] | BackendAuditLogPage;
 
-    return body.map(mapBackendAuditSummary).sort((left, right) => right.timestamp.localeCompare(left.timestamp));
+    if (Array.isArray(body)) {
+      const items = body
+        .map(mapBackendAuditSummary)
+        .sort((left, right) => right.timestamp.localeCompare(left.timestamp));
+
+      return {
+        items,
+        limit: query.limit ?? items.length,
+        offset: query.offset ?? 0,
+        total: items.length,
+      };
+    }
+
+    return {
+      items: body.items
+        .map(mapBackendAuditSummary)
+        .sort((left, right) => right.timestamp.localeCompare(left.timestamp)),
+      limit: body.limit,
+      offset: body.offset,
+      total: body.total,
+    };
   } catch {
     return null;
   }
@@ -523,6 +558,30 @@ function waitForMockLatency(): Promise<void> {
   return new Promise(resolve => {
     globalThis.setTimeout(resolve, MOCK_LATENCY_MS);
   });
+}
+
+function auditQueryString(query: AuditLogQuery): string {
+  const params = new URLSearchParams();
+
+  if (query.userAddress) {
+    params.set("user_address", query.userAddress);
+  }
+
+  if (query.status) {
+    params.set("status", query.status);
+  }
+
+  if (typeof query.limit === "number") {
+    params.set("limit", String(query.limit));
+  }
+
+  if (typeof query.offset === "number") {
+    params.set("offset", String(query.offset));
+  }
+
+  const serialized = params.toString();
+
+  return serialized ? `?${serialized}` : "";
 }
 
 function cloneResponse(response: ExecuteResponse): ExecuteResponse {

@@ -31,6 +31,8 @@
 | CP8 | Shared Contract / Docs 对齐 | 1-2h | 2026-06-07 03:49 | 2026-06-07 03:58 | Code Done / Tests Passed | 已对齐 CAW wallet lifecycle、risk config、tool/memory evidence 类型、mock、mapper、API wrapper 和 Next proxy routes |
 | CP9 | CAW Account Lifecycle UI | 2-4h | 2026-06-07 03:58 | 2026-06-07 04:41 | Code Done / Build + HTTP Smoke Passed | CAW Account 改为顶部连接钱包式二级菜单；首屏不再占用 Intent Workbench 空间 |
 | CP10 | Intent Input Guard UX | 1-2h | 2026-06-07 05:15 | 2026-06-07 05:25 | Code Done / Tests Passed | 前端输入校验：长度限制(500)、控制字符、prompt injection 提示；后端 security rejection 展示 |
+| CP11 | Settings Page + Pact Sync Status | 2-4h | 2026-06-07 09:11 | 2026-06-07 09:37 | Code Done / Build + Screenshot Passed | Settings 页面、config save、Pact sync warning、左侧 Settings 导航已完成 |
+| CP12 | CAW Evidence Audit + Policy Deny Visual | 2-4h | 2026-06-07 08:45 | 2026-06-07 09:37 | Code Done / Build + Screenshot Passed | Audit user/status/page 控制和 CAW policy deny 证据展示已完成 |
 
 当前整体判断：
 
@@ -42,6 +44,117 @@
 - 下一个 checkpoint：CP12（CAW Evidence Audit + Policy Deny Visual）。
 
 ## 当前进度详情
+
+### 2026-06-07 前端 Checkpoint 11：Settings Page + Pact Sync Status
+
+- 开始时间：2026-06-07 09:11。
+- 暂停时间：2026-06-07 09:20（WSL service error）。
+- 完成时间：2026-06-07 09:37。
+- 当前状态：Code Done / Build + Screenshot Passed。
+- 目标：
+  - 新增 `/settings` 工具页。
+  - 展示并编辑 shared contract 中的 `RiskConfig` 字段。
+  - 保存后展示 `Sentinel config updated`，并根据 `config_status` 展示 `CAW Pact synced` 或 `CAW Pact update required`。
+  - 首页和 Settings 对 `needs_pact_update` 显示轻量 warning。
+- 已完成：
+  - 新增 `frontend/packages/nextjs/app/settings/page.tsx`：
+    - 编辑 shared contract 中的 swap / transfer / slippage / frequency / whitelist / auto approve 字段。
+    - 保存调用 `updateRiskConfig()`。
+    - 保存后展示 `Sentinel config updated` 和 Pact sync 状态文案。
+  - 新增 `frontend/packages/nextjs/lib/sentinel/configViewModel.ts` 和 `configViewModel.test.ts`：
+    - `riskConfigToDraft()` / `draftToRiskConfig()`。
+    - `getPactSyncMessage()`。
+  - 新增 `frontend/packages/nextjs/components/sentinel/ConfigSyncWarning.tsx`：
+    - 首页默认只在 `needs_pact_update` 时显示轻量 warning。
+    - Settings 页可显示 synced / warning 两种状态。
+  - 更新 `SentinelShell.tsx`：
+    - 左侧导航增加 Settings。
+  - 更新 `page.tsx`：
+    - 首页插入轻量 Pact sync warning，不改变常态首屏布局。
+  - 更新 `CawWalletContext.tsx`：
+    - 暴露 `setConfigStatus()`，Settings 保存后可同步更新 CAW 菜单和首页 warning。
+  - 更新 `types.ts`：
+    - `whitelistMode` 对齐 shared contract：`strict | open`。
+- 验证结果：
+  - `yarn workspace @se-2/nextjs check-types` passed。
+  - `yarn workspace @se-2/nextjs lint` passed, no ESLint warnings or errors。
+  - `git diff --check` passed。
+  - `yarn workspace @se-2/nextjs build` passed；保留既有 RainbowKit/Wagmi dynamic dependency warnings。
+  - HTTP smoke：`/`、`/audit`、`/settings` 均返回 200。
+  - Playwright 截图 `output/playwright/settings-cp11-wait.png` 已生成，确认 Settings 数据加载、Pact sync 状态和右上角 `CAW active` 渲染正常。
+
+后端 CP12 真实联调（2026-06-07 09:49）：
+
+- 已启动后端 `/home/admini/sentinel-backend`，分支 `feature/backend-risk-pipeline`，FastAPI `http://127.0.0.1:8000` 健康检查通过。
+- 当前后端 `.env` 关键开关：`EXECUTION_BACKEND=caw`、`ENABLE_REAL_TX=false`。
+- 为前端 demo user 准备本地 SQLite 测试状态：
+  - `user_address=0x1111111111111111111111111111111111111111`
+  - `wallet_status=active`
+  - `pairing_status=paired`
+  - `pact_status=active`
+  - `caw_wallet_id=wallet_frontend_integration_demo`
+  - `pact_id=pact_frontend_integration_demo`
+- 验收结果：
+  - `PUT /api/config` 返回 `config_status=needs_pact_update`、`config_version=2`、`pact_config_version=1`。
+  - 发现并修复前端真实联调 bug：后端 `/api/wallet/status` 仍返回 `config_status=synced`，首页只看 wallet status 会漏掉 Pact update warning；已改 `CawWalletContext` 同时读取 `getRiskConfig()`，用 config API 的 `config_status` 覆盖展示状态。
+  - 首页截图 `output/playwright/integration-home-config-warning.png` 已确认显示 `CAW Pact update required`。
+  - Settings 截图 `output/playwright/integration-settings-needs-pact.png` 已确认显示 `needs_pact_update`，且文案没有暗示 Sentinel config 自动修改 CAW Pact。
+- 验证命令：
+  - `yarn workspace @se-2/nextjs check-types` passed。
+  - `yarn workspace @se-2/nextjs lint` passed。
+  - `git diff --check` passed。
+  - `yarn workspace @se-2/nextjs build` passed；保留既有 RainbowKit/Wagmi dynamic dependency warnings。
+
+### 2026-06-07 前端 Checkpoint 12：CAW Evidence Audit + Policy Deny Visual
+
+- 开始时间：2026-06-07 08:45。
+- 完成时间：2026-06-07 09:10。
+- 当前状态：Code Done / Typecheck + Lint Passed / Build Blocked。
+- 先审查 Hermes CP10：
+  - `validateIntentInput()` 使用 500 字符限制、控制字符 error、prompt injection warning；warning 不阻断提交，符合“前端只做 UX guard”的边界。
+  - `runIntent(nextIntent)` 校验实际提交 intent，preset 不再被 textarea 当前错误状态误阻断。
+  - Run 按钮有 `disabled` 状态和 onClick 前置兜底。
+  - Audit 行 toggle 没有破坏 detail fetch 清理逻辑。
+  - `isSecurityRejection()` 不依赖新增后端字段，保持 shared contract 稳定。
+- 本 checkpoint 目标：
+  - Audit 支持 user-scoped query、status filter、分页。
+  - Audit detail 展示 CAW request / transaction / wallet / pact / backend 证据。
+  - `execution.status = policy_denied` 时显示专属 CAW Pact block 视觉，不和 Sentinel hard reject 混在一起。
+- 已完成：
+  - 新增 `auditEvidenceViewModel.ts`，集中处理 CAW evidence label、policy deny 判断、explorer links。
+  - Audit API wrapper 支持 `user_address`、`status`、`limit`、`offset`，兼容旧数组响应和 shared contract 分页响应。
+  - Audit proxy route 透传查询参数。
+  - Audit 页面新增 user scope、status filter、pagination 控制。
+  - Audit detail 通过 `DecisionChain` 展示 user address、CAW wallet id/address、pact id/status、request id、transaction id、tx hash、policy reason、execution backend。
+  - `execution.status = policy_denied` 时显示 `Sentinel allowed, CAW Pact blocked execution`。
+  - mock audit log 增加 CAW Pact deny 样例；真实后端可用时仍优先使用 8000 API。
+- 测试结果：
+  - `yarn workspace @se-2/nextjs check-types` passed。
+  - `yarn workspace @se-2/nextjs lint` passed, no ESLint warnings or errors。
+  - `git diff --check` passed。
+  - `yarn workspace @se-2/nextjs build` passed；保留既有 RainbowKit/Wagmi dynamic dependency warnings。
+  - HTTP smoke：`/`、`/audit`、`/settings` 均返回 200。
+  - Playwright 截图 `output/playwright/audit-cp12-wait.png` 已生成，确认 Audit user/status controls、展开区和 CAW header 状态渲染正常。
+  - 额外说明：尝试用 inline Playwright script 自动切换 `rejected` filter 检查 policy-deny 文案，但项目未安装可 `require("playwright")` 的本地 module，脚本未执行；policy-deny 逻辑已由 `auditEvidenceViewModel.test.ts` 覆盖。
+
+后端 CP11 + CP13 真实联调（2026-06-07 09:49）：
+
+- 已启动后端 `/home/admini/sentinel-backend`，分支 `feature/backend-risk-pipeline`，FastAPI `http://127.0.0.1:8000` 健康检查通过。
+- 通过前端 Next proxy `http://127.0.0.1:3000/api/sentinel/*` 验收：
+  - Sentinel reject：
+    - 输入：`Swap 1 ETH to USDC`
+    - 返回：`status=rejected`、`decision=reject`、`sentinel_decision=reject`
+    - execution：`backend=caw`、`status=skipped`、`request_id=null`
+    - 结论：Sentinel reject 不触发 CAW submit，audit detail 保留 wallet/pact evidence。
+  - CAW request evidence：
+    - 输入：`Send 0.001 ETH to 0x1111111111111111111111111111111111111111`
+    - 返回：`status=executed`、`execution.backend=caw`、`execution.status=dry_run`
+    - evidence：`request_id=sentinel-...`、`caw_wallet_id=wallet_frontend_integration_demo`、`pact_id=pact_frontend_integration_demo`
+    - audit list/detail 通过 Next proxy 能查到同一 tx 的 backend/status/request/wallet/pact。
+  - Audit 页面截图 `output/playwright/integration-audit-backend.png` 已确认真实后端记录能加载并展开。
+- 当前不能直接完成的验收：
+  - CAW policy deny：当前后端环境 `ENABLE_REAL_TX=false`，CawExecutor 会在提交前返回 `dry_run`，不会触发真实 CAW Pact deny；当前后端 audit 查询 `execution_status=policy_denied` 记录数为 0。
+  - 需要切到受控真实 CAW deny 场景（`ENABLE_REAL_TX=true` 且有会被 Pact 拒绝的 demo transfer / Pact policy）后再做最终 policy deny 验收。
 
 ### 2026-06-07 前端 Checkpoint 10：Intent Input Guard UX
 

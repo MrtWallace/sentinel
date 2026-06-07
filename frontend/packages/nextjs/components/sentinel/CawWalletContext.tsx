@@ -1,9 +1,15 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { connectExistingCawWallet, createCawWallet, getWalletStatus, refreshWalletStatus } from "~~/lib/sentinel/api";
+import {
+  connectExistingCawWallet,
+  createCawWallet,
+  getRiskConfig,
+  getWalletStatus,
+  refreshWalletStatus,
+} from "~~/lib/sentinel/api";
 import { DEMO_USER_ADDRESS } from "~~/lib/sentinel/mockData";
-import type { CawWalletBinding } from "~~/lib/sentinel/types";
+import type { CawWalletBinding, ConfigStatus } from "~~/lib/sentinel/types";
 
 type WalletAction = "connect" | "create" | "refresh";
 
@@ -16,6 +22,7 @@ type CawWalletContextValue = {
   connectExisting: (cawWalletId: string) => Promise<void>;
   createWallet: () => Promise<void>;
   refreshStatus: () => Promise<void>;
+  setConfigStatus: (status: ConfigStatus) => void;
 };
 
 const CawWalletContext = createContext<CawWalletContextValue | null>(null);
@@ -32,7 +39,12 @@ export const CawWalletProvider = ({ children }: { children: React.ReactNode }) =
     setError(null);
 
     try {
-      setWalletBinding(await getWalletStatus(userAddress));
+      const [walletStatus, riskConfig] = await Promise.all([getWalletStatus(userAddress), getRiskConfig(userAddress)]);
+
+      setWalletBinding({
+        ...walletStatus,
+        configStatus: riskConfig.configStatus,
+      });
     } catch {
       setError("CAW wallet status is unavailable.");
       setWalletBinding(null);
@@ -87,6 +99,17 @@ export const CawWalletProvider = ({ children }: { children: React.ReactNode }) =
     }
   }, [userAddress]);
 
+  const setConfigStatus = useCallback((status: ConfigStatus) => {
+    setWalletBinding(currentBinding =>
+      currentBinding
+        ? {
+            ...currentBinding,
+            configStatus: status,
+          }
+        : currentBinding,
+    );
+  }, []);
+
   const value = useMemo<CawWalletContextValue>(
     () => ({
       action,
@@ -97,8 +120,19 @@ export const CawWalletProvider = ({ children }: { children: React.ReactNode }) =
       connectExisting,
       createWallet,
       refreshStatus,
+      setConfigStatus,
     }),
-    [action, connectExisting, createWallet, error, isLoading, refreshStatus, userAddress, walletBinding],
+    [
+      action,
+      connectExisting,
+      createWallet,
+      error,
+      isLoading,
+      refreshStatus,
+      setConfigStatus,
+      userAddress,
+      walletBinding,
+    ],
   );
 
   return <CawWalletContext.Provider value={value}>{children}</CawWalletContext.Provider>;

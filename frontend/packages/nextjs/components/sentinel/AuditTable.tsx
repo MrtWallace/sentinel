@@ -4,6 +4,7 @@ import { Fragment } from "react";
 import { ChevronDownIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { DecisionChain } from "~~/components/sentinel/DecisionChain";
 import { StatusBadge } from "~~/components/sentinel/StatusBadge";
+import { getAuditEvidenceLabel } from "~~/lib/sentinel/auditEvidenceViewModel";
 import type { AuditLogItem, ExecuteResponse } from "~~/lib/sentinel/types";
 
 type AuditTableProps = {
@@ -14,6 +15,7 @@ type AuditTableProps = {
   isLoadingList: boolean;
   items: AuditLogItem[];
   onSelect: (txId: string) => void;
+  userAddress: string;
 };
 
 export const AuditTable = ({
@@ -24,6 +26,7 @@ export const AuditTable = ({
   isLoadingList,
   items,
   onSelect,
+  userAddress,
 }: AuditTableProps) => {
   return (
     <section className="overflow-hidden rounded-lg border border-white/10 bg-[#111318]">
@@ -91,7 +94,7 @@ export const AuditTable = ({
                         <StatusBadge status={row.status} />
                       </td>
                       <td className="px-4 py-3 text-[#bec9c2]">{row.reason}</td>
-                      <td className="px-4 py-3 text-[#88d6b6]">{evidenceLabel(row)}</td>
+                      <td className="px-4 py-3 text-[#88d6b6]">{getAuditEvidenceLabel(row)}</td>
                     </tr>
 
                     {isExpanded && (
@@ -105,6 +108,7 @@ export const AuditTable = ({
                             ) : (
                               <div className="h-[640px] overflow-hidden rounded-lg border border-[#3f4944] bg-[#111318]">
                                 <DecisionChain
+                                  auditUserAddress={userAddress}
                                   isLoading={isLoadingDetail}
                                   response={isLoadingDetail ? null : expandedResponse}
                                 />
@@ -148,24 +152,4 @@ function formatAuditTimestamp(timestamp: string): string {
   }
 
   return date.toISOString().slice(0, 19).replace("T", " ");
-}
-
-function evidenceLabel(row: AuditLogItem): string {
-  if (row.txHash) {
-    return shortHash(row.txHash);
-  }
-
-  if (row.status === "executed") {
-    return "CAW/mock evidence";
-  }
-
-  if (row.status === "confirm_needed") {
-    return "Audit only";
-  }
-
-  return "None";
-}
-
-function shortHash(hash: string): string {
-  return `${hash.slice(0, 6)}...${hash.slice(-4)}`;
 }

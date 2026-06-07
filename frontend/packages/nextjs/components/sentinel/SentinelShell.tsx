@@ -2,12 +2,12 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ChartBarSquareIcon, CommandLineIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
+import { ChartBarSquareIcon, Cog6ToothIcon, CommandLineIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
 import { CawWalletProvider } from "~~/components/sentinel/CawWalletContext";
 import { SmartAccountStatusBar } from "~~/components/sentinel/SmartAccountStatusBar";
 
 type SentinelShellProps = {
-  active: "execute" | "audit";
+  active: "execute" | "audit" | "settings";
   children: ReactNode;
 };
 
@@ -23,6 +23,12 @@ const navItems = [
     href: "/audit",
     label: "Audit",
     Icon: ChartBarSquareIcon,
+  },
+  {
+    key: "settings",
+    href: "/settings",
+    label: "Settings",
+    Icon: Cog6ToothIcon,
   },
 ] as const;
 

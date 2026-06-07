@@ -82,3 +82,39 @@ if (mappedRecord.decisionChain.confirmation?.required !== true) {
 if (mappedRecord.execution.status !== "skipped") {
   throw new Error("Expected audit detail mapper to preserve backend execution status.");
 }
+
+const policyDeniedRecord: BackendAuditLogRecord = {
+  ...backendSummary,
+  tx_id: "audit-policy-deny",
+  status: "rejected",
+  decision: "reject",
+  decision_reason: "CAW policy denied execution: matched_pact_transfer_deny_if",
+  attempts: [],
+  decision_chain: null,
+  execution: {
+    backend: "caw",
+    status: "policy_denied",
+    request_id: "sentinel-request-001",
+    tx_id: null,
+    tx_hash: null,
+    reason: "matched_pact_transfer_deny_if",
+    policy_reason: "TRANSFER_LIMIT_EXCEEDED",
+    caw_wallet_id: "wallet_123",
+    caw_wallet_address: "0xCAW000000000000000000000000000000000000",
+    pact_id: "pact_123",
+  },
+};
+
+const mappedPolicyDeniedRecord = mapBackendAuditRecord(policyDeniedRecord);
+
+if (mappedPolicyDeniedRecord.execution.walletId !== "wallet_123") {
+  throw new Error("Expected mapper to support shared contract caw_wallet_id.");
+}
+
+if (mappedPolicyDeniedRecord.execution.walletAddress !== "0xCAW000000000000000000000000000000000000") {
+  throw new Error("Expected mapper to support shared contract caw_wallet_address.");
+}
+
+if (mappedPolicyDeniedRecord.execution.policyReason !== "TRANSFER_LIMIT_EXCEEDED") {
+  throw new Error("Expected mapper to preserve CAW Pact policy deny reason.");
+}

@@ -61,7 +61,7 @@ export type RiskConfig = {
   slippageThresholdPass?: number;
   slippageThresholdConfirm?: number;
   frequencyLimit?: number;
-  whitelistMode?: "strict" | "permissive" | string;
+  whitelistMode?: "strict" | "open" | string;
   customWhitelist?: string[];
   autoApproveLowRisk?: boolean;
 };
@@ -228,11 +228,27 @@ export type AuditLogItem = {
   status: ExecutionStatus;
   reason: string;
   txHash: string | null;
+  executionBackend?: string | null;
+  executionStatus?: string | null;
   decisionChain?: DecisionChain;
   attempts?: AttemptRecord[];
   execution?: ExecutionResult;
   toolCalls?: ToolCallEvidence[];
   memoryAnomalies?: MemoryAnomaly[];
+};
+
+export type AuditLogQuery = {
+  userAddress?: string;
+  status?: ExecutionStatus;
+  limit?: number;
+  offset?: number;
+};
+
+export type AuditLogPage = {
+  items: AuditLogItem[];
+  limit: number;
+  offset: number;
+  total: number;
 };
 
 export type ConfirmExecutionResponse = ExecuteResponse & {
@@ -300,6 +316,8 @@ export type BackendExecutionResult = {
   reason?: string | null;
   wallet_id?: string | null;
   wallet_address?: string | null;
+  caw_wallet_id?: string | null;
+  caw_wallet_address?: string | null;
   pact_id?: string | null;
   policy_reason?: string | null;
   raw?: Record<string, unknown>;
@@ -333,7 +351,7 @@ export type BackendRiskConfig = {
   slippage_threshold_pass?: number;
   slippage_threshold_confirm?: number;
   frequency_limit?: number;
-  whitelist_mode?: "strict" | "permissive" | string;
+  whitelist_mode?: "strict" | "open" | string;
   custom_whitelist?: string[];
   auto_approve_low_risk?: boolean;
 };
@@ -405,9 +423,18 @@ export type BackendAuditLogSummary = {
   intent: string;
   status: ExecutionStatus;
   decision: BackendDecision;
+  decision_reason?: string;
   sentinel_decision?: BackendDecision;
+  execution_backend?: string | null;
   execution_status?: string | null;
   tx_hash: string | null;
+};
+
+export type BackendAuditLogPage = {
+  items: BackendAuditLogSummary[];
+  limit: number;
+  offset: number;
+  total: number;
 };
 
 export type BackendAuditLogRecord = BackendExecuteResponse & {
