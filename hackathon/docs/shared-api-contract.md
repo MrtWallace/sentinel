@@ -5,14 +5,12 @@
 Any API shape/status/field change must be committed as a docs(contract) change and synced to both backend and frontend branches before implementation.
 
 > **Purpose:** Single source of truth for backend/frontend integration.
-> **Status:** Draft for Post-MVP Cobo + Agent work. Backend CP9 wallet APIs implemented; CAW status and execute response shape locked for CP11.
-> **Last updated:** 2026-06-06
+> **Status:** Integration branch merged. Backend CP1-13 + Frontend CP0-12 complete. `tool_calls` and `memory_anomalies` fields are reserved (returns `[]`) until CP16/CP17 are implemented.
+> **Last updated:** 2026-06-07
 
 This document defines API shapes, status names, and frontend mapper rules shared by:
 
-- Backend worktree: `feature/backend-risk-pipeline`
-- Frontend worktree: `feature/frontend-risk-console`
-- Future integration branch: `feature/cobo-agent-integration`
+- Main branch: `main` (integration merged from `feature/backend-risk-pipeline` + `feature/frontend-risk-console`)
 
 Implementation details stay in `backend-plan.md` and `frontend-plan.md`. This file only records stable contracts and examples.
 
@@ -384,7 +382,14 @@ Required top-level fields for every `/api/execute` response:
 ```text
 tx_id, user_address, intent, status, decision, decision_reason,
 sentinel_decision, sentinel_decision_reason, caw, attempts, decision_chain,
-execution, security, tool_calls, memory_anomalies
+execution, security
+```
+
+Reserved fields (returns `[]` until implemented):
+
+```text
+tool_calls        — planned: CP16 Agent Tool Calling
+memory_anomalies  — planned: CP17 Agent Memory + Anomaly Detection
 ```
 
 Required `execution` fields:

@@ -21,7 +21,7 @@ Thumbs.db
 # Private demo evidence
 hackathon/evidence/
 
-# Node (前端将来需要)
+# Node / Next.js
 node_modules/
 .next/
 # Generated output

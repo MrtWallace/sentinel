@@ -1,7 +1,7 @@
 # Sentinel Hackathon — 后端 & 合约稳定计划
 
 > 目的：记录 Sentinel 黑客松后端/合约方向、已确认取舍、checkpoint 定义和长期测试策略。
-> 最后更新：2026-06-06
+> 最后更新：2026-06-07
 > 短期进度、当前阻塞、最近完成项见 `hackathon/docs/backend-progress.md`。
 
 ## 语言约定
@@ -46,7 +46,7 @@ Sentinel 不应该只是一个交易解析器，而要表现为 CAW 之上的 ri
 - 后端主线使用 FastAPI，配合 Pydantic 定义请求/响应模型；Flask 作为后期对照练习，不进入 MVP 主线。
 - `CONFIRM` 是 MVP 阶段的后端终态；`/api/confirm` 第一版只更新审计状态，不触发真实链上执行。
 - 真实 Sepolia 执行必须受 `ENABLE_REAL_TX=true` 控制，默认走 dry-run/mock，避免 demo 和开发误触发。
-- Audit log 第一版使用本地 JSON + 简单 HTTP API 查询，不读取链上事件。
+- Audit log 主存储已升级为 SQLite（CP13），支持 per-user/status 分页查询和 CAW evidence 脱敏；本地 JSON 文件保留为开发 fallback 副本。
 - Agent B/C 同时接收原始用户输入和结构化 `TxProposal`，但 prompt 必须明确原始输入是 untrusted data，只能用于审查，不能当作指令执行。
 - `transfer` 第一版使用黑名单 + 金额限制，不做白名单模式。
 - swap 模拟采用 live Sepolia 优先 + mock fallback，兼顾真实性和 demo 稳定性。

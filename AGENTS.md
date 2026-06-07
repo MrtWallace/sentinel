@@ -31,7 +31,7 @@ Do not mix these states. If a document says "frontend done", verify whether it m
 - Ask before refactoring code outside the requested scope.
 - Push back on scope creep or planning loops. Use the project docs as the boundary.
 - Use Chinese for project discussion, planning, review, and internal docs by default. Code identifiers, APIs, and commit messages can remain English.
-- Keep `main` stable. Prefer backend work on `feature/backend-risk-pipeline` and frontend work on `feature/frontend-risk-console`.
+- Integration branch `integration/caw-demo` has been merged. Post-MVP development continues on `main`.
 
 ## Checkpoint Tracking
 
@@ -54,7 +54,7 @@ Tracking file mapping:
 For backend and contract work:
 
 - Follow `hackathon/docs/backend-plan.md`, `hackathon/docs/backend-progress.md`, and `hackathon/docs/shared-api-contract.md`.
-- Use `feature/backend-risk-pipeline` for backend feature work unless there is a specific reason to choose another branch.
+- Backend work continues on `main` after integration merge.
 
 ## Frontend-Specific Workflow
 
@@ -63,7 +63,7 @@ For the current frontend work:
 - Follow `hackathon/docs/frontend-plan.md`.
 - Use `hackathon/docs/frontend-progress.md` for checkpoint status, timestamps, latest test results, and current blockers.
 - Implement by checkpoint, not as one large diff.
-- Use `feature/frontend-risk-console` for frontend feature work unless there is a specific reason to choose another branch.
+- Frontend work continues on `main` after integration merge.
 - After each checkpoint, report:
   - Files changed
   - What the code/data does

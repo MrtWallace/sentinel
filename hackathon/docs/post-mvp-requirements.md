@@ -1,7 +1,7 @@
 # Sentinel — Post-MVP 需求文档
 
 > **目的**：记录从黑客松 MVP 到真实产品需要补齐的架构和功能。
-> **当前状态**：MVP 已完成（后端 CP1-7.6，前端 CP0-7），demo-ready。
+> **当前状态**：后端 CP1-13 Done（136 tests, per-user CAW, input guard, SQLite audit），前端 CP0-12 Done（execute console, audit, settings, CAW lifecycle）。Integration branch `integration/caw-demo` 已合并前后端。
 > **适用对象**：Codex / Claude Code 接手开发时的任务输入。
 > **API Contract**：前后端接口字段以 `shared-api-contract.md` 为准，本文件只记录需求和优先级。
 
@@ -469,10 +469,10 @@ Task 9: Agent reflection
 ### Batch 5（P2-P3 — 基础设施）
 
 ```
-Task 10: Prompt injection protection
-- Input sanitizer: length limit, control char filter, pattern detection
-- Output validator: strict schema check on LLM JSON output
-- Anomaly detector: compare proposal vs original intent
+Task 10: Prompt injection protection (大部分已在 CP10 Input Guard 实现)
+- Input sanitizer: ✅ 已完成 (input_guard.py — length limit, control char filter, pattern detection)
+- Output validator: strict schema check on LLM JSON output (待补)
+- Anomaly detector: compare proposal vs original intent (待补)
 
 Task 11: API authentication (JWT)
 - MetaMask signature login
@@ -959,6 +959,6 @@ Cobo Agentic Wallet (per-user)
 
 ---
 
-> **Last updated**: 2026-06-06 (v3 — moved Planner/Reflection to P3 deferred scope)
+> **Last updated**: 2026-06-07 (v4 — CP10 Input Guard mostly done; status updated to reflect CP1-13 + CP0-12)
 > **Author**: MrtWallace
 > **Status**: 待开发
