@@ -1,5 +1,13 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Literal
+
+
+@dataclass
+class Suggestion:
+    field: str
+    suggested_value: str | float | int
+    reason: str
+    rejection_code: Optional[str] = None
 
 @dataclass
 class TxProposal:
@@ -28,11 +36,13 @@ class AgentResult:
     risk_level: Literal["low", "medium", "high"]
     findings: list[str]
     reasoning: str
+    suggestions: list[Suggestion] = field(default_factory=list)
 
 @dataclass
 class DecisionResult:
     decision: Literal["execute", "confirm", "reject"]
     reason: str
+    suggestions: list[Suggestion] = field(default_factory=list)
 
 @dataclass
 class SimulationResult:

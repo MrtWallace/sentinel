@@ -1,5 +1,6 @@
 agent/venv/
 agent/logs/
+agent/data/
 notes/
 __pycache__/
 *.pyc
@@ -17,6 +18,11 @@ Thumbs.db
 # Logs
 *.log
 
-# Node (前端将来需要)
+# Private demo evidence
+hackathon/evidence/
+
+# Node / Next.js
 node_modules/
 .next/
+# Generated output
+output/

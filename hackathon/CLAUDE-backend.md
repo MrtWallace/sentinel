@@ -18,9 +18,18 @@
 - 适合练习的模块优先拆成小任务或 TODO，让用户先写关键逻辑
 - Codex 负责拆解、讲解、review、测试建议、排查 bug，并在卡住或时间紧时补齐代码
 
+## 进度记录约定
+
+- 每次开始一个后端/合约 checkpoint 时，默认更新 `docs/backend-progress.md` 的进度跟踪表
+- 每次结束一个后端/合约 checkpoint 或准备提交前，默认更新 `docs/backend-progress.md` 的完成时间、状态、测试结果和当前进度详情
+- 时间戳统一使用北京时间（Asia/Shanghai），精确到分钟，格式为 `YYYY-MM-DD HH:MM`
+- 用户不需要每次重复提醒“更新进度详情”或“记录时间戳”；除非明确要求跳过，默认执行
+
 先读：
-- `docs/backend-plan.md` 了解当前已确认方向、待讨论问题和执行计划
-- `docs/backend-spec.md` 了解完整技术规格
+- `docs/backend-plan.md` 了解稳定方向和 checkpoint 定义
+- `docs/backend-progress.md` 了解当前进度、阻塞和最近完成项
+- `docs/shared-api-contract.md` 了解前后端 API contract
+- `docs/mvp-spec.md` 了解历史 MVP 规格（归档，不作为最新计划维护）
 
 ## 现有代码位置
 
