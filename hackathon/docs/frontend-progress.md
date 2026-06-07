@@ -1,6 +1,6 @@
 # Sentinel 前端进度记录
 
-> 最后更新：2026-06-07 05:15
+> 最后更新：2026-06-07 08:20
 
 ## 进度记录约定
 
@@ -34,14 +34,12 @@
 
 当前整体判断：
 
-- 前端 MVP 约完成 60%-70%，首页执行控制台、确认流、CAW/attempts 后端契约对齐、Audit 页展开详情已完成。
-- CP5 已把 Audit 页从静态 mock 表格改为调用 `getAuditLog()` / `getAuditLogItem()`，并在展开区复用首页 `DecisionChain` 展示 attempts timeline 与 execution evidence。
-- 当前后端 FastAPI 已在 `http://127.0.0.1:8000` 启动，`GET /health` 返回 `{"status":"ok"}`。
-- CP5.5 已完成真实后端 audit/confirm 联调。
-- CP6 前端理解层按用户要求顺延，不阻塞 MVP。
-- CP7 已完成前端 MVP 验证：真实后端 smoke、Next proxy、首页/Audit 页面、typecheck、lint、production build 均已跑过。
-- CP7.1 已按用户 review 反馈处理 quick wins。
-- 当前还需要用户做浏览器侧主观 QA：检查页面视觉、文案和 demo 讲述是否符合预期。
+- 前端 MVP 约完成 70%-75%，首页执行控制台、确认流、CAW/attempts 后端契约对齐、Audit 页展开/收起、输入校验已完成。
+- CP10 已完成输入校验 UX（长度限制、控制字符、prompt injection warning）和 Run 按钮 disabled 逻辑。
+- Audit 行已支持展开/收起 toggle。
+- dev server 运行中（需确认端口 3000 上是最新进程，否则浏览器刷新拿到旧代码）。
+- 后端 FastAPI 已在 `http://127.0.0.1:8000` 启动。
+- 下一个 checkpoint：CP12（CAW Evidence Audit + Policy Deny Visual）。
 
 ## 当前进度详情
 
@@ -70,6 +68,12 @@
   - `yarn workspace @se-2/nextjs check-types` passed。
   - `yarn workspace @se-2/nextjs lint` passed, no ESLint warnings or errors。
   - `git diff --check` passed。
+- 后续修复：
+  - `185d33d` — Run 按钮增加 `disabled:` 样式（cursor-not-allowed、灰化）和 onClick `hasBlockingError` 前置检查，修复 disabled 属性未阻止点击的问题。
+  - `6df441d` — Audit 行增加展开/收起 toggle，点击已展开行收起。改动 1 行（`onSelect` 从 `setSelectedTxId` 改为 toggle）。
+- 环境说明：
+  - dev server 有 CSS 400 问题，根因是旧 next-server 进程占端口 3000 导致新进程绑端口失败。正确清理方式：`kill $(ss -tlnp | grep 3000 | grep -oP 'pid=\K[0-9]+')`。
+  - 改代码后需确认端口上跑的是最新进程，否则浏览器刷新拿到旧 build 产物。
 
 ### 2026-06-07 前端 Checkpoint 9：CAW Account Lifecycle UI
 
