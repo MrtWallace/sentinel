@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import type { NextPage } from "next";
 import {
   ArrowPathIcon,
@@ -6,25 +9,88 @@ import {
   PlayIcon,
   ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
-import { DecisionChainPreview } from "~~/components/sentinel/DecisionChainPreview";
+import { ConfigSyncWarning } from "~~/components/sentinel/ConfigSyncWarning";
+import { DecisionChain } from "~~/components/sentinel/DecisionChain";
 import { SentinelShell } from "~~/components/sentinel/SentinelShell";
 import { StatusBadge } from "~~/components/sentinel/StatusBadge";
+import { confirmExecution, executeIntent } from "~~/lib/sentinel/api";
+import type { ApiError, ExecuteResponse, ExecutionStatus } from "~~/lib/sentinel/types";
+
+// CP10: Frontend input validation — UX layer only, security boundary is the backend.
+const MAX_INTENT_LENGTH = 500;
+
+const PROMPT_INJECTION_PATTERNS = [
+  /\bignore\s+(all\s+)?previous\s+instructions\b/i,
+  /\bdisregard\s+(all\s+)?previous\s+instructions\b/i,
+  /\bsystem\s+prompt\b/i,
+  /\bdeveloper\s+message\b/i,
+  /\breveal\s+(the\s+)?prompt\b/i,
+  /\boverride\s+(the\s+)?policy\b/i,
+];
+
+type InputValidationError = {
+  message: string;
+  severity: "error" | "warning";
+};
+
+function validateIntentInput(intent: string): InputValidationError | null {
+  const trimmed = intent.trim();
+
+  if (!trimmed) {
+    return null; // empty input — Run button disabled, no error shown
+  }
+
+  if (trimmed.length > MAX_INTENT_LENGTH) {
+    return {
+      message: `Intent must be under ${MAX_INTENT_LENGTH} characters (currently ${trimmed.length}).`,
+      severity: "error",
+    };
+  }
+
+  // Control characters: same logic as backend input_guard.py
+  for (const char of trimmed) {
+    if (char.charCodeAt(0) < 32 && char !== "\n" && char !== "\r" && char !== "\t") {
+      return {
+        message: "Unsupported control characters detected.",
+        severity: "error",
+      };
+    }
+  }
+
+  // Prompt injection hints — warn but don't block submission (backend is the real guard)
+  const lowered = trimmed.toLowerCase();
+  for (const pattern of PROMPT_INJECTION_PATTERNS) {
+    if (pattern.test(lowered)) {
+      return {
+        message: "High-risk input pattern detected. The backend will reject prompt injection attempts.",
+        severity: "warning",
+      };
+    }
+  }
+
+  return null;
+}
 
 const presets = [
   {
     label: "Safe swap",
     intent: "Swap 0.01 ETH to USDC",
-    tone: "executed",
+    tone: "executed" as const,
+  },
+  {
+    label: "Agent retry",
+    intent: "Swap 0.2 ETH to USDC",
+    tone: "executed" as const,
   },
   {
     label: "Blocked swap",
     intent: "Swap 1 ETH to USDC",
-    tone: "rejected",
+    tone: "rejected" as const,
   },
   {
     label: "Manual review",
-    intent: "Send 0.08 ETH to 0x742d...",
-    tone: "confirm_needed",
+    intent: "Send 0.03 ETH to 0x742d...",
+    tone: "confirm_needed" as const,
   },
 ] as const;
 
@@ -32,30 +98,107 @@ const recentDecisions = [
   {
     id: "SNT-2048",
     intent: "Swap 0.01 ETH to USDC",
-    status: "executed",
+    status: "executed" as const,
     reason: "All checks passed",
     time: "09:42:18",
   },
   {
     id: "SNT-2047",
+    intent: "Swap 0.2 ETH to USDC",
+    status: "executed" as const,
+    reason: "Reproposal accepted",
+    time: "09:39:10",
+  },
+  {
+    id: "SNT-2046",
     intent: "Swap 1 ETH to USDC",
-    status: "rejected",
+    status: "rejected" as const,
     reason: "AmountRule exceeded",
     time: "09:37:04",
   },
   {
-    id: "SNT-2046",
-    intent: "Quote WETH to USDC",
-    status: "failed",
-    reason: "RPC timeout",
+    id: "SNT-2045",
+    intent: "Send 0.03 ETH to 0x742d...",
+    status: "confirm_needed" as const,
+    reason: "Manual approval required",
     time: "09:31:55",
   },
 ] as const;
 
+type RecentDecision = {
+  id: string;
+  intent: string;
+  reason: string;
+  status: ExecutionStatus;
+  time: string;
+};
+
+type ConfirmationAction = "approve" | "reject";
+
 const Home: NextPage = () => {
+  const [intent, setIntent] = useState("Swap 0.2 ETH to USDC");
+  const [execution, setExecution] = useState<ExecuteResponse | null>(null);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [decisionItems, setDecisionItems] = useState<RecentDecision[]>([...recentDecisions]);
+  const [pendingConfirmationAction, setPendingConfirmationAction] = useState<ConfirmationAction | null>(null);
+
+  const inputError = validateIntentInput(intent);
+  const hasBlockingError = inputError?.severity === "error";
+  const isBusy = isExecuting || pendingConfirmationAction !== null;
+
+  const runIntent = async (nextIntent = intent) => {
+    const trimmedIntent = nextIntent.trim();
+
+    // Validate the actual intent being submitted, not the textarea state.
+    const submitError = validateIntentInput(trimmedIntent);
+    if (!trimmedIntent || isBusy || submitError?.severity === "error") {
+      return;
+    }
+
+    setIntent(trimmedIntent);
+    setIsExecuting(true);
+    setErrorMessage(null);
+
+    try {
+      const result = await executeIntent(trimmedIntent);
+
+      setExecution(result);
+      setDecisionItems(currentItems => [responseToRecentDecision(result), ...currentItems].slice(0, 5));
+    } catch (error) {
+      setExecution(null);
+      setErrorMessage(toExecutionErrorMessage(error));
+    } finally {
+      setIsExecuting(false);
+    }
+  };
+
+  const handleConfirm = async (approved: boolean) => {
+    if (!execution || execution.status !== "confirm_needed" || pendingConfirmationAction) {
+      return;
+    }
+
+    const action = approved ? "approve" : "reject";
+
+    setPendingConfirmationAction(action);
+    setErrorMessage(null);
+
+    try {
+      const result = await confirmExecution(execution.txId, approved);
+
+      setExecution(result);
+      setDecisionItems(currentItems => [responseToRecentDecision(result), ...currentItems].slice(0, 5));
+    } catch (error) {
+      setErrorMessage(toExecutionErrorMessage(error));
+    } finally {
+      setPendingConfirmationAction(null);
+    }
+  };
+
   return (
     <SentinelShell active="execute">
       <div className="grid min-h-[calc(100vh-48px)] gap-4 overflow-y-auto bg-[#0c0e12] p-4 lg:grid-cols-[360px_minmax(0,1fr)] xl:grid-cols-[380px_minmax(0,1fr)_300px]">
+        <ConfigSyncWarning className="lg:col-span-2 xl:col-span-3" />
         <section className="flex min-h-[560px] flex-col rounded-lg border border-white/10 bg-[#111318]">
           <div className="border-b border-white/10 px-4 py-3">
             <div className="flex items-center gap-2 text-[#88d6b6]">
@@ -63,7 +206,7 @@ const Home: NextPage = () => {
               <h1 className="m-0 text-base font-semibold">Intent Workbench</h1>
             </div>
             <p className="m-0 mt-1 text-xs text-[#bec9c2]">
-              Natural language command intake for the guarded SmartAccount.
+              Natural language command intake for Sentinel risk control before CAW execution.
             </p>
           </div>
 
@@ -71,16 +214,31 @@ const Home: NextPage = () => {
             <label className="flex flex-col gap-2">
               <span className="font-mono text-[11px] uppercase text-[#89938d]">Intent</span>
               <textarea
+                aria-label="Natural language DeFi intent"
                 className="h-44 resize-none rounded-lg border border-[#3f4944] bg-[#0c0e12] p-3 font-mono text-sm leading-6 text-[#e2e2e8] outline-none placeholder:text-[#89938d] focus:border-[#88d6b6]"
-                defaultValue="Send 0.08 ETH to 0x742d... after AI risk review"
+                onChange={event => setIntent(event.target.value)}
+                value={intent}
               />
+              {inputError && (
+                <span
+                  className={`font-mono text-xs ${inputError.severity === "error" ? "text-[#ffb4ab]" : "text-amber-200"}`}
+                >
+                  {inputError.message}
+                </span>
+              )}
             </label>
 
             <div className="grid gap-2">
               {presets.map(preset => (
                 <button
-                  className="group flex items-center justify-between rounded-lg border border-white/10 bg-[#1a1c20] px-3 py-3 text-left transition hover:border-[#88d6b6]/50 hover:bg-[#1e2024]"
+                  className={`group flex items-center justify-between rounded-lg border px-3 py-3 text-left transition ${
+                    execution?.intent === preset.intent
+                      ? "border-[#88d6b6]/70 bg-[#88d6b6]/10"
+                      : "border-white/10 bg-[#1a1c20] hover:border-[#88d6b6]/50 hover:bg-[#1e2024]"
+                  }`}
+                  disabled={isBusy}
                   key={preset.intent}
+                  onClick={() => runIntent(preset.intent)}
                   type="button"
                 >
                   <span>
@@ -92,30 +250,46 @@ const Home: NextPage = () => {
               ))}
             </div>
 
-            <div className="rounded-lg border border-amber-300/20 bg-amber-300/10 p-3">
-              <div className="flex items-start gap-2">
-                <ExclamationTriangleIcon className="mt-0.5 h-4 w-4 text-amber-200" />
-                <div>
-                  <p className="m-0 text-sm font-medium text-amber-100">Manual confirmation slot</p>
-                  <p className="m-0 mt-1 text-xs leading-5 text-amber-100/75">
-                    Recipient context is incomplete. Operator approval is required before audit finalization.
-                  </p>
+            {execution && (
+              <div className={infoPanelClass(execution.status)}>
+                <div className="flex items-start gap-2">
+                  <ExclamationTriangleIcon className="mt-0.5 h-4 w-4 text-amber-200" />
+                  <div>
+                    <p className="m-0 text-sm font-medium text-amber-100">{infoPanelTitle(execution)}</p>
+                    <p className="m-0 mt-1 text-xs leading-5 text-amber-100/75">{infoPanelBody(execution)}</p>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             <button
-              className="flex h-11 items-center justify-center gap-2 rounded-lg border border-[#88d6b6] bg-[#88d6b6] px-4 text-sm font-semibold text-[#003828] transition hover:bg-[#a4f3d1]"
+              className="flex h-11 items-center justify-center gap-2 rounded-lg border border-[#88d6b6] bg-[#88d6b6] px-4 text-sm font-semibold text-[#003828] transition hover:bg-[#a4f3d1] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-[#89938d]"
+              disabled={isBusy || !intent.trim() || hasBlockingError}
+              onClick={() => {
+                if (!hasBlockingError) runIntent();
+              }}
               type="button"
             >
-              <PlayIcon className="h-4 w-4" />
-              Run risk pipeline
+              {isExecuting ? <ArrowPathIcon className="h-4 w-4 animate-spin" /> : <PlayIcon className="h-4 w-4" />}
+              {isExecuting ? "Running risk pipeline" : "Run risk pipeline"}
             </button>
+
+            {errorMessage && (
+              <div className="rounded-lg border border-rose-300/30 bg-rose-300/10 p-3 text-sm text-rose-100">
+                {errorMessage}
+              </div>
+            )}
           </div>
         </section>
 
         <section className="h-[calc(100vh-80px)] min-h-[560px] overflow-hidden rounded-lg border border-white/10 bg-[#111318]">
-          <DecisionChainPreview variant="confirm_needed" />
+          <DecisionChain
+            actionError={execution?.status === "confirm_needed" ? errorMessage : null}
+            isLoading={isExecuting}
+            onConfirm={handleConfirm}
+            pendingConfirmationAction={pendingConfirmationAction}
+            response={execution}
+          />
         </section>
 
         <aside className="flex min-h-[560px] flex-col rounded-lg border border-white/10 bg-[#111318] lg:col-span-2 xl:col-span-1">
@@ -128,7 +302,7 @@ const Home: NextPage = () => {
           </div>
 
           <div className="flex flex-1 flex-col divide-y divide-white/5">
-            {recentDecisions.map(item => (
+            {decisionItems.map(item => (
               <div className="px-4 py-3" key={item.id}>
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-mono text-xs text-[#89938d]">{item.id}</span>
@@ -156,3 +330,83 @@ const Home: NextPage = () => {
 };
 
 export default Home;
+
+function responseToRecentDecision(response: ExecuteResponse): RecentDecision {
+  return {
+    id: response.txId.toUpperCase(),
+    intent: response.intent,
+    reason: response.reason,
+    status: response.status,
+    time: response.timestamp.slice(11, 19),
+  };
+}
+
+function infoPanelClass(status?: ExecutionStatus): string {
+  if (status === "executed") {
+    return "rounded-lg border border-[#88d6b6]/20 bg-[#88d6b6]/10 p-3";
+  }
+
+  if (status === "rejected" || status === "failed") {
+    return "rounded-lg border border-[#ffb4ab]/20 bg-[#ffb4ab]/10 p-3";
+  }
+
+  return "rounded-lg border border-amber-300/20 bg-amber-300/10 p-3";
+}
+
+function infoPanelTitle(response: ExecuteResponse): string {
+  if (response.status === "executed") {
+    if (response.attempts.length > 1) {
+      return "Agentic retry completed";
+    }
+
+    return "Execution path completed";
+  }
+
+  if (response.status === "rejected") {
+    return "Execution blocked by policy";
+  }
+
+  if (response.status === "failed") {
+    return "Execution failed";
+  }
+
+  return "Manual review required";
+}
+
+function infoPanelBody(response: ExecuteResponse): string {
+  if (response.status === "confirm_needed") {
+    return response.decisionChain.confirmation?.riskNote ?? response.reason;
+  }
+
+  if (response.status === "executed" && response.attempts.length > 1) {
+    return "The first proposal was rejected, revised by the bounded agent loop, and accepted on a later attempt.";
+  }
+
+  return response.reason;
+}
+
+function toExecutionErrorMessage(error: unknown): string {
+  if (!isApiError(error)) {
+    return "Connection failed. Try again.";
+  }
+
+  if (error.kind === "timeout") {
+    return "Request timed out.";
+  }
+
+  if (error.kind === "execution_failed") {
+    return error.parsedReason ?? error.message;
+  }
+
+  return "Connection failed. Try again.";
+}
+
+function isApiError(error: unknown): error is ApiError {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const maybeError = error as Partial<ApiError>;
+
+  return maybeError.kind === "network" || maybeError.kind === "timeout" || maybeError.kind === "execution_failed";
+}
