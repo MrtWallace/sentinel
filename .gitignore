@@ -1,5 +1,6 @@
 agent/venv/
 agent/logs/
+agent/data/
 notes/
 __pycache__/
 *.pyc
@@ -20,3 +21,4 @@ Thumbs.db
 # Node (前端将来需要)
 node_modules/
 .next/
+output/
