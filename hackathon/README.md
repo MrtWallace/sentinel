@@ -7,8 +7,10 @@
 ## 快速导航
 
 - `proposal.md` — 项目提案（1 页 memo）
-- `docs/backend-spec.md` — 后端 & 合约技术规格（给 VSCode Claude Code）
-- `docs/frontend-spec.md` — 前端技术规格（给 Claude Code CLI）
+- `docs/mvp-spec.md` — MVP 归档规格（后续不作为最新计划维护）
+- `docs/shared-api-contract.md` — 前后端联调 API contract
+- `docs/backend-plan.md` — 后端稳定计划和 Post-MVP checkpoint
+- `docs/frontend-plan.md` — 前端稳定计划和 Post-MVP checkpoint
 - `CLAUDE-backend.md` — 后端开发的 Claude Code 上下文
 - `CLAUDE-frontend.md` — 前端开发的 Claude Code 上下文
 - `sentinel/` — Sentinel 项目源码（symlink → /home/admin/sentinel）

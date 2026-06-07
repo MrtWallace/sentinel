@@ -18,6 +18,9 @@ Thumbs.db
 # Logs
 *.log
 
+# Private demo evidence
+hackathon/evidence/
+
 # Node (前端将来需要)
 node_modules/
 .next/
