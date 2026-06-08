@@ -99,6 +99,15 @@ E2E_CASES = [
         "expected_attempts_range": (1, 1),
         "expect_agent_review": True,
     },
+    {
+        "id": "swap_confirm",
+        "intent": "Swap 0.08 ETH for USDC",
+        "expected_status": "executed",
+        "category": "normal_swap",
+        "description": "Swap above pass threshold (0.05) — DemoRiskAnalyst rejects, AgenticLoop retries to 0.01, executes",
+        "expected_attempts_range": (2, 2),
+        "expect_agent_review": True,
+    },
 
     # ── Large Amount Rejections (3) ──────────────────────────
     {
@@ -125,6 +134,24 @@ E2E_CASES = [
         "expected_status": "rejected",
         "category": "boundary",
         "description": "Transfer above confirm threshold (>0.1 ETH) — hard rule reject",
+        "expected_attempts_range": (1, 1),
+        "expect_agent_review": False,
+    },
+    {
+        "id": "transfer_just_over_confirm",
+        "intent": f"Send 0.101 ETH to {DEFAULT_RECIPIENT}",
+        "expected_status": "rejected",
+        "category": "boundary",
+        "description": "Transfer just over confirm threshold (0.1 ETH) — AmountRule rejects",
+        "expected_attempts_range": (1, 1),
+        "expect_agent_review": False,
+    },
+    {
+        "id": "swap_just_over_confirm",
+        "intent": "Swap 0.21 ETH for USDC",
+        "expected_status": "rejected",
+        "category": "boundary",
+        "description": "Swap just over confirm threshold (0.2 ETH) — AmountRule rejects",
         "expected_attempts_range": (1, 1),
         "expect_agent_review": False,
     },
@@ -192,6 +219,15 @@ E2E_CASES = [
         "expected_status": "rejected",
         "category": "boundary",
         "description": "Empty intent string → unknown action, should reject",
+        "expected_attempts_range": (0, 0),
+        "expect_agent_review": False,
+    },
+    {
+        "id": "control_char",
+        "intent": f"Send 0.001 ETH to {DEFAULT_RECIPIENT}\x00 now",
+        "expected_status": "rejected",
+        "category": "boundary",
+        "description": "Control character (null byte) in intent → InputGuard rejects",
         "expected_attempts_range": (0, 0),
         "expect_agent_review": False,
     },
@@ -547,7 +583,16 @@ def classify_rejection(response: dict) -> str:
         if risk_analysis and not risk_analysis.get("passed", True):
             return "agent"
 
-    # Rejected but source unclear (e.g. CAW policy, execution failure)
+    # CAW policy denial
+    for attempt in attempts:
+        execution = attempt.get("execution", {})
+        if isinstance(execution, dict) and execution.get("status") == "policy_denied":
+            return "caw"
+    execution = response.get("execution", {})
+    if isinstance(execution, dict) and execution.get("status") == "policy_denied":
+        return "caw"
+
+    # Rejected but source unclear
     return "unknown"
 
 
@@ -580,7 +625,7 @@ def check_trajectory_properties(response: dict, case: dict) -> list[tuple[str, b
         "agent_review",
         agent_ok,
         f"agent review {'present' if has_agent_review else 'absent'}, "
-        f"expected {'present' if expect_agent else 'absent'}",
+        + f"expected {'present' if expect_agent else 'absent'}",
     ))
 
     # 3. Max attempts ≤ 3 (max_retries=2 → max 3 attempts)
@@ -1029,7 +1074,7 @@ def run_llm_judge(e2e_results: list[dict]) -> tuple[int, int] | None:
     return passed, total
 
 # ═══════════════════════════════════════════════════════════════
-# Layer 4: Fuzz Evaluation
+# Layer 6: Fuzz Evaluation
 # ═══════════════════════════════════════════════════════════════
 
 FUZZ_CASES = [
