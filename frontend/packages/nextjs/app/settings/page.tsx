@@ -6,7 +6,7 @@ import { ArrowPathIcon, CheckCircleIcon, ExclamationTriangleIcon } from "@heroic
 import { useCawWallet } from "~~/components/sentinel/CawWalletContext";
 import { ConfigSyncWarning } from "~~/components/sentinel/ConfigSyncWarning";
 import { SentinelShell } from "~~/components/sentinel/SentinelShell";
-import { getRiskConfig, updateRiskConfig } from "~~/lib/sentinel/api";
+import { getRiskConfig, submitPact, updateRiskConfig } from "~~/lib/sentinel/api";
 import { draftToRiskConfig, getPactSyncMessage, riskConfigToDraft } from "~~/lib/sentinel/configViewModel";
 import type { RiskConfigDraft } from "~~/lib/sentinel/configViewModel";
 import type { ConfigStatus, RiskConfigResponse } from "~~/lib/sentinel/types";
@@ -31,6 +31,8 @@ const SettingsContent = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<ConfigStatus | null>(null);
+  const [isSubmittingPact, setIsSubmittingPact] = useState(false);
+  const [pactMessage, setPactMessage] = useState<string | null>(null);
   const visibleConfigStatus = configResponse?.configStatus ?? walletBinding?.configStatus ?? "synced";
 
   useEffect(() => {
@@ -95,6 +97,32 @@ const SettingsContent = () => {
   };
 
   const saveMessage = saveStatus ? getPactSyncMessage(saveStatus) : null;
+
+  const handleSubmitPact = async () => {
+    setIsSubmittingPact(true);
+    setErrorMessage(null);
+    setPactMessage(null);
+
+    try {
+      const limits = {
+        max_transfer_eth: draft.transferAmountThresholdConfirm,
+        max_swap_eth: draft.swapAmountThresholdConfirm,
+        daily_limit_eth: draft.transferAmountThresholdConfirm,
+      };
+
+      const result = await submitPact(userAddress, limits);
+
+      setPactMessage(`Pact submitted. Status: ${result.pactStatus}`);
+    } catch {
+      setErrorMessage("Could not submit Pact to CAW. Try again.");
+    } finally {
+      setIsSubmittingPact(false);
+    }
+  };
+
+  const walletStatus = walletBinding?.walletStatus ?? "none";
+  const pactStatus = walletBinding?.pactStatus ?? "none";
+  const canSubmitPact = walletStatus === "paired" && pactStatus === "none" && !isSubmittingPact;
 
   return (
     <div className="min-h-[calc(100vh-48px)] overflow-y-auto bg-[#0c0e12] p-4">
@@ -275,6 +303,29 @@ const SettingsContent = () => {
               label="caw_wallet"
               value={walletBinding?.cawWalletAddress ?? walletBinding?.cawWalletId ?? "N/A"}
             />
+          </div>
+
+          {pactMessage && (
+            <div className="border-t border-white/10 px-4 py-3">
+              <p className="m-0 text-xs text-[#88d6b6]">{pactMessage}</p>
+            </div>
+          )}
+
+          <div className="border-t border-white/10 p-4">
+            <button
+              className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-[#88d6b6] bg-[#88d6b6] text-sm font-semibold text-[#003828] transition hover:bg-[#a4f3d1] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-[#89938d]"
+              disabled={!canSubmitPact}
+              onClick={handleSubmitPact}
+              type="button"
+            >
+              {isSubmittingPact && <ArrowPathIcon className="h-4 w-4 animate-spin" />}
+              {isSubmittingPact ? "Submitting..." : "Submit Pact to CAW"}
+            </button>
+            {!canSubmitPact && walletStatus === "paired" && pactStatus !== "none" && (
+              <p className="m-0 mt-2 text-center text-[10px] text-[#89938d]">
+                Pact already submitted ({pactStatus})
+              </p>
+            )}
           </div>
         </aside>
       </div>

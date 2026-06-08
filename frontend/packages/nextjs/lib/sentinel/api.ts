@@ -45,6 +45,7 @@ const WALLET_STATUS_PROXY_PATH = "/api/sentinel/wallet/status";
 const WALLET_CONNECT_EXISTING_PROXY_PATH = "/api/sentinel/wallet/connect-existing";
 const WALLET_CREATE_PROXY_PATH = "/api/sentinel/wallet/create";
 const WALLET_REFRESH_STATUS_PROXY_PATH = "/api/sentinel/wallet/refresh-status";
+const WALLET_PACT_PROXY_PATH = "/api/sentinel/wallet/pact";
 const CONFIG_PROXY_PATH = "/api/sentinel/config";
 
 // 这个函数是页面唯一需要依赖的执行入口；后端完成后只替换函数内部实现。
@@ -113,6 +114,28 @@ export async function createCawWallet(request: CreateCawWalletRequest): Promise<
   return {
     ...cloneWalletBinding(MOCK_WALLET_BINDINGS.pairingPending),
     userAddress: request.userAddress,
+  };
+}
+
+export async function submitPact(
+  userAddress: string,
+  limits: Record<string, unknown>,
+): Promise<CawWalletBinding> {
+  const backendResponse = await postWalletAction(WALLET_PACT_PROXY_PATH, {
+    user_address: userAddress,
+    limits,
+  });
+
+  if (backendResponse) {
+    return backendResponse;
+  }
+
+  await waitForMockLatency();
+
+  return {
+    ...cloneWalletBinding(MOCK_WALLET_BINDINGS.active),
+    userAddress,
+    pactStatus: "pending_approval",
   };
 }
 
