@@ -59,7 +59,7 @@ class ExecuteApiTest(unittest.TestCase):
         self.assertEqual(body["memory_anomalies"], [])
 
     def test_execute_dry_runs_safe_transfer(self):
-        body = execute(ExecuteRequest(intent="Send 0.001 ETH"))
+        body = execute(ExecuteRequest(intent="Send 0.001 ETH to 0x1111111111111111111111111111111111111111"))
 
         self.assertEqual(body["status"], "executed")
         self.assertEqual(body["decision"], "execute")
@@ -68,16 +68,16 @@ class ExecuteApiTest(unittest.TestCase):
         self.assertEqual(body["execution"]["status"], "dry_run")
 
     def test_execute_writes_audit_record(self):
-        body = execute(ExecuteRequest(intent="Send 0.001 ETH"))
+        body = execute(ExecuteRequest(intent="Send 0.001 ETH to 0x1111111111111111111111111111111111111111"))
 
         record = get_audit_log(body["tx_id"])
 
         self.assertEqual(record["tx_id"], body["tx_id"])
-        self.assertEqual(record["intent"], "Send 0.001 ETH")
+        self.assertEqual(record["intent"], "Send 0.001 ETH to 0x1111111111111111111111111111111111111111")
         self.assertEqual(record["execution"]["status"], "dry_run")
 
     def test_audit_log_list_returns_summary(self):
-        body = execute(ExecuteRequest(intent="Send 0.001 ETH"))
+        body = execute(ExecuteRequest(intent="Send 0.001 ETH to 0x1111111111111111111111111111111111111111"))
 
         records = list_audit_log()
 
@@ -90,10 +90,10 @@ class ExecuteApiTest(unittest.TestCase):
         body = execute(
             ExecuteRequest(
                 user_address=self.user_address,
-                intent="Send 0.001 ETH",
+                intent="Send 0.001 ETH to 0x1111111111111111111111111111111111111111",
             )
         )
-        execute(ExecuteRequest(intent="Send 0.001 ETH"))
+        execute(ExecuteRequest(intent="Send 0.001 ETH to 0x1111111111111111111111111111111111111111"))
 
         records = list_audit_log(
             user_address=self.user_address,
@@ -107,7 +107,7 @@ class ExecuteApiTest(unittest.TestCase):
         self.assertEqual(records["items"][0]["caw_wallet_id"], "wallet_active")
 
     def test_confirm_records_user_approval(self):
-        body = execute(ExecuteRequest(intent="Send 0.001 ETH"))
+        body = execute(ExecuteRequest(intent="Send 0.001 ETH to 0x1111111111111111111111111111111111111111"))
 
         record = confirm(ConfirmRequest(tx_id=body["tx_id"], action="approve"))
 
@@ -115,7 +115,7 @@ class ExecuteApiTest(unittest.TestCase):
         self.assertEqual(record["confirmation"]["status"], "approved")
 
     def test_confirm_user_reject_updates_final_decision(self):
-        body = execute(ExecuteRequest(intent="Send 0.001 ETH"))
+        body = execute(ExecuteRequest(intent="Send 0.001 ETH to 0x1111111111111111111111111111111111111111"))
 
         record = confirm(ConfirmRequest(tx_id=body["tx_id"], action="reject"))
 
@@ -142,7 +142,7 @@ class ExecuteApiTest(unittest.TestCase):
         with patch("api.build_execution_backend") as build_backend:
             build_backend.return_value = PolicyDeniedBackend()
 
-            body = execute(ExecuteRequest(intent="Send 0.001 ETH"))
+            body = execute(ExecuteRequest(intent="Send 0.001 ETH to 0x1111111111111111111111111111111111111111"))
 
         self.assertEqual(body["status"], "rejected")
         self.assertEqual(body["decision"], "reject")
@@ -176,6 +176,25 @@ class ExecuteApiTest(unittest.TestCase):
         self.assertEqual(body["execution"]["status"], "skipped")
         self.assertEqual(body["security"]["code"], "prompt_injection_hint")
 
+    def test_execute_unknown_intent_returns_rejected(self):
+        body = execute(ExecuteRequest(intent="What is the weather today?"))
+
+        self.assertEqual(body["status"], "rejected")
+        self.assertEqual(body["decision"], "reject")
+        self.assertEqual(body["attempts"], [])
+
+    def test_execute_empty_intent_returns_rejected(self):
+        body = execute(ExecuteRequest(intent=""))
+
+        self.assertEqual(body["status"], "rejected")
+        self.assertEqual(body["decision"], "reject")
+
+    def test_execute_bare_transfer_keyword_returns_rejected(self):
+        body = execute(ExecuteRequest(intent="transfer"))
+
+        self.assertEqual(body["status"], "rejected")
+        self.assertEqual(body["decision"], "reject")
+
     def test_execute_rejects_intent_proposal_anomaly_before_backend(self):
         with patch("api.build_execution_backend") as build_backend:
             body = execute(
@@ -200,7 +219,7 @@ class ExecuteApiTest(unittest.TestCase):
             body = execute(
                 ExecuteRequest(
                     user_address=self.user_address,
-                    intent="Send 0.001 ETH",
+                    intent="Send 0.001 ETH to 0x1111111111111111111111111111111111111111",
                 )
             )
 
@@ -221,7 +240,7 @@ class ExecuteApiTest(unittest.TestCase):
             body = execute(
                 ExecuteRequest(
                     user_address=self.user_address,
-                    intent="Send 0.001 ETH",
+                    intent="Send 0.001 ETH to 0x1111111111111111111111111111111111111111",
                 )
             )
 
@@ -237,7 +256,7 @@ class ExecuteApiTest(unittest.TestCase):
         body = execute(
             ExecuteRequest(
                 user_address=self.user_address,
-                intent="Send 0.001 ETH",
+                intent="Send 0.001 ETH to 0x1111111111111111111111111111111111111111",
             )
         )
 
@@ -278,7 +297,7 @@ class ExecuteApiTest(unittest.TestCase):
         body = execute(
             ExecuteRequest(
                 user_address=self.user_address,
-                intent="Send 0.005 ETH",
+                intent="Send 0.005 ETH to 0x1111111111111111111111111111111111111111",
             )
         )
 

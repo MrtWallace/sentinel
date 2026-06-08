@@ -79,6 +79,23 @@ class AmountRuleTest(unittest.TestCase):
         result = self.rule.check(tx)
         self.assertEqual(result.status, "passed")
 
+    def test_amount_rule_rejects_negative_transfer(self):
+        tx = TxProposal(action="transfer", amount="-1")
+        result = self.rule.check(tx)
+        self.assertEqual(result.status, "rejected")
+        self.assertIn("negative", result.reason.lower())
+
+    def test_amount_rule_rejects_zero_transfer(self):
+        tx = TxProposal(action="transfer", amount="0")
+        result = self.rule.check(tx)
+        self.assertEqual(result.status, "rejected")
+        self.assertIn("zero", result.reason.lower())
+
+    def test_amount_rule_rejects_negative_swap(self):
+        tx = TxProposal(action="swap", amount="-0.5")
+        result = self.rule.check(tx)
+        self.assertEqual(result.status, "rejected")
+
 class SlippageRuleTest(unittest.TestCase):
     def setUp(self):
         self.rule = SlippageRule()

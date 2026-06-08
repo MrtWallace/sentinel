@@ -513,22 +513,44 @@ def _execution_to_dict(
     return data
 
 
+def _extract_first_address(text: str) -> str | None:
+    import re
+    match = re.search(r"0x[a-fA-F0-9]{40}", text)
+    return match.group(0) if match else None
+
+
 def _demo_proposal_from_intent(intent: str) -> TxProposal:
-    lowered = intent.lower()
+    lowered = intent.lower().strip()
     amount = _extract_first_decimal(lowered)
 
     if "transfer" in lowered or "send" in lowered:
+        recipient = _extract_first_address(intent)
+
+        if amount is None or recipient is None:
+            return TxProposal(
+                action="unknown",
+                amount="0",
+                reasoning="Could not parse explicit amount or recipient from intent.",
+            )
+
         return TxProposal(
             action="transfer",
-            amount=amount or "0.01",
-            recipient=DEFAULT_TRANSFER_RECIPIENT,
+            amount=str(amount),
+            recipient=recipient,
             reasoning="Deterministic demo parser generated a transfer proposal.",
         )
 
     if "swap" in lowered:
+        if amount is None:
+            return TxProposal(
+                action="unknown",
+                amount="0",
+                reasoning="Could not parse swap amount from intent.",
+            )
+
         return TxProposal(
             action="swap",
-            amount=amount or "0.01",
+            amount=str(amount),
             from_token="ETH",
             to_token="USDC",
             to_contract=DEFAULT_SWAP_CONTRACT,
@@ -540,7 +562,7 @@ def _demo_proposal_from_intent(intent: str) -> TxProposal:
     return TxProposal(
         action="unknown",
         amount="0",
-        reasoning="Minimal API could not parse intent.",
+        reasoning="Intent does not match any supported transaction pattern.",
     )
 
 
