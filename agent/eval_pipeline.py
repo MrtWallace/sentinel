@@ -18,6 +18,7 @@ Prerequisites:
 import json
 import sys
 import time
+from decimal import Decimal
 from typing import Any
 
 try:
@@ -618,6 +619,31 @@ def check_trajectory_properties(response: dict, case: dict) -> list[tuple[str, b
             f"amount: {first_amount} → {last_amount}" if changed
             else f"amount unchanged: {first_amount}",
         ))
+    # 6. Step efficiency: retry should improve the proposal
+    if num_attempts >= 2:
+        try:
+            first_val = Decimal(attempts[0].get("proposal", {}).get("amount", "0"))
+            last_val = Decimal(attempts[-1].get("proposal", {}).get("amount", "0"))
+            improved = last_val < first_val
+            checks.append((
+                "retry_improved",
+                improved,
+                f"risk reduced: {first_val} → {last_val}" if improved
+                else f"no risk reduction: {first_val} → {last_val}",
+            ))
+        except Exception:
+            checks.append(("retry_improved", False, "could not parse amounts"))
+
+    # 7. No redundant attempts (same decision repeated)
+    if num_attempts >= 2:
+        decisions = [a.get("decision", {}).get("decision") for a in attempts]
+        has_redundant = len(decisions) != len(set(decisions))
+        checks.append((
+            "no_redundant_attempts",
+            not has_redundant,
+            "no redundant attempts" if not has_redundant
+            else f"redundant decisions: {decisions}",
+        ))
 
     return checks
 
@@ -803,6 +829,65 @@ def run_safety() -> tuple[list[dict], int, int]:
 # ═══════════════════════════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
+# Layer 4: Fuzz Evaluation
+# ═══════════════════════════════════════════════════════════════
+
+FUZZ_CASES = [
+    # Unicode 变体
+    {"id": "fuzz_fullwidth", "intent": "Ｓｅｎｄ 0.001 ＥＴＨ to 0x1111111111111111111111111111111111111111", "expect": "any"},
+    # Emoji 混入
+    {"id": "fuzz_emoji", "intent": "Send 0.001 ETH 🚀 to 0x1111111111111111111111111111111111111111", "expect": "any"},
+    # 超长数字
+    {"id": "fuzz_long_number", "intent": "Send " + "9" * 100 + " ETH to 0x1111111111111111111111111111111111111111", "expect": "rejected"},
+    # 空白变体
+    {"id": "fuzz_whitespace", "intent": "Send\t0.001\nETH to 0x1111111111111111111111111111111111111111", "expect": "any"},
+    # 重复关键词
+    {"id": "fuzz_repeat", "intent": "send send send 0.001 ETH to 0x1111111111111111111111111111111111111111", "expect": "any"},
+    # 混合语言
+    {"id": "fuzz_multilang", "intent": "送 0.001 ETH à 0x1111111111111111111111111111111111111111", "expect": "any"},
+    # SQL-like 注入
+    {"id": "fuzz_sql", "intent": "'; DROP TABLE users; -- Send 0.001 ETH to 0x1111111111111111111111111111111111111111", "expect": "any"},
+    # HTML 注入
+    {"id": "fuzz_html", "intent": "<script>alert('xss')</script> Send 0.001 ETH to 0x1111111111111111111111111111111111111111", "expect": "any"},
+    # 极短输入
+    {"id": "fuzz_short", "intent": "a", "expect": "any"},
+    # 只有数字
+    {"id": "fuzz_numbers_only", "intent": "1234567890", "expect": "any"},
+]
+
+
+def run_fuzz() -> tuple[int, int]:
+    """运行模糊测试，返回 (passed, failed)"""
+    passed = 0
+    failed = 0
+
+    for case in FUZZ_CASES:
+        try:
+            response, elapsed_ms = send_intent(case["intent"])
+            status = response.get("status", "unknown")
+
+            # 关键：不应该 500 或 crash
+            if status not in ("executed", "rejected", "confirm_needed"):
+                print(f"  FAIL [{case['id']}] unexpected status: {status}  ({elapsed_ms:.0f}ms)")
+                failed += 1
+                continue
+
+            # 如果期望 rejected
+            if case["expect"] == "rejected" and status != "rejected":
+                print(f"  FAIL [{case['id']}] expected rejected, got {status}  ({elapsed_ms:.0f}ms)")
+                failed += 1
+                continue
+
+            passed += 1
+            print(f"  PASS [{case['id']}] → {status}  ({elapsed_ms:.0f}ms)")
+
+        except Exception as e:
+            print(f"  ERROR [{case['id']}] {e}")
+            failed += 1
+
+    return passed, failed
+
 
 def main():
     print("=" * 60)
@@ -890,12 +975,25 @@ def main():
     print()
     print(f"Safety: {safety_passed}/{safety_total} passed ({safety_pct:.0f}%)")
     print()
+    # ══════════════════════════════════════════════════════════
+    # Layer 4: Fuzz Evaluation
+    # ══════════════════════════════════════════════════════════
+    print("=" * 60)
+    print("=== Fuzz Evaluation ===")
+    print("=" * 60)
+
+    fuzz_passed, fuzz_failed = run_fuzz()
+    fuzz_total = fuzz_passed + fuzz_failed
+    fuzz_pct = (fuzz_passed / fuzz_total * 100) if fuzz_total else 0
+    print()
+    print(f"Fuzz: {fuzz_passed}/{fuzz_total} passed ({fuzz_pct:.0f}%)")
+    print()
 
     # ══════════════════════════════════════════════════════════
     # Summary
     # ══════════════════════════════════════════════════════════
-    total_passed = e2e_passed + traj_passed + safety_passed
-    total_tests = e2e_total + traj_total + safety_total
+    total_passed = e2e_passed + traj_passed + safety_passed + fuzz_passed
+    total_tests = e2e_total + traj_total + safety_total + fuzz_total
     total_pct = (total_passed / total_tests * 100) if total_tests else 0
 
     print("=" * 60)
@@ -904,6 +1002,7 @@ def main():
     print(f"  E2E:        {e2e_passed}/{e2e_total} ({e2e_pct:.0f}%)")
     print(f"  Trajectory: {traj_passed}/{traj_total} ({traj_pct:.0f}%)")
     print(f"  Safety:     {safety_passed}/{safety_total} ({safety_pct:.0f}%)")
+    print(f"  Fuzz:       {fuzz_passed}/{fuzz_total} ({fuzz_pct:.0f}%)")
     print(f"  Total:      {total_passed}/{total_tests} ({total_pct:.0f}%)")
     print()
 
