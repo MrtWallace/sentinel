@@ -1,10 +1,56 @@
 # Sentinel — Risk-Aware Agentic Wallet Execution
 
+[![CI](https://github.com/MrtWallace/sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/MrtWallace/sentinel/actions/workflows/ci.yml)
+
 Sentinel is a risk-aware autonomous trading agent for the Cobo Agentic Wallet track.
 
 It turns a user intent into a structured transaction proposal, runs deterministic risk rules and agent reviews, retries bounded safer proposals when possible, and executes approved transfers through Cobo Agentic Wallet (CAW) with Pact policy enforcement.
 
-> Active hackathon development is currently split across `feature/backend-risk-pipeline` and `feature/frontend-risk-console`. This README mirrors the current Cobo/Agent direction before final integration back to `main`.
+## Quick Start
+
+```bash
+# One command starts both backend and frontend
+make dev
+# or directly:
+bash scripts/dev.sh
+
+# Frontend: http://127.0.0.1:3000
+# Backend:  http://127.0.0.1:8000/health
+```
+
+Run tests:
+
+```bash
+make test    # All backend unit tests (307 tests, ~1s)
+make eval    # Eval pipeline (requires backend running)
+make build   # Frontend production build
+```
+
+## Security & Evaluation
+
+6-layer evaluation framework with 109 test cases:
+
+```text
+E2E:        31/32 (97%)   — intent → final status
+Trajectory: 32/32 (100%)  — attempts structure + step efficiency
+Safety:     20/20 (100%)  — prompt injection + malicious transactions
+Reference:  15/15 (100%)  — ideal trajectory pattern matching
+Fuzz:       10/10 (100%)  — adversarial inputs (Unicode, SQL, HTML)
+Total:      108/109 (99%)
+```
+
+Security hardening:
+- 24 input injection patterns (Chinese + English + roleplay + broad)
+- 6-dimension Agent B security prompt (address, approval, intent consistency, social engineering, action, injection)
+- 6-dimension Agent C risk prompt (amount, slippage, deadline, token, pattern, frequency)
+- Unknown action rejection (no fallback to default values)
+- Negative/zero amount rejection
+- CAW policy denial detection
+
+Component-level tests (159 tests, <1s, no HTTP server):
+```bash
+python3 -m unittest test_eval_components -v
+```
 
 ## Cobo Track
 
@@ -221,13 +267,14 @@ Attempt 2: execute
 ## Tests
 
 ```bash
-PYTHONPATH=agent agent/venv/bin/python -m unittest discover -s agent -p 'test_*.py'
+make test
+# or: cd agent && python3 -m unittest discover -s . -p "test_*.py" -v
 ```
 
 Current backend test count:
 
 ```text
-Ran 107 tests
+Ran 307 tests in ~1s
 OK
 ```
 
@@ -235,29 +282,46 @@ OK
 
 ```text
 agent/
-  api.py              FastAPI endpoints
-  audit.py            local JSON audit logger
+  api.py              FastAPI endpoints + demo parser
+  models.py           data models (TxProposal, AgentResult, etc.)
+  input_guard.py      input sanitization + injection detection
+  loop.py             bounded AgenticLoop (max 2 retries)
+  reviewers.py        Agent B/C (mock + LLM)
+  reproposal.py       reproposal agent + MutationGuard
+  risk/
+    rules.py          5 hard rules (Amount, Slippage, Whitelist, Approval, Frequency)
+    decision.py       DecisionEngine
+    pipeline.py       RiskPipeline
   execution.py        mock / CAW execution backend
-  loop.py             bounded agent loop
+  audit.py            SQLite audit logger
+  config_store.py     user risk config (SQLite)
+  wallets.py          CAW wallet lifecycle (SQLite + Mock/SDK)
   llm.py              provider-agnostic LLM client
-  reproposal.py       reproposal agent + mutation guard
-  reviewers.py        mock reviewers
-  wallet_store.py     per-user CAW wallet persistence
-  wallet_service.py   CAW wallet lifecycle service
-  risk/               deterministic hard rules and pipeline
-  caw_smoke.py        manual CAW SDK smoke script
+  eval_pipeline.py    6-layer evaluation framework
+  test_eval_components.py  component-level tests (159 tests)
+  test_*.py           unit tests (307 total)
+
+frontend/
+  packages/nextjs/
+    app/settings/     risk config + Pact sync UI
+    app/api/sentinel/ Next.js API proxy routes
+    lib/sentinel/     API client + types + mappers
 
 contracts/
   src/SmartAccount.sol
   test/SmartAccount.t.sol
 
+scripts/
+  dev.sh              one-command dev launcher
+
+.github/workflows/
+  ci.yml              CI: backend tests + frontend build
+
 hackathon/docs/
-  backend-plan.md
-  backend-progress.md
-  caw-setup.md
-  demo-script.md
-  shared-api-contract.md
-  post-mvp-requirements.md
+  backend-plan.md     stable backend plan
+  backend-progress.md checkpoint tracker
+  shared-api-contract.md  API contract
+  demo-script.md      demo video script
 ```
 
 ## Documentation

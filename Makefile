@@ -1,0 +1,24 @@
+.PHONY: dev test eval lint build clean help
+
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
+
+dev: ## Start backend + frontend (scripts/dev.sh)
+	bash scripts/dev.sh
+
+test: ## Run all backend unit tests
+	cd agent && python3 -m unittest discover -s . -p "test_*.py" -v
+
+eval: ## Run eval pipeline (requires backend running)
+	cd agent && python3 eval_pipeline.py
+
+lint: ## Run frontend lint
+	cd frontend && yarn lint
+
+build: ## Build frontend
+	cd frontend && yarn next:build
+
+clean: ## Clean caches and temp files
+	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	find . -type d -name ".next" -exec rm -rf {} + 2>/dev/null || true
+	rm -f agent/*.pid agent/logs/*.log 2>/dev/null || true
