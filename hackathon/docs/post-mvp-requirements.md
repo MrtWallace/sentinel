@@ -894,7 +894,6 @@ class AgentReflector:
 ## 4. 不在范围内
 
 以下功能明确不在本次迭代范围：
-
 - ❌ 多链支持（只做 Sepolia）
 - ❌ 通知系统（Telegram bot / 邮件）
 - ❌ x402 支付协议集成（口头叙事，不写代码）
@@ -902,11 +901,66 @@ class AgentReflector:
 - ❌ DAO 治理 / 多签审批
 - ❌ 生产级部署（Docker / K8s / CI/CD）
 - ❌ Agent 声誉系统（仅 2 个 Agent B/C，加权投票无实际意义）
+---
+## 4.5 策略意图扩展（后续考虑）
+
+**背景**：Cobo 赛道描述为 "Agent 自主执行链上交易策略：套利、做市、组合管理、流动性挖矿"。
+当前 Sentinel 只支持 transfer + swap + approve 三种 action，与赛道期望存在差距。
+
+**策略**：在 intent 解析层扩展策略类型，保持风控 pipeline 不变，不真实执行复杂策略。
+
+### 4.5.1 扩展 TxProposal.action 类型
+
+新增 action：`rebalance` / `add_liquidity` / `remove_liquidity` / `arbitrage`
+
+示例意图：
+- "Rebalance my portfolio to 60% ETH 40% USDC" → action=rebalance
+- "Provide liquidity to ETH/USDC pool on Uniswap" → action=add_liquidity
+- "Arbitrage ETH between Uniswap and SushiSwap" → action=arbitrage
+- "Remove liquidity from ETH/USDC pool" → action=remove_liquidity
+
+### 4.5.2 新增 StrategyRiskRule
+
+复杂策略（arbitrage / add_liquidity / rebalance）默认返回 `confirm`，不自动执行。
+理由：策略类操作风险高于简单 transfer/swap，应要求 owner 确认。
+
+```python
+class StrategyRiskRule:
+    name = "StrategyRiskRule"
+
+    def check(self, tx: TxProposal) -> RuleResult:
+        if tx.action in ("arbitrage", "add_liquidity", "remove_liquidity", "rebalance"):
+            return RuleResult(
+                rule_name=self.name,
+                status="confirm",
+                reason=f"Strategy '{tx.action}' requires owner confirmation",
+                severity="warning",
+            )
+        return RuleResult(
+            rule_name=self.name,
+            status="skipped",
+            reason=f"Strategy rule does not apply to action: {tx.action}",
+        )
+```
+
+### 4.5.3 前端展示
+
+DecisionChain Step 1 Agent A Proposal 对复杂策略额外展示：
+- 策略类型标签（arbitrage / rebalance / LP）
+- 风险等级：strategies 默认 medium
+- 需要确认的原因说明
+
+### 4.5.4 Demo 叙事升级
+
+**当前**：Sentinel 让 AI Agent 安全地执行 transfer 和 swap
+**升级后**：Sentinel 让 AI Agent 安全地执行任何链上交易策略——从简单 transfer 到复杂套利、做市、组合管理。复杂策略自动升级为需要 owner 确认，简单操作自动放行。
+
+**优先级**：P2（黑客松后考虑，不影响当前 demo）
+**预估工作量**：3-4h（intent parser + StrategyRiskRule + 前端展示）
+**不做**：真实套利/做市执行、DEX 交互、闪电贷
 
 ---
-
 ## 5. 验收标准
-
 每个任务完成后需要满足：
 
 1. **现有测试不回归**：`PYTHONPATH=agent python3 -m unittest discover -s agent -p 'test_*.py'` 全部通过
@@ -959,6 +1013,6 @@ Cobo Agentic Wallet (per-user)
 
 ---
 
-> **Last updated**: 2026-06-07 (v4 — CP10 Input Guard mostly done; status updated to reflect CP1-13 + CP0-12)
+> **Last updated**: 2026-06-09 (v5 — eval 99%, security hardened, strategy expansion plan added)
 > **Author**: MrtWallace
 > **Status**: 待开发
