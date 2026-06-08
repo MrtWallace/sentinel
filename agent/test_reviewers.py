@@ -40,9 +40,15 @@ class TestReviewers(unittest.TestCase):
 
         self.assertFalse(result.passed)
         self.assertEqual(result.risk_level, "high")
-        self.assertEqual(len(result.suggestions), 1)
-        self.assertEqual(result.suggestions[0].field, "slippage")
-        self.assertEqual(result.suggestions[0].rejection_code, "slippage_too_high")
+        self.assertGreaterEqual(len(result.suggestions), 1)
+        slippage_suggestion = next(
+            s for s in result.suggestions if s.rejection_code == "slippage_too_high"
+        )
+        self.assertEqual(slippage_suggestion.field, "slippage")
+        contract_suggestion = next(
+            s for s in result.suggestions if s.rejection_code == "unknown_contract"
+        )
+        self.assertEqual(contract_suggestion.field, "to_contract")
 
     def test_llm_risk_analyst_maps_json_to_agent_result(self):
         tx = TxProposal(action="transfer", amount="0.005")

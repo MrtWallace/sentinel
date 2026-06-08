@@ -29,7 +29,22 @@ class AmountRule:
                 reason="Invalid amount",
                 severity="critical",
             )
-        
+
+        if amount < 0:
+            return RuleResult(
+                rule_name=self.name,
+                status="rejected",
+                reason="Amount cannot be negative",
+                severity="critical",
+            )
+        if amount == 0:
+            return RuleResult(
+                rule_name=self.name,
+                status="rejected",
+                reason="Amount cannot be zero",
+                severity="critical",
+            )
+
         if tx.action == "swap":
             if amount > self.swap_confirm_threshold:
                 return RuleResult(

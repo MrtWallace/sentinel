@@ -11,12 +11,33 @@ MAX_INTENT_LENGTH = 1200
 
 
 PROMPT_INJECTION_PATTERNS = [
+    # ── Original English patterns ──
     r"\bignore\s+(all\s+)?previous\s+instructions\b",
     r"\bdisregard\s+(all\s+)?previous\s+instructions\b",
     r"\bsystem\s+prompt\b",
     r"\bdeveloper\s+message\b",
     r"\breveal\s+(the\s+)?prompt\b",
     r"\boverride\s+(the\s+)?policy\b",
+
+    # ── Chinese injection patterns ──
+    r"忽略.{0,15}(上面|之前|以上|所有).{0,10}(指令|提示|规则|命令)",
+    r"无视.{0,10}(安全|风控|规则|限制)",
+    r"不要.{0,10}(检查|审查|验证|遵循)",
+    r"系统.{0,5}(覆盖|绕过|禁用|取消)",
+    r"(以上|上面).{0,5}(内容|文字).{0,10}(无效|忽略|作废)",
+
+    # ── Role-playing attacks ──
+    r"you are now (?:a |the )?(?:admin|root|system|developer|owner)",
+    r"as (?:a |the )?(?:reviewer|auditor|admin|security)\s*.*\bmark\s+.*\bsafe\b",
+    r"(?:system|admin|root)\s*(?:override|bypass|disable|confirm)",
+
+    # ── Broader English injection patterns ──
+    r"\bignore\b.*\b(?:rules|constraints|safety|policy|checks)\b",
+    r"\bforget\b.*\b(?:instructions|rules|constraints|prior)\b",
+    r"\byour (?:original|real|true) (?:instructions|purpose|role)\b",
+    r"\boverride\b.*\b(?:safety|security|guard|check|policy)\b",
+    r"\bdisable\b.*\b(?:safety|security|guard|check|filter)\b",
+    r"\bpretend\b.*\b(?:no |without ).*(?:rules|limits|restrictions)\b",
 ]
 
 

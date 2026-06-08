@@ -96,6 +96,11 @@ def execute(request: ExecuteRequest):
         build_audit_logger().write(response)
         return response
 
+    if tx.action == "unknown":
+        response = _unknown_action_reject_response(request, tx_id)
+        build_audit_logger().write(response)
+        return response
+
     caw_status = _caw_status_for_request(request)
     if caw_status is not None and caw_status["readiness"] != "ready":
         response = _caw_not_ready_response(request, tx_id, caw_status)
@@ -337,6 +342,40 @@ def _final_response_decision(result, execution):
         _status_from_decision(decision),
         result.final_decision.reason,
     )
+
+
+def _unknown_action_reject_response(
+    request: ExecuteRequest,
+    tx_id: str,
+) -> dict[str, Any]:
+    return {
+        "tx_id": tx_id,
+        "user_address": request.user_address or "",
+        "intent": request.intent,
+        "input_proposal": request.proposal,
+        "status": "rejected",
+        "decision": "reject",
+        "decision_reason": "Could not parse transaction intent. Please rephrase your request.",
+        "sentinel_decision": "reject",
+        "sentinel_decision_reason": "Could not parse transaction intent. Please rephrase your request.",
+        "caw": None,
+        "attempts": [],
+        "decision_chain": {},
+        "execution": _execution_to_dict(
+            ExecutionResult(
+                backend="none",
+                status="skipped",
+                reason="Unknown action type.",
+            ),
+            None,
+        ),
+        "security": {
+            "code": "unknown_action",
+            "reason": "Could not parse transaction intent.",
+        },
+        "tool_calls": [],
+        "memory_anomalies": [],
+    }
 
 
 def _input_guard_reject_response(

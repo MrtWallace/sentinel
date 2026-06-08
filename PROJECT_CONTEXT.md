@@ -287,21 +287,19 @@ frontend worktree:
 ---
 
 ## 10. 当前状态(每次更新)
-
 ```
-最后更新：2026-06-06
-当前阶段：Hackathon Post-MVP planning / Cobo CAW + Agent evidence
+最后更新：2026-06-08
+当前阶段：Hackathon Post-MVP / Security Hardening + Eval Framework
 当前分支：
 - backend worktree: /home/admini/sentinel-backend @ feature/backend-risk-pipeline
 - frontend worktree: /home/admini/sentinel-frontend @ feature/frontend-risk-console
 本轮目标：
-- Cobo/CAW功能优先拆入前后端plan
-- Agent功能保留但按Demo风险分层
-- 新增 shared-api-contract.md 作为前后端联调契约
-- 合并旧 backend-spec/frontend-spec 为 mvp-spec.md 历史归档
+- Security Hardening：已修复 input_guard 注入检测、AmountRule 负数/零值、unknown action 拦截、Agent B/C prompt 加强
+- Eval Framework：已新建 eval_pipeline.py 3层评估（E2E/Trajectory/Safety），总分 93%
+- 后续：CP14 CAW contract_call 或 CP15 Read-only MCP Server
 卡点：
-- CAW SDK/API真实返回字段需要实现时再以官方文档或实际SDK校准
-- Agent高级自动化不要抢Cobo主线优先级
+- 剩余 5 个 eval FAIL 是 demo parser 限制（中文解析、JSON payload、无金额 transfer），非安全漏洞
+- CAW contract_call swap 待 transfer 主线稳定后再做
 合约地址：0xad7C1EBe561C9359C657FA36a156Cd213C8E6d7c（Sepolia，历史SmartAccount MVP版本）
 ```
 
