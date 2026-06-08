@@ -979,10 +979,10 @@ class TestMockExecutionBackend(unittest.TestCase):
         self.assertEqual(result.backend, "mock")
         self.assertIn("mock-", result.request_id)
 
-    def test_swap_skipped(self):
+    def test_swap_dry_run(self):
         tx = TxProposal(action="swap", amount="0.01")
         result = self.backend.execute(tx, "tx-002")
-        self.assertEqual(result.status, "skipped")
+        self.assertEqual(result.status, "dry_run")
 
     def test_unknown_skipped(self):
         tx = TxProposal(action="unknown", amount="0")

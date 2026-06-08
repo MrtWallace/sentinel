@@ -67,23 +67,38 @@ class CawConfig:
 
 class MockExecutionBackend:
     def execute(self, tx: TxProposal, tx_id: str) -> ExecutionResult:
-        if tx.action != "transfer":
+        if tx.action == "transfer":
+            return ExecutionResult(
+                backend="mock",
+                status="dry_run",
+                request_id=f"mock-{tx_id}",
+                reason="Mock execution backend did not submit a transaction.",
+                raw={
+                    "amount": tx.amount,
+                    "recipient": tx.recipient,
+                },
+            )
+        elif tx.action == "swap":
+            return ExecutionResult(
+                backend="mock",
+                status="dry_run",
+                request_id=f"mock-{tx_id}",
+                reason="Mock execution backend did not submit a swap.",
+                raw={
+                    "amount": tx.amount,
+                    "from_token": tx.from_token,
+                    "to_token": tx.to_token,
+                    "to_contract": tx.to_contract,
+                    "calldata": tx.calldata,
+                    "value": tx.value,
+                },
+            )
+        else:
             return ExecutionResult(
                 backend="mock",
                 status="skipped",
-                reason=f"Mock executor only handles transfer, got {tx.action}.",
+                reason=f"Mock executor does not support action: {tx.action}.",
             )
-
-        return ExecutionResult(
-            backend="mock",
-            status="dry_run",
-            request_id=f"mock-{tx_id}",
-            reason="Mock execution backend did not submit a transaction.",
-            raw={
-                "amount": tx.amount,
-                "recipient": tx.recipient,
-            },
-        )
 
 
 class CawExecutor:
@@ -92,13 +107,20 @@ class CawExecutor:
         self.client_factory = client_factory or self._default_client_factory
 
     def execute(self, tx: TxProposal, tx_id: str) -> ExecutionResult:
-        if tx.action != "transfer":
+        request_id = f"sentinel-{tx_id}"
+
+        if tx.action == "transfer":
+            return self._execute_transfer(tx, tx_id, request_id)
+        elif tx.action == "swap":
+            return self._execute_swap(tx, tx_id, request_id)
+        else:
             return ExecutionResult(
                 backend="caw",
                 status="skipped",
-                reason=f"CAW executor only handles transfer, got {tx.action}.",
+                reason=f"CAW executor does not support action: {tx.action}.",
             )
 
+    def _execute_transfer(self, tx: TxProposal, tx_id: str, request_id: str) -> ExecutionResult:
         if not tx.recipient:
             return ExecutionResult(
                 backend="caw",
@@ -106,7 +128,6 @@ class CawExecutor:
                 reason="Missing transfer recipient.",
             )
 
-        request_id = f"sentinel-{tx_id}"
         if not self.config.enable_real_tx:
             return ExecutionResult(
                 backend="caw",
@@ -126,6 +147,41 @@ class CawExecutor:
             )
 
         return asyncio.run(self._execute_real_transfer(tx, request_id))
+
+    def _execute_swap(self, tx: TxProposal, tx_id: str, request_id: str) -> ExecutionResult:
+        if not tx.to_contract:
+            return ExecutionResult(
+                backend="caw",
+                status="failed",
+                reason="Missing swap target contract.",
+            )
+
+        if not tx.calldata:
+            return ExecutionResult(
+                backend="caw",
+                status="failed",
+                reason="Missing swap calldata.",
+            )
+
+        if not self.config.enable_real_tx:
+            return ExecutionResult(
+                backend="caw",
+                status="dry_run",
+                request_id=request_id,
+                reason="ENABLE_REAL_TX=false; CAW contract_call was not submitted.",
+                raw=self._swap_payload(tx, request_id),
+            )
+
+        missing = self._missing_real_tx_config()
+        if missing:
+            return ExecutionResult(
+                backend="caw",
+                status="failed",
+                request_id=request_id,
+                reason=f"Missing CAW config: {', '.join(missing)}",
+            )
+
+        return asyncio.run(self._execute_real_swap(tx, request_id))
 
     async def _execute_real_transfer(
         self,
@@ -191,6 +247,52 @@ class CawExecutor:
             "amount": tx.amount,
             "request_id": request_id,
         }
+    def _swap_payload(self, tx: TxProposal, request_id: str) -> dict[str, Any]:
+        return {
+            "chain_id": self.config.chain_id,
+            "contract_addr": tx.to_contract,
+            "calldata": tx.calldata,
+            "value": tx.value or "0x0",
+            "request_id": request_id,
+        }
+
+    async def _execute_real_swap(
+        self,
+        tx: TxProposal,
+        request_id: str,
+    ) -> ExecutionResult:
+        try:
+            async with self.client_factory(
+                base_url=self.config.api_url,
+                api_key=self.config.api_key,
+            ) as client:
+                pact = await client.get_pact(self.config.pact_id)
+
+            pact_api_key = pact.get("api_key") or self.config.api_key
+            async with self.client_factory(
+                base_url=self.config.api_url,
+                api_key=pact_api_key,
+            ) as pact_client:
+                raw = await pact_client.contract_call(
+                    wallet_uuid=self.config.wallet_id,
+                    chain_id=self.config.chain_id,
+                    contract_addr=tx.to_contract,
+                    calldata=tx.calldata,
+                    value=tx.value or "0x0",
+                    request_id=request_id,
+                )
+
+            return self._result_from_caw_response(raw)
+        except Exception as exc:
+            if self._is_policy_denied(exc):
+                return self._policy_denied_result(exc, request_id)
+            return ExecutionResult(
+                backend="caw",
+                status="failed",
+                request_id=request_id,
+                reason=str(exc),
+            )
+
 
     def _result_from_caw_response(self, raw: dict[str, Any]) -> ExecutionResult:
         status = raw.get("status_display") or raw.get("status", "")

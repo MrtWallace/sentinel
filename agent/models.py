@@ -21,6 +21,8 @@ class TxProposal:
     deadline: Optional[int] = None
     reasoning: Optional[str] = None
     recipient: Optional[str] = None
+    calldata: Optional[str] = None
+    value: Optional[str] = None
 
 @dataclass
 class RuleResult:

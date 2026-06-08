@@ -53,7 +53,7 @@ class ExecuteApiTest(unittest.TestCase):
         self.assertEqual(body["status"], "executed")
         self.assertEqual(body["decision"], "execute")
         self.assertEqual(len(body["attempts"]), 1)
-        self.assertEqual(body["execution"]["status"], "skipped")
+        self.assertEqual(body["execution"]["status"], "dry_run")
         self.assertEqual(body["security"], {"code": None, "reason": None})
         self.assertEqual(body["tool_calls"], [])
         self.assertEqual(body["memory_anomalies"], [])

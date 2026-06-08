@@ -548,6 +548,14 @@ def _demo_proposal_from_intent(intent: str) -> TxProposal:
                 reasoning="Could not parse swap amount from intent.",
             )
 
+        from swap_codec import build_swap_proposal
+        swap_data = build_swap_proposal(
+            from_token="ETH",
+            to_token="USDC",
+            amount_eth=str(amount),
+            slippage=0.03,
+        )
+
         return TxProposal(
             action="swap",
             amount=str(amount),
@@ -556,6 +564,8 @@ def _demo_proposal_from_intent(intent: str) -> TxProposal:
             to_contract=DEFAULT_SWAP_CONTRACT,
             slippage=0.03,
             deadline=300,
+            calldata=swap_data.get("calldata"),
+            value=swap_data.get("value"),
             reasoning="Deterministic demo parser generated a swap proposal.",
         )
 
