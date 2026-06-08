@@ -25,8 +25,8 @@ COPY . .
 # Build frontend
 RUN cd frontend && yarn next:build
 
-# Expose port
-EXPOSE 8000
+# Expose ports
+EXPOSE 8000 3000
 
 # Start both services
 CMD ["bash", "scripts/dev.sh"]

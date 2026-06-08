@@ -1,0 +1,11 @@
+.git
+__pycache__
+*.pyc
+.pids
+.logs
+node_modules
+.next
+.env
+agent/.env
+agent/data/
+agent/logs/

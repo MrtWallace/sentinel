@@ -21,4 +21,4 @@ build: ## Build frontend
 clean: ## Clean caches and temp files
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name ".next" -exec rm -rf {} + 2>/dev/null || true
-	rm -f agent/*.pid agent/logs/*.log 2>/dev/null || true
+	rm -rf .pids .logs 2>/dev/null || true
