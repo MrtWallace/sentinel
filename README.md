@@ -167,7 +167,7 @@ Run tests:
 
 ```bash
 make test    # All backend unit tests (466 tests, ~1s)
-make eval    # Eval pipeline (requires backend running)
+make eval    # Eval pipeline (auto-starts a temporary mock backend)
 make build   # Frontend production build
 ```
 

@@ -9,8 +9,8 @@ dev: ## Start backend + frontend (scripts/dev.sh)
 test: ## Run all backend unit tests
 	cd agent && python3 -m unittest discover -s . -p "test_*.py" -v
 
-eval: ## Run eval pipeline (requires backend running)
-	cd agent && python3 eval_pipeline.py
+eval: ## Run eval pipeline with a temporary mock backend
+	cd agent && python3 eval_pipeline.py --auto-start --base-url http://127.0.0.1:18080
 
 lint: ## Run frontend lint
 	cd frontend && yarn lint

@@ -31,9 +31,29 @@ FEE_TIERS = {
     ("USDC", "WETH"): 3000,
 }
 
-# exactInputSingle function selector
-# function exactInputSingle(ExactInputSingleParams calldata params)
-EXACT_INPUT_SINGLE_SELECTOR = "0x414bf389"
+# SwapRouter02 exactInputSingle selector:
+# exactInputSingle((address,address,uint24,address,uint256,uint256,uint160))
+EXACT_INPUT_SINGLE_SELECTOR = "0x04e45aaf"
+
+TOKEN_DECIMALS = {
+    "ETH": 18,
+    "WETH": 18,
+    "USDC": 6,
+    "USDT": 6,
+}
+
+REFERENCE_RATES = {
+    ("ETH", "USDC"): Decimal("2000"),
+    ("WETH", "USDC"): Decimal("2000"),
+    ("ETH", "USDT"): Decimal("2000"),
+    ("WETH", "USDT"): Decimal("2000"),
+    ("USDC", "ETH"): Decimal("0.0005"),
+    ("USDC", "WETH"): Decimal("0.0005"),
+    ("USDT", "ETH"): Decimal("0.0005"),
+    ("USDT", "WETH"): Decimal("0.0005"),
+    ("USDC", "USDT"): Decimal("1"),
+    ("USDT", "USDC"): Decimal("1"),
+}
 
 
 def encode_swap_calldata(
@@ -49,7 +69,8 @@ def encode_swap_calldata(
 
     Returns:
         (calldata_hex, value_wei_hex)
-        value_wei_hex is non-zero only for ETH→Token swaps (msg.value)
+        value_wei_hex is always "0" for the router call. The CAW executor wraps
+        ETH into WETH before calling SwapRouter02.
     """
     from_token = from_token.upper()
     to_token = to_token.upper()
@@ -63,15 +84,18 @@ def encode_swap_calldata(
     estimated_output = _estimate_output(from_token, to_token, amount_wei)
     min_output = estimated_output * (10000 - slippage_bps) // 10000
 
+    # SwapRouter02 does not include deadline in ExactInputSingleParams.
+    # The deadline_seconds argument remains proposal metadata for risk review.
+    _ = deadline_seconds
+
     # Encode ExactInputSingleParams tuple:
     # (address tokenIn, address tokenOut, uint24 fee, address recipient,
-    #  uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)
+    #  uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)
     params = _encode_params(
         token_in=token_in,
         token_out=token_out,
         fee=fee,
         recipient=recipient,
-        deadline=deadline_seconds,
         amount_in=amount_wei,
         amount_out_min=max(min_output, 1),  # at least 1 wei
         sqrt_price_limit=0,
@@ -79,10 +103,7 @@ def encode_swap_calldata(
 
     calldata = EXACT_INPUT_SINGLE_SELECTOR + params
 
-    # ETH→Token requires msg.value; Token→Token value is 0
-    value = amount_wei if from_token in ("ETH", "WETH") else 0
-
-    return calldata, _int_to_hex(value)
+    return calldata, "0"
 
 
 def _resolve_token(symbol: str) -> str:
@@ -100,23 +121,15 @@ def _get_fee(from_token: str, to_token: str) -> int:
 
 def _estimate_output(from_token: str, to_token: str, amount_wei: int) -> int:
     """Estimate output amount for demo purposes."""
-    # Simplified: 1 ETH = 2000 USDC
-    eth_usdc_rate = 2000
+    from_token = from_token.upper()
+    to_token = to_token.upper()
+    from_decimals = TOKEN_DECIMALS.get(from_token, 18)
+    to_decimals = TOKEN_DECIMALS.get(to_token, from_decimals)
+    rate = REFERENCE_RATES.get((from_token, to_token), Decimal("1"))
 
-    if from_token in ("ETH", "WETH") and to_token == "USDC":
-        return amount_wei * eth_usdc_rate
-    elif from_token == "USDC" and to_token in ("ETH", "WETH"):
-        return amount_wei // eth_usdc_rate
-    elif from_token in ("ETH", "WETH") and to_token == "USDT":
-        return amount_wei * eth_usdc_rate
-    elif from_token == "USDT" and to_token in ("ETH", "WETH"):
-        return amount_wei // eth_usdc_rate
-    elif from_token == "USDC" and to_token == "USDT":
-        return amount_wei  # 1:1
-    elif from_token == "USDT" and to_token == "USDC":
-        return amount_wei  # 1:1
-    else:
-        return amount_wei  # fallback 1:1
+    input_units = Decimal(amount_wei) / (Decimal(10) ** from_decimals)
+    output_units = input_units * rate
+    return int(output_units * (Decimal(10) ** to_decimals))
 
 
 def _encode_params(
@@ -124,7 +137,6 @@ def _encode_params(
     token_out: str,
     fee: int,
     recipient: str,
-    deadline: int,
     amount_in: int,
     amount_out_min: int,
     sqrt_price_limit: int,
@@ -136,7 +148,6 @@ def _encode_params(
         _pad_address(token_out),
         _pad_uint24(fee),
         _pad_address(recipient.replace("0x", "")),
-        _pad_uint256(deadline),
         _pad_uint256(amount_in),
         _pad_uint256(amount_out_min),
         _pad_uint160(sqrt_price_limit),
@@ -165,10 +176,9 @@ def _pad_uint160(value: int) -> str:
 
 
 def _int_to_hex(value: int) -> str:
-    """Convert int to hex string."""
-    if value == 0:
-        return "0x0"
-    return hex(value)
+    """Convert int to decimal string for CAW API."""
+    return str(value)
+
 
 
 def build_swap_proposal(

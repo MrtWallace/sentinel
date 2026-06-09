@@ -99,8 +99,36 @@ class ExecutionBackendTest(unittest.TestCase):
 
         result = CawExecutor(config=config, client_factory=factory).execute(tx, "tx-1")
 
-        self.assertEqual(result.status, "submitted")
+        self.assertEqual(result.status, "pending")
         self.assertIn("Processing", result.reason)
+
+    def test_caw_executor_maps_failed_display_status(self):
+        executor = CawExecutor(config=CawConfig("", "", "", ""))
+
+        result = executor._result_from_caw_response(
+            {
+                "id": "caw-tx-id",
+                "request_id": "sentinel-tx-1",
+                "status_display": "Failed",
+                "transaction_hash": None,
+            }
+        )
+
+        self.assertEqual(result.status, "failed")
+
+    def test_caw_executor_maps_rejected_status_as_failed(self):
+        executor = CawExecutor(config=CawConfig("", "", "", ""))
+
+        result = executor._result_from_caw_response(
+            {
+                "id": "caw-tx-id",
+                "request_id": "sentinel-tx-1",
+                "status": "Rejected",
+                "transaction_hash": None,
+            }
+        )
+
+        self.assertEqual(result.status, "failed")
 
     def test_caw_executor_maps_policy_denial(self):
         tx = TxProposal(

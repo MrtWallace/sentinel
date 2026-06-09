@@ -1076,6 +1076,24 @@ class TestProposalFromDict(unittest.TestCase):
 class TestDemoParserAndUnknownAction(unittest.TestCase):
     """通过 execute endpoint 间接测试 demo parser 和 unknown action 拦截"""
 
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.env_patcher = patch.dict(
+            "os.environ",
+            {
+                "EXECUTION_BACKEND": "mock",
+                "ENABLE_REAL_TX": "false",
+                "AUDIT_LOG_DIR": self.tmpdir.name,
+                "WALLET_DB_PATH": f"{self.tmpdir.name}/wallets.db",
+                "CONFIG_DB_PATH": f"{self.tmpdir.name}/config.db",
+            },
+        )
+        self.env_patcher.start()
+
+    def tearDown(self):
+        self.env_patcher.stop()
+        self.tmpdir.cleanup()
+
     def _exec(self, intent, proposal=None):
         from api import execute, ExecuteRequest
         return execute(ExecuteRequest(intent=intent, proposal=proposal))

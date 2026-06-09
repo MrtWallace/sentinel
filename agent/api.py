@@ -70,7 +70,11 @@ class RiskConfigRequest(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "execution_backend": os.getenv("EXECUTION_BACKEND", "mock").lower(),
+        "real_tx_enabled": os.getenv("ENABLE_REAL_TX", "false").lower() == "true",
+    }
 
 
 @app.post("/api/execute")
@@ -549,11 +553,13 @@ def _demo_proposal_from_intent(intent: str) -> TxProposal:
             )
 
         from swap_codec import build_swap_proposal
+        recipient = os.getenv("COBO_SRC_ADDRESS") or DEFAULT_TRANSFER_RECIPIENT
         swap_data = build_swap_proposal(
             from_token="ETH",
             to_token="USDC",
             amount_eth=str(amount),
             slippage=0.03,
+            recipient=recipient,
         )
 
         return TxProposal(
@@ -564,6 +570,7 @@ def _demo_proposal_from_intent(intent: str) -> TxProposal:
             to_contract=DEFAULT_SWAP_CONTRACT,
             slippage=0.03,
             deadline=300,
+            recipient=recipient,
             calldata=swap_data.get("calldata"),
             value=swap_data.get("value"),
             reasoning="Deterministic demo parser generated a swap proposal.",
