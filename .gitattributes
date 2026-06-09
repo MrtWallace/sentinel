@@ -1,0 +1,7 @@
+# Exclude Foundry libraries from GitHub language statistics
+contracts/lib/** linguist-vendored
+frontend/packages/foundry/lib/** linguist-vendored
+frontend/packages/hardhat/lib/** linguist-vendored
+
+# Mark generated files
+frontend/packages/nextjs/contracts/deployedContracts.ts linguist-generated
