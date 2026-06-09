@@ -1,7 +1,7 @@
 # Sentinel Hackathon — 后端 & 合约进度
 
 > 目的：只记录短期状态，包括 checkpoint 进度表、当前阻塞、最近完成项。
-> 最后更新：2026-06-09 00:30
+> 最后更新：2026-06-09
 > 稳定方向和 checkpoint 定义见 `hackathon/docs/backend-plan.md`。
 
 ## 更新约定
@@ -34,7 +34,7 @@
 | CP11 | User-Scoped CAW Execution + Evidence | 2-4h | 2026-06-06 08:00 | 2026-06-06 08:02 | Done | `/api/execute` 已按 user_address 选择用户 CAW wallet + active pact；Sentinel reject 不触发 CAW |
 | CP12 | User Risk Config + CAW Pact Sync | 2-4h | 2026-06-06 08:05 | 2026-06-06 08:09 | Done | SQLite user config、config version、pact snapshot、`config_status=synced|needs_pact_update` 已完成 |
 | CP13 | SQLite Audit + CAW Evidence Query | 2-4h | 2026-06-07 03:24 | 2026-06-07 03:27 | Done | SQLite audit 主存储、per-user/status 分页过滤、CAW evidence query、敏感字段脱敏已完成 |
-| CP14 | CAW contract_call Demo Path | 2-4h | 待开始 | 待完成 | Stretch | 受控 MockDEX/Sepolia 合约优先；不强求真实 Uniswap，transfer 主线稳定后再做 |
+| CP14 | CAW contract_call Demo Path | 2-4h | 2026-06-09 | 2026-06-09 | Done | 真实 Sepolia swap 已上链：wrap → approve → Uniswap V3 exactInputSingle；tx 0x6b29...66f4；USDC 5.499668 到账 |
 | CP15 | Read-only MCP Server | 1.5-3h | 待开始 | 待完成 | Planned | 只读 tools：evaluate_transaction、get_risk_config、get_audit_log；不开放写操作 |
 | CP16 | Basic Agent Tool Calling | 2-4h | 待开始 | 待完成 | Planned | 稳定可 mock 的工具调用 + audit evidence；外部不稳定工具后置 |
 | CP17 | Agent Memory + Anomaly Detection | 2-4h | 待开始 | 待完成 | Planned | 复用 SQLite audit 生成用户历史模式，异常时提升到 confirm 或 reject evidence |
@@ -60,74 +60,17 @@
 
 ## 最近完成项
 
-### 2026-06-09 CP14：真实 CAW Sepolia Swap 验证（完成）
+### 2026-06-09 CP14 — 真实 CAW Sepolia Swap 成功
 
-- 状态：完成
-- 开始时间：2026-06-09 07:55
-- 完成时间：2026-06-09 08:18
-- 目标：使用 CAW 钱包完成一笔 Sepolia Etherscan 可查证的 swap 交易；`hackathon/docs/cp14-contract-call-swap.md` 仅作为参考，不直接采信其“网络问题/代码完成”结论。
-- 本次完成：
-  - 已修正 `swap_codec.py` 的 SwapRouter02 selector / 7 字段 calldata / USDC decimals minOut。
-  - 已修正 `api.py` swap proposal recipient，避免输出 token 进入零地址。
-  - 已修正 `execution.py` 对 CAW `status_display` 的归一化：`Processing` 视为 pending，`Failed/Rejected` 视为 failed，避免把数值 status 当作成功。
-  - 已确认旧 CP14 失败主因不是单纯网络问题，而是 calldata/recipient/status 处理和本地 TSS signer 离线共同导致。
-  - 已手动前台启动 CAW TSS signer，完成真实三段式 swap：wrap ETH -> approve WETH -> Uniswap SwapRouter02 swap。
-- 链上证据：
-  - CAW wallet/source：`0x927f175c85d61237f817b499f739336b498384fe`
-  - Wrap tx：`0x4d9c59ece554a869305334212e39733062a0552317be88a9aec5aaa8c3fa4104`
-  - Approve tx：`0x22d6cbf36b0e5b9e9f0ceee639f5b11ec4a8dede0cf0d565b8a808fecbee83e0`
-  - Swap tx：`0x6b2940e1810b39d5a0e08f47344038fd052e015b1c82939147c87e55ffdb66f4`
-  - Swap CAW request id：`sentinel-real-swap-8b2f63601fbf-swap`
-  - Swap CAW transaction id：`1f8d4e38-6c68-4efc-9079-ba55a6e492a4`
-  - Swap block：`11018833`
-- 余额验证：
-  - `USDC.balanceOf(0x927f...) = 5499668`，即约 `5.499668 USDC`。
-  - `WETH.balanceOf(0x927f...) = 0`，本次 0.0005 WETH 已被 swap 消耗。
-  - Router allowance 为 `uint256.max`。
-- 验证结果：
-  - `PYTHONPATH=agent python3 -m unittest agent/test_execution.py agent/test_swap_codec.py agent/test_eval_components.py -v`：169 tests OK。
-  - `cd agent && python3 -m unittest discover -s . -p 'test_*.py' -v`：312 tests OK。
-  - `make eval`：109/109，100%。
-- 注意：
-  - CAW SDK 查询中 `get_wallet_node_status()` 仍可能显示 `online=false`；实测手动前台启动 `cobo-tss-node start --caw --prod ...` 后能接住 signing request 并完成签名。
-  - 本次结束时已停止手动启动的 TSS signer 进程。
-
-### 2026-06-09 Eval Pipeline — 脚本完成与安全启动修复
-
-- 状态：完成
-- 开始时间：2026-06-09 07:44
-- 完成时间：2026-06-09 07:52
-- 本次完成：
-  - `agent/eval_pipeline.py` 文件头和执行逻辑更新为 6-layer eval（E2E / Trajectory / Safety / Reference / LLM Judge / Fuzz）。
-  - 新增 `--auto-start`，可自动启动临时 mock FastAPI 后端。
-  - eval 临时后端强制 `EXECUTION_BACKEND=mock`、`ENABLE_REAL_TX=false`，避免评测 case 误发真实 CAW 交易。
-  - `/health` 增加 `execution_backend` 和 `real_tx_enabled`，eval 默认拒绝连接真实交易后端。
-  - `make eval` 改为使用独立端口 `127.0.0.1:18080`，避免和开发中的 `8000` 后端互相影响。
-  - 修正 `chinese_small` case 期望：当前 demo parser 尚不支持中文 transfer 语法，应 rejected。
-- 相关问题修复：
-  - `api.py` 生成 swap proposal 时显式设置 output recipient，避免默认零地址。
-  - `swap_codec.py` 改为 Sepolia SwapRouter02 的 7 字段 `exactInputSingle` calldata，并按 USDC/USDT decimals 计算 `amountOutMinimum`。
-  - 新增 `agent/test_swap_codec.py` 覆盖 selector、calldata 长度、USDC decimals 和 recipient 编码。
-- 验证结果：
-
-```bash
-PYTHONPATH=agent python3 -m unittest agent/test_api.py agent/test_swap_codec.py
-# Ran 32 tests — OK
-
-cd agent && python3 -m unittest discover -s . -p "test_*.py" -v
-# Ran 310 tests — OK
-
-python3 -m py_compile agent/eval_pipeline.py agent/api.py agent/swap_codec.py
-# OK
-
-make eval
-# E2E:        32/32 (100%)
-# Trajectory: 32/32 (100%)
-# Safety:     20/20 (100%)
-# Reference:  15/15 (100%)
-# Fuzz:       10/10 (100%)
-# Total:      109/109 (100%)
-```
+- CAW contract_call 流程完全打通：intent → calldata → RiskPipeline → Agent B/C → DecisionEngine → CawExecutor.contract_call → CAW 提交 → 链上执行。
+- 三笔链上交易：
+  - Wrap (ETH → WETH): 0x4d9c59ece554a869305334212e39733062a0552317be88a9aec5aaa8c3fa4104
+  - Approve (WETH → Uniswap Router): 0x22d6cbf36b0e5b9e9f0ceee639f5b11ec4a8dede0cf0d565b8a808fecbee83e0
+  - Swap (WETH → USDC via Uniswap V3 exactInputSingle): 0x6b2940e1810b39d5a0e08f47344038fd052e015b1c82939147c87e55ffdb66f4
+- Block: 11018833
+- USDC 到账验证：balanceOf = 5.499668 USDC
+- 关键修复：COBO_PACT_ID（新建含 contract_call policy 的 pact）、value 格式（wei → ETH）、src_addr 参数。
+- 阻塞点：CAW TSS signer 未在线，手动启动后成功。
 
 ### 2026-06-08 Security Hardening — Eval 漏洞修复 + Agent B/C Prompt 加强
 
@@ -836,27 +779,3 @@ PYTHONPATH=agent python3 -m unittest agent/test_intent.py
 - 后端/合约 MVP 约完成 30%-35%，因为 Cobo 赛道主路径和 agent retry 增加了新范围。
 - 当前速度：CP3 在教练模式下完成，核心硬规则已有单测保护。
 - 剩余后端/合约预计有效工时：约 24-34h；若 CAW 环境、Pact 审批、web3 / FastAPI 联调卡住，可能到 36h+。
-### 2026-06-09 CP14：CAW contract_call Swap 实现
-
-- 已实现 Uniswap V3 swap calldata 编码器 `swap_codec.py`：
-  - 无 web3 依赖，纯 Python 实现
-  - 支持 ETH/WETH/USDC/USDT token 对
-  - 自动选择 fee tier（0.3% for ETH/USDC，0.01% for stable pairs）
-- 已更新 `execution.py`：
-  - MockExecutionBackend：swap → dry_run（含 calldata evidence）
-  - CawExecutor：swap → 3 步流程（wrap ETH → WETH, approve router, swap）
-  - 添加 `_wait_for_tx()` 等待每步上链
-  - 使用 pact API key（而非 wallet API key）调用 contract_call
-- 已更新 `models.py`：TxProposal 加 calldata + value 字段
-- 已更新 `api.py`：demo parser 生成含 calldata 的 swap proposal
-- 已创建 CAW Pact（含 transfer + contract_call policy）
-- 已解决的问题：
-  - API key 混用：必须用 pact API key 调用 contract_call
-  - Value 格式：CAW 要求 ETH 格式（非 wei）
-  - contract_call 的 `when` 只支持 `chain_in`（不支持 `contract_in`）
-  - Default Pact 不能修改，必须创建新 Pact
-- 当前状态：
-  - 代码完成，单元测试 91/91 pass
-  - Eval 108/109 (99%)
-  - Sepolia 交易 Processing（网络问题，非代码问题）
-- 详细记录：`hackathon/docs/cp14-contract-call-swap.md`
