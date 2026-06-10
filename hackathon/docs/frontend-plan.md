@@ -1,6 +1,6 @@
 # Sentinel 前端 MVP 更新计划
 
-> 最后更新：2026-06-07
+> 最后更新：2026-06-10
 
 ## 总结
 
@@ -26,11 +26,15 @@ Post-MVP 新路线采用 **Cobo-first execution platform + Agent evidence layer*
 
 ### 首页 `/`
 
-首页是执行控制台。
+首页是执行控制台，三列布局。
 
-- 顶部状态栏优先展示 Cobo demo 需要的 execution context：network、execution backend、CAW wallet、pact status / pact id、real-tx mode。SmartAccount 余额、daily limit、daily spent、agent 可作为 baseline / fallback 的 secondary 信息保留。
-- 左侧输入 intent，提供 demo 快捷按钮：成功 swap、被拦截 swap、需要确认的大额操作。
-- 右侧展示 decision chain：先显示 loading skeleton，再逐步 reveal 每个步骤；如果后端返回 `attempts[]`，优先展示 attempts timeline，而不是只展示 legacy `decision_chain`。
+- **左列 — Intent Workbench**：自然语言输入 + Demo Scenarios 快捷按钮 + Run 按钮。Demo Scenarios 是 demo 入口，标注清晰（不是产品功能），让评委 5 秒内切到不同场景。
+- **中列 — Decision Chain**：六步 pipeline 展示，每步可点击展开查看 agent tool 调用详情（详见 Checkpoint 14）。执行前显示 skeleton/空态，执行后逐步 reveal。
+- **右列 — Chain Evidence Panel**：三状态链上证据面板（详见 Checkpoint 13.5）。Idle 时展示 CAW wallet/pact/network；submitted 时展示等待状态；completed 时展示完整链上证据。
+
+三列各自职责清晰：左边「输入」，中间「AI 怎么判断」，右边「链上证据」。不重叠。
+
+顶部状态栏展示 Cobo demo 需要的 execution context：network、execution backend、CAW wallet、pact status / pact id、real-tx mode。SmartAccount 余额等作为 baseline 信息保留。
 
 ### Audit 页 `/audit`
 
@@ -785,35 +789,303 @@ yarn workspace @se-2/nextjs lint
 
 - 为什么 Cobo 赛道展示 contract_call 能力有价值，但 demo 稳定性优先。
 
-### Checkpoint 14：Agent Evidence UI（Tools + Memory + MCP）
+### Checkpoint 13.5：Chain Evidence Panel（右列三状态）
 
 目标：
 
-- 让 “Agent 项目” 不只展示 loop，还能展示工具调用、用户记忆和 MCP 互操作证据。
+- 替换当前右列 "Recent Decisions" 为 Chain Evidence Panel。
+- 让评委在首页第一屏直接看到链上证据，不需要翻 Audit 页。
+- 三个状态：Idle（未操作）、Submitted（已提交等待链上确认）、Completed（链上证据就绪）。
+
+背景：
+
+- 当前右列 "Recent Decisions" 和 Audit 页重复度 ~80%，且不展示链上证据。
+- ChatGPT 计划里 P0 #3 Evidence Panel 是正确的判断。
+- Chain Evidence Panel 解决两个问题：消除重复 + 让链上证据在首页可见。
 
 产物：
 
-- Agent B/C 区块增加 tool evidence：
-  - `check_contract_verified`
-  - `check_gas_price`
-  - `get_token_price` 或 mock/static price provider
-- Memory anomaly 区块：
-  - average amount。
-  - current amount multiplier。
-  - unusual target / common target。
-  - resulting finding or confirm reason。
-- MCP evidence panel：
-  - 显示外部 Agent 调用 `evaluate_transaction` 的一条示例结果。
-  - 先作为 read-only evidence，不做前端编辑 MCP config。
+- 新增 `frontend/packages/nextjs/components/sentinel/ChainEvidencePanel.tsx`。
+- 移除首页右列的 `Recent Decisions` 硬编码列表和 `decisionItems` 状态。
+- 三状态切换由 `execution` 状态驱动：
+
+**State 1: Idle（execution === null）**
+
+```
+┌─ Chain Evidence ──────────────────┐
+│ CAW Wallet   0x927f...84fe        │
+│ Pact         6514b2d6 ✓ active    │
+│ Network      Sepolia              │
+│ ───────────────────────────────── │
+│ No active execution.              │
+│ Run an intent to see evidence.    │
+└───────────────────────────────────┘
+```
+
+- CAW Wallet 地址和 Pact ID 从后端 config API 或 mock 获取。
+- 展示当前 CAW 钱包状态，不需要执行就能看到。
+
+**State 2: Submitted（isExecuting === true 或 execution.status 为 pending）**
+
+```
+┌─ Chain Evidence ──────────────────┐
+│ ⏳ CAW operation submitted        │
+│ ───────────────────────────────── │
+│ Request ID   sentinel-8b2f...-swap│
+│ Operation    contract_call        │
+│ Status       waiting for confirm..│
+│ ───────────────────────────────── │
+│ ⏱ Checking on-chain...           │
+└───────────────────────────────────┘
+```
+
+- 展示 CAW request ID 和 operation type（transfer_tokens / contract_call）。
+- loading 动画表示等待链上确认。
+
+**State 3a: Completed — Executed**
+
+```
+┌─ Chain Evidence ──────────────────┐
+│ ✅ Executed via CAW               │
+│ ───────────────────────────────── │
+│ CAW Wallet   0x927f...84fe        │
+│ Pact         6514b2d6 ✓ enforced  │
+│ Exec backend caw                  │
+│ Real tx      ✓                    │
+│ ───────────────────────────────── │
+│ Swap tx      0x6b29...f4          │
+│ Block        11018833             │
+│ Received     5.499668 USDC        │
+│ ───────────────────────────────── │
+│ [View on Explorer ↗]              │
+│ [Audit log →]                     │
+└───────────────────────────────────┘
+```
+
+- swap 场景显示 wrap tx、approve tx、swap tx 三笔（可折叠，只显示 swap tx 主行）。
+- transfer 场景只显示 transfer tx。
+- Explorer 链接同时提供 Etherscan 和 Blockscout。
+- "Audit log →" 链接到 Audit 页该条记录。
+
+**State 3b: Completed — Rejected / Failed**
+
+```
+┌─ Chain Evidence ──────────────────┐
+│ ❌ Blocked by Sentinel            │
+│ ───────────────────────────────── │
+│ Rule         AmountRule           │
+│ Reason       Amount exceeds limit │
+│ CAW reached  ✗ (blocked before)  │
+└───────────────────────────────────┘
+```
+
+- 如果是 CAW Pact deny，显示 `Blocked by CAW Pact` 而非 Sentinel。
+- `CAW reached: ✗` 昨意 Sentinel 拦截时 CAW 未被触达。
+
+**State 3c: Completed — Confirm Needed**
+
+```
+┌─ Chain Evidence ──────────────────┐
+│ ⚠ Manual review required         │
+│ ───────────────────────────────── │
+│ Risk note    Amount above median  │
+│ Pending      Approve / Reject     │
+└───────────────────────────────────┘
+```
+
+实现要点：
+
+- `ChainEvidencePanel` 接收 `execution: ExecuteResponse | null` 和 `isExecuting: boolean` 作为 props。
+- CAW wallet / pact 信息可从 `execution.cawEvidence` 获取，idle 时从 config API 或 mock。
+- swap 的三笔 sub-tx 如果后端 `execution.cawEvidence.subTransactions` 存在则展示折叠列表，否则只展示主 swap tx。
+- 右列宽度保持 300px（`xl:grid-cols-[380px_minmax(0,1fr)_300px]`），信息密度适中。
 
 审查重点：
 
-- Agent evidence 是辅助层，不打断 CAW 主 demo 流。
-- 不把外部 API 不稳定性暴露给 demo 主路径；必要时使用 mock/static evidence。
+- 评委能否在首页第一屏看到真实 tx hash 和 USDC received，不需要翻页。
+- 三个状态切换是否流畅，idle → submitted → completed 的过渡是否自然。
+- Reject / CAW deny 场景的文案是否清晰区分 Sentinel 拦截 vs CAW Pact 拦截。
+- swap 三笔 sub-tx 折叠是否不遮挡关键信息。
 
 学习点：
 
-- Tool calling 解决“Agent 会查证据”，memory 解决“Agent 记得用户模式”，MCP 解决“Sentinel 可被其他 Agent 调用”。
+- 为什么 Evidence Panel 替代 Recent Decisions 而不是并存 — 消除重复，强化证据叙事。
+- 为什么 idle 状态也要展示 CAW wallet — 让评委第一眼就知道「这个项目用的是真实 CAW」。
+
+### Checkpoint 14：Decision Chain 可展开详情（Agent Tool-Use + Memory Anomaly）
+
+目标：
+
+- 让 Decision Chain 不只是六步状态展示，而是每步可点击展开查看 agent tool 调用详情。
+- 证明 Sentinel 不只是 if-else pipeline — 它调用了工具、审查了多维度、检测了行为异常。
+- Tool-use 和 Memory Anomaly 嵌入 Decision Chain，不建独立页面。
+
+背景：
+
+- Tool-use 和 agent 状态是 per-execution 的，跟着当前决策走，不是全局状态。
+- 三个 agent（A 解析、B 安全审查、C 风险分析）的状态在 Decision Chain 的对应步骤中展开。
+- Memory anomaly（amount_spike、frequency_spike、new_contract_seen）在 Agent C 风险审查步骤中展示。
+- 不建独立 "Agent Status" 页 — 原因：每轮不同、三个 agent 状态、和 Decision Chain 是同一个叙事。
+
+产物：
+
+- 修改 `frontend/packages/nextjs/components/sentinel/DecisionChain.tsx`：每步增加 expand/collapse 交互。
+- 后端 `/api/execute` 响应中每个 step 增加 `toolCalls` 字段（详见后端 contract）。
+- 前端类型 `types.ts` 增加 `ToolCall` 类型。
+
+**展开前（默认态，和现在一样）：**
+
+```
+1 ✎ Intent Parsing              120ms
+2 ✦ Hard Rules Check             15ms  ✓ 5/5
+3 ⊘ Agent Review                850ms  ✓ passed
+4 ⚑ Decision                    10ms  → EXECUTE
+5 ⚡ Execution               2,100ms  contract_call
+6 ☑ Result                      tx hash
+```
+
+每步一行：步骤名 + 状态 + 耗时/摘要。点击任意步展开详情。
+
+**Step 1 展开 — Intent Parsing（Agent A）：**
+
+```
+1 ✎ Intent Parsing              120ms
+  ┌──────────────────────────────────┐
+  │ Tool      parse_intent           │
+  │ Input     "Swap 0.0005 ETH to    │
+  │           USDC"                  │
+  │ Output    action: swap           │
+  │           amount: 0.0005         │
+  │           token_in: ETH          │
+  │           token_out: USDC        │
+  │ Status    ✓ success              │
+  └──────────────────────────────────┘
+```
+
+**Step 2 展开 — Hard Rules：**
+
+```
+2 ✦ Hard Rules Check             15ms
+  ┌──────────────────────────────────┐
+  │ AmountRule       ✓ pass   3ms    │
+  │ SlippageRule     ✓ pass   2ms    │
+  │ WhitelistRule    ✓ pass   4ms    │
+  │ ApprovalRule     ✓ pass   3ms    │
+  │ FrequencyRule    ✓ pass   3ms    │
+  └──────────────────────────────────┘
+```
+
+**Step 3 展开 — Agent Review（重点）：**
+
+```
+3 ⊘ Agent Review                850ms
+  ┌─ Agent B (Security) ──────────┐
+  │ address_risk       ✓ low   80ms│
+  │ approval_risk      ✓ safe  65ms│
+  │ intent_consistency ✓ match 90ms│
+  │ social_engineering ✓ none 120ms│
+  │ action_risk        ✓ std   70ms│
+  │ injection_check    ✓ clean 95ms│
+  │ ────────────────────────────── │
+  │ verdict: APPROVE               │
+  └────────────────────────────────┘
+  ┌─ Agent C (Risk) ─────────────┐
+  │ amount_exposure    ✓ 0.05% 75ms│
+  │ slippage_risk      ✓ ok    60ms│
+  │ token_risk         ✓ stable 80ms│
+  │ frequency_context  ✓ normal 70ms│
+  │ memory_anomaly     ✓ no spike  │  ← Memory 在这里
+  │ ────────────────────────────── │
+  │ verdict: APPROVE               │
+  └────────────────────────────────┘
+```
+
+Memory anomaly 三个信号在 Agent C 展开区内展示：
+
+- `amount_spike_vs_recent_median` — 正常时 `✓ no spike`，异常时 `⚠ 10x recent median`（amber 警告色）
+- `frequency_spike_24h` — 正常时 `✓ normal`，异常时 `⚠ 15 requests in 24h`
+- `new_contract_seen` — 正常时 `✓ known contract`，异常时 `⚠ first interaction with 0x3bFA...`
+
+当 Memory anomaly 检测到异常时，Agent C 的 verdict 变为 `CONFIRM` 而非 `APPROVE`，最终决策变为 `confirm_needed`。
+
+**Step 5 展开 — Execution（CAW 详情）：**
+
+```
+5 ⚡ Execution               2,100ms
+  ┌──────────────────────────────────┐
+  │ Backend    caw                   │
+  │ Operation  contract_call         │
+  │ Request ID sentinel-8b2f...-swap │
+  │ Target     0x3bFA...48E (Router) │
+  │ ─────────────────────────────────│
+  │ Tool       submit_caw_contract   │
+  │ Status     ✓ submitted    1,200ms│
+  │ Tool       read_caw_transaction  │
+  │ Status     ✓ succeeded      900ms│
+  └──────────────────────────────────┘
+```
+
+**Step 6 展开 — Result（链上证据摘要）：**
+
+```
+6 ☑ Result
+  ┌──────────────────────────────────┐
+  │ Swap tx   0x6b29...f4            │
+  │ Block     11018833               │
+  │ Received  5.499668 USDC          │
+  │ ─────────────────────────────────│
+  │ [Full evidence in right panel →] │
+  └──────────────────────────────────┘
+```
+
+Step 6 只展示摘要，完整链上证据在右列 Chain Evidence Panel 中展示（Checkpoint 13.5）。不重复。
+
+实现要点：
+
+- 每步默认 collapsed，点击 header 行 toggle 展开/折叠。
+- 展开/折叠用 CSS transition，不用 stagger animation（stagger 只用于首次 reveal）。
+- `ToolCall` 类型：`{ name: string; status: string; duration_ms?: number; input_summary?: string; output_summary?: string }`。
+- 后端需要在 `/api/execute` 响应的每个 step 中增加 `tool_calls[]` 字段。如果后端未返回，前端该步不显示展开内容（graceful degradation）。
+- Memory anomaly 的三个信号值来自后端 Agent C 的 `findings[]`，前端只做展示，不做计算。
+- Agent B 和 Agent C 并行显示，不合并成一个 block。
+- 展开区宽度跟随中列（`minmax(0, 1fr)`），不限 300px。
+
+后端 contract 变更（后端 CP16 产出）：
+
+```typescript
+// 在 decision_chain 的每个 step 中新增
+type DecisionStep = {
+  name: string;
+  status: string;
+  duration_ms: number;
+  summary: string;
+  tool_calls?: ToolCall[];  // 新增
+};
+
+type ToolCall = {
+  name: string;           // e.g. "parse_intent", "address_risk", "submit_caw_contract"
+  status: "success" | "failed" | "skipped";
+  duration_ms?: number;
+  input_summary?: string;
+  output_summary?: string;
+};
+```
+
+审查重点：
+
+- 未展开时 Decision Chain 是否和改造前一样简洁（每步一行）。
+- 展开后 Agent B / Agent C 的维度展示是否能让评委理解「这不是简单 if-else」。
+- Memory anomaly 在 Agent C 中的展示是否自然，不突兀。
+- Step 5 和 Step 6 是否不重复展示 CAW 证据（Step 5 展示执行过程，Step 6 引导去看右列）。
+- 后端未返回 tool_calls 时，前端是否不报错、不显示空展开区。
+
+学习点：
+
+- 为什么 tool-use 不做成独立 timeline 组件 — 它是 Decision Chain 的内联详情，不是独立功能。
+- 为什么 Memory anomaly 放在 Agent C 而不是单独区块 — 它是风险评估的一个维度。
+- 为什么 Step 6 只展示摘要 — 避免和右列 Evidence Panel 重复。
+
+MCP 部分移至 P2（Read-only MCP Server），不在本 checkpoint 实现。独立 "Agent Status" 二级菜单方案已否决 — agent 状态是 per-execution 的，嵌入 Decision Chain 才合理。
 
 ### Checkpoint 15：Auth UX + Rate Limit Error
 

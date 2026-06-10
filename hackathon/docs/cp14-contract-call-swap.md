@@ -2,7 +2,9 @@
 
 > 日期：2026-06-08 ~ 2026-06-09
 > 目标：实现 CAW contract_call 真实 swap 流程
-> 最终状态：代码完成，Sepolia 测试网交易 Processing（网络问题，非代码问题）
+> 最终状态：✅ Done — 真实 CAW contract_call swap 在 Sepolia 上链成功（2026-06-09）
+>
+> **更新 2026-06-09**：早期 Processing/Failed 状态已解决。最终验证的 swap 证据（3 笔 tx hash + USDC 到账）记录在 backend-progress.md 和 README Demo Evidence 中。
 
 ---
 
