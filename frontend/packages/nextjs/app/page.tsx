@@ -280,7 +280,7 @@ const Home: NextPage = () => {
         </section>
 
         <aside className="flex min-h-[560px] flex-col rounded-lg border border-white/10 bg-[#111318] lg:col-span-2 xl:col-span-1">
-          <EvidencePanel response={execution} />
+          <EvidencePanel isExecuting={isExecuting} response={execution} />
         </aside>
       </div>
     </SentinelShell>
@@ -297,6 +297,8 @@ const demoEvidence = {
   pactStatus: "active",
   backend: "caw",
   realTxEnabled: "true",
+  wrapTx: "0x4d9c59ece554a869305334212e39733062a0552317be88a9aec5aaa8c3fa4104",
+  approveTx: "0x22d6cbf36b0e5b9e9f0ceee639f5b11ec4a8dede0cf0d565b8a808fecbee83e0",
   finalSwapTx: "0x6b2940e1810b39d5a0e08f47344038fd052e015b1c82939147c87e55ffdb66f4",
   blockNumber: "11018833",
   usdcReceived: "5.499668 USDC",
@@ -306,7 +308,10 @@ const demoEvidence = {
 const ExecutionFlow = () => {
   return (
     <div className="rounded-lg border border-white/10 bg-[#0c0e12] p-3">
-      <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[#89938d]">Execution Flow</div>
+      <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.12em] text-[#89938d]">End-to-end Flow</div>
+      <p className="m-0 mb-2 text-xs leading-5 text-[#bec9c2]">
+        The high-level demo path; the Decision Chain below expands the risk and execution details.
+      </p>
       <div className="grid gap-2 sm:grid-cols-5">
         {flowSteps.map((step, index) => (
           <div className="min-w-0 rounded-md border border-white/10 bg-[#111318] px-2.5 py-2" key={step}>
@@ -319,8 +324,8 @@ const ExecutionFlow = () => {
   );
 };
 
-const EvidencePanel = ({ response }: { response: ExecuteResponse | null }) => {
-  const evidence = buildEvidenceView(response);
+const EvidencePanel = ({ isExecuting, response }: { isExecuting: boolean; response: ExecuteResponse | null }) => {
+  const evidence = buildEvidenceView(response, isExecuting);
 
   return (
     <>
@@ -328,14 +333,14 @@ const EvidencePanel = ({ response }: { response: ExecuteResponse | null }) => {
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2 text-[#88d6b6]">
             <ShieldCheckIcon className="h-4 w-4 shrink-0" />
-            <h2 className="m-0 truncate text-base font-semibold">Evidence Panel</h2>
+            <h2 className="m-0 truncate text-base font-semibold">Chain Evidence</h2>
           </div>
           <span className="shrink-0 rounded-full border border-[#88d6b6]/25 bg-[#88d6b6]/10 px-2 py-1 font-mono text-[10px] uppercase text-[#a4f3d1]">
             {evidence.sourceLabel}
           </span>
         </div>
         <p className="m-0 mt-1 text-xs leading-5 text-[#bec9c2]">
-          CAW execution context and on-chain proof for the selected scenario.
+          CAW wallet, Pact boundary, execution status, and on-chain proof for the selected scenario.
         </p>
       </div>
 
@@ -343,16 +348,51 @@ const EvidencePanel = ({ response }: { response: ExecuteResponse | null }) => {
         {evidence.rows.map(row => (
           <EvidenceRow key={row.label} label={row.label} value={row.value} tone={row.tone} />
         ))}
+
+        {evidence.subTransactions.length > 0 && (
+          <details className="rounded-md border border-white/10 bg-[#0c0e12] px-3 py-2">
+            <summary className="cursor-pointer list-none font-mono text-[10px] uppercase text-[#89938d] [&::-webkit-details-marker]:hidden">
+              Swap sub-transactions
+            </summary>
+            <div className="mt-2 grid gap-2">
+              {evidence.subTransactions.map(tx => (
+                <EvidenceRow key={tx.label} label={tx.label} value={tx.value} tone="success" />
+              ))}
+            </div>
+          </details>
+        )}
       </div>
 
       <div className="border-t border-white/10 p-4">
-        <a
-          className="flex items-center gap-2 rounded-lg border border-[#3f4944] bg-[#0c0e12] px-3 py-2 font-mono text-xs text-[#bec9c2] transition hover:border-[#88d6b6]/60 hover:text-[#e2e2e8]"
-          href={evidence.auditHref}
-        >
-          <ArrowPathIcon className="h-4 w-4 text-[#88d6b6]" />
-          Open audit trail
-        </a>
+        <div className="grid gap-2">
+          {evidence.explorerTxHash && (
+            <>
+              <a
+                className="flex items-center gap-2 rounded-lg border border-[#88d6b6]/30 bg-[#88d6b6]/10 px-3 py-2 font-mono text-xs text-[#a4f3d1] transition hover:border-[#88d6b6]"
+                href={`https://sepolia.etherscan.io/tx/${evidence.explorerTxHash}`}
+                rel="noreferrer"
+                target="_blank"
+              >
+                View on Etherscan
+              </a>
+              <a
+                className="flex items-center gap-2 rounded-lg border border-[#88d6b6]/30 bg-[#88d6b6]/10 px-3 py-2 font-mono text-xs text-[#a4f3d1] transition hover:border-[#88d6b6]"
+                href={`https://eth-sepolia.blockscout.com/tx/${evidence.explorerTxHash}`}
+                rel="noreferrer"
+                target="_blank"
+              >
+                View on Blockscout
+              </a>
+            </>
+          )}
+          <a
+            className="flex items-center gap-2 rounded-lg border border-[#3f4944] bg-[#0c0e12] px-3 py-2 font-mono text-xs text-[#bec9c2] transition hover:border-[#88d6b6]/60 hover:text-[#e2e2e8]"
+            href={evidence.auditHref}
+          >
+            <ArrowPathIcon className="h-4 w-4 text-[#88d6b6]" />
+            Open audit trail
+          </a>
+        </div>
       </div>
     </>
   );
@@ -377,15 +417,41 @@ const EvidenceRow = ({ label, tone = "default", value }: EvidenceRowModel) => {
   );
 };
 
-function buildEvidenceView(response: ExecuteResponse | null): {
+function buildEvidenceView(
+  response: ExecuteResponse | null,
+  isExecuting: boolean,
+): {
   auditHref: string;
+  explorerTxHash: string | null;
   rows: EvidenceRowModel[];
   sourceLabel: string;
+  subTransactions: EvidenceRowModel[];
 } {
+  if (isExecuting) {
+    return {
+      auditHref: "/audit",
+      explorerTxHash: null,
+      sourceLabel: "Submitted",
+      subTransactions: [],
+      rows: [
+        { label: "Operation", value: "Awaiting backend decision", tone: "warning" },
+        { label: "Execution Backend", value: "caw" },
+        { label: "Status", value: "checking risk + CAW readiness", tone: "warning" },
+        { label: "Real TX Enabled", value: "resolved by backend", tone: "warning" },
+      ],
+    };
+  }
+
   if (!response) {
     return {
       auditHref: "/audit",
+      explorerTxHash: demoEvidence.finalSwapTx,
       sourceLabel: "Demo evidence",
+      subTransactions: [
+        { label: "Wrap TX", value: demoEvidence.wrapTx },
+        { label: "Approve TX", value: demoEvidence.approveTx },
+        { label: "Swap TX", value: demoEvidence.finalSwapTx },
+      ],
       rows: [
         { label: "CAW Wallet", value: demoEvidence.walletAddress, tone: "success" },
         { label: "Pact ID / Status", value: `${demoEvidence.pactId} / ${demoEvidence.pactStatus}` },
@@ -408,10 +474,19 @@ function buildEvidenceView(response: ExecuteResponse | null): {
       : (rawString(execution.raw, "real_tx_enabled") ?? "Not returned");
   const isPolicyDenied = execution.status === "policy_denied";
   const evidenceSource = rawString(execution.raw, "evidence_source");
+  const wrapTx = rawString(execution.raw, "wrap_tx");
+  const approveTx = rawString(execution.raw, "approve_tx");
+  const swapTx = rawString(execution.raw, "swap_tx") ?? (txHash !== "Not returned" ? txHash : null);
 
   return {
     auditHref: `/audit`,
+    explorerTxHash: swapTx,
     sourceLabel: evidenceSource ? "Demo evidence" : "Current result",
+    subTransactions: [
+      wrapTx ? { label: "Wrap TX", value: wrapTx } : null,
+      approveTx ? { label: "Approve TX", value: approveTx } : null,
+      swapTx ? { label: "Swap TX", value: swapTx } : null,
+    ].filter((row): row is EvidenceRowModel => row !== null),
     rows: [
       {
         label: "CAW Wallet",
@@ -424,6 +499,7 @@ function buildEvidenceView(response: ExecuteResponse | null): {
         tone: isPolicyDenied ? "danger" : "default",
       },
       { label: "Execution Backend", value: execution.backend },
+      { label: "Execution Status", value: execution.status, tone: isPolicyDenied ? "danger" : "default" },
       { label: "Real TX Enabled", value: realTxEnabled, tone: realTxEnabled === "true" ? "success" : "warning" },
       { label: "Final Swap TX", value: txHash, tone: txHash === "Not returned" ? "warning" : "success" },
       {

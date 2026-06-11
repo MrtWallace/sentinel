@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   ArrowPathIcon,
   CheckCircleIcon,
+  ChevronDownIcon,
   ClockIcon,
   ExclamationTriangleIcon,
   ShieldCheckIcon,
@@ -11,7 +12,17 @@ import {
 } from "@heroicons/react/24/outline";
 import { StatusBadge } from "~~/components/sentinel/StatusBadge";
 import { getCawAuditEvidence, isCawPolicyDenied } from "~~/lib/sentinel/auditEvidenceViewModel";
-import type { AgentReview, ExecuteResponse, ExecutionStatus, RuleCheck, TxProposal } from "~~/lib/sentinel/types";
+import type {
+  AgentReview,
+  AttemptRecord,
+  ExecuteResponse,
+  ExecutionStatus,
+  MemoryAnomaly,
+  RuleCheck,
+  ToolCall,
+  ToolCallEvidence,
+  TxProposal,
+} from "~~/lib/sentinel/types";
 
 type DecisionChainProps = {
   actionError?: string | null;
@@ -74,14 +85,20 @@ export const DecisionChain = ({
 
       <div className="min-h-0 flex-1 overflow-y-auto divide-y divide-white/5">
         {visibleSteps >= 1 && (
-          <StepBlock index="01" status="passed" title="Agent A Proposal">
+          <StepBlock index="01" status="passed" summary={proposalSummary(proposal)} title="Agent A Proposal">
             <ProposalGrid proposal={proposal} />
             <p className="m-0 mt-3 text-xs leading-5 text-[#bec9c2]">{chain.agentProposal.reasoning}</p>
+            <ToolCallList calls={stepToolCalls(response, "Agent A", chain.agentProposal.toolCalls)} />
           </StepBlock>
         )}
 
         {visibleSteps >= 2 && (
-          <StepBlock index="02" status={rulesStepStatus(chain.hardRules)} title="Hard Rules">
+          <StepBlock
+            index="02"
+            status={rulesStepStatus(chain.hardRules)}
+            summary={rulesSummary(chain.hardRules)}
+            title="Hard Rules"
+          >
             <div className="grid gap-2">
               {chain.hardRules.map(rule => (
                 <RuleRow key={rule.rule} rule={rule} />
@@ -91,23 +108,43 @@ export const DecisionChain = ({
         )}
 
         {visibleSteps >= 3 && (
-          <StepBlock index="03" status={agentStepStatus(agentB)} title="Agent B Security Review">
+          <StepBlock
+            index="03"
+            status={agentStepStatus(agentB)}
+            summary={agentSummary(agentB)}
+            title="Agent B Security Review"
+          >
             <AgentReviewPanel fallback="Skipped after hard-rule rejection." review={agentB} />
+            <ToolCallList calls={stepToolCalls(response, "Agent B", agentB?.toolCalls)} />
           </StepBlock>
         )}
 
         {visibleSteps >= 4 && (
-          <StepBlock index="04" status={agentStepStatus(agentC)} title="Agent C Risk Review">
+          <StepBlock
+            index="04"
+            status={agentStepStatus(agentC)}
+            summary={agentSummary(agentC)}
+            title="Agent C Risk Review"
+          >
             <AgentReviewPanel fallback="Skipped after hard-rule rejection." review={agentC} />
+            <MemoryAnomalyPanel anomalies={response.memoryAnomalies} />
+            <ToolCallList calls={stepToolCalls(response, "Agent C", agentC?.toolCalls)} />
           </StepBlock>
         )}
 
         {visibleSteps >= 5 && (
-          <StepBlock index="05" status={chain.finalDecision} title="Final Decision">
+          <StepBlock
+            index="05"
+            status={chain.finalDecision}
+            summary={executionSummary(response)}
+            title="Execution Decision"
+          >
             <div className="grid gap-2 md:grid-cols-[180px_minmax(0,1fr)]">
               <StatusBadge status={chain.finalDecision} />
               <p className="m-0 text-sm leading-6 text-[#e2e2e8]">{chain.decisionReason}</p>
             </div>
+            <ExecutionDetailGrid response={response} />
+            <ToolCallList calls={executionToolCalls(response)} />
             {isSecurityRejection(response) && (
               <div className="mt-2 rounded-md border border-rose-300/20 bg-rose-300/10 px-3 py-2 text-xs leading-5 text-rose-100">
                 Security rejection: {response.reason}
@@ -122,7 +159,12 @@ export const DecisionChain = ({
         )}
 
         {visibleSteps >= 6 && (
-          <StepBlock index="06" status={chain.finalDecision} title="Transaction / Audit Result">
+          <StepBlock
+            index="06"
+            status={chain.finalDecision}
+            summary={resultSummary(response)}
+            title="Transaction / Audit Result"
+          >
             <AuditResult response={response} userAddress={auditUserAddress} />
           </StepBlock>
         )}
@@ -177,7 +219,7 @@ const ProposalGrid = ({ proposal }: { proposal: TxProposal }) => {
       <DataPoint label="Action" value={proposal.action} />
       <DataPoint label="Amount" value={proposal.amount} />
       <DataPoint label="Token Pair" value={proposal.tokenPair ?? tokenPairFromProposal(proposal)} />
-      <DataPoint label="Target" value={proposal.targetContract} />
+      <DataPoint className="sm:col-span-2 xl:col-span-2" label="Target" value={proposal.targetContract} />
       <DataPoint label="Slippage" value={proposal.slippage ?? "N/A"} />
       <DataPoint label="Expected Output" value={proposal.expectedOutput ?? "N/A"} />
       <DataPoint label="Deadline" value={proposal.deadline ?? "N/A"} />
@@ -251,31 +293,156 @@ const AttemptsTimeline = ({ response }: { response: ExecuteResponse }) => {
       </div>
       <div className="grid gap-2">
         {response.attempts.map(attempt => (
-          <div
-            className="grid gap-2 rounded-md border border-white/10 bg-[#111318] p-2.5 lg:grid-cols-[88px_120px_minmax(0,1fr)_minmax(0,1fr)]"
-            key={attempt.attemptIndex}
-          >
-            <div className="font-mono text-xs text-[#89938d]">ATTEMPT {attempt.attemptIndex}</div>
-            <StatusBadge status={decisionToStatus(attempt.decision)} />
-            <div className="min-w-0 text-xs leading-5 text-[#bec9c2]">
-              <span className="font-semibold text-[#e2e2e8]">{attempt.proposal.amount}</span>{" "}
-              {attempt.proposal.tokenPair ?? attempt.proposal.action}
-              {attempt.rejectionSource !== "none" && (
-                <span className="ml-2 text-[#ffb4ab]">source: {attempt.rejectionSource}</span>
-              )}
-            </div>
-            <div className="min-w-0 text-xs leading-5 text-[#bec9c2]">
-              {attempt.suggestions.length > 0
-                ? attempt.suggestions
-                    .map(suggestion => `${suggestion.field} -> ${suggestion.suggestedValue}`)
-                    .join(", ")
-                : attempt.decisionReason}
-            </div>
-          </div>
+          <AttemptCard attempt={attempt} key={attempt.attemptIndex} />
         ))}
       </div>
     </div>
   );
+};
+
+const AttemptCard = ({ attempt }: { attempt: AttemptRecord }) => {
+  const agentB = attempt.agentReviews.find(review => review.agent === "Agent B");
+  const agentC = attempt.agentReviews.find(review => review.agent === "Agent C");
+  const summary =
+    attempt.suggestions.length > 0
+      ? attempt.suggestions.map(suggestion => `${suggestion.field} -> ${suggestion.suggestedValue}`).join(", ")
+      : attempt.decisionReason;
+
+  return (
+    <details className="group rounded-md border border-white/10 bg-[#111318]">
+      <summary className="grid cursor-pointer list-none gap-2 p-2.5 [&::-webkit-details-marker]:hidden lg:grid-cols-[88px_120px_minmax(0,1fr)_minmax(0,1fr)_28px]">
+        <div className="font-mono text-xs text-[#89938d]">ATTEMPT {attempt.attemptIndex}</div>
+        <StatusBadge status={decisionToStatus(attempt.decision)} />
+        <div className="min-w-0 text-xs leading-5 text-[#bec9c2]">
+          <span className="font-semibold text-[#e2e2e8]">{attempt.proposal.amount}</span>{" "}
+          {attempt.proposal.tokenPair ?? attempt.proposal.action}
+          {attempt.rejectionSource !== "none" && (
+            <span className="ml-2 text-[#ffb4ab]">source: {attempt.rejectionSource}</span>
+          )}
+        </div>
+        <div className="min-w-0 text-xs leading-5 text-[#bec9c2]">{summary}</div>
+        <ChevronDownIcon className="h-4 w-4 text-[#89938d] transition group-open:rotate-180" />
+      </summary>
+
+      <div className="grid gap-3 border-t border-white/10 px-3 pb-3 pt-3">
+        <ProposalGrid proposal={attempt.proposal} />
+
+        <div className="rounded-md border border-white/10 bg-[#0c0e12] px-3 py-2">
+          <div className="font-mono text-[10px] uppercase text-[#89938d]">Decision Reason</div>
+          <p className="m-0 mt-1 text-xs leading-5 text-[#bec9c2]">{attempt.decisionReason}</p>
+        </div>
+
+        {attempt.suggestions.length > 0 && (
+          <div className="grid gap-2">
+            {attempt.suggestions.map(suggestion => (
+              <div
+                className="rounded-md border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-xs leading-5 text-amber-100"
+                key={`${attempt.attemptIndex}-${suggestion.field}-${suggestion.suggestedValue}`}
+              >
+                <span className="font-semibold">{suggestion.field}</span>
+                {" -> "}
+                {suggestion.suggestedValue}: {suggestion.reason}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="grid gap-2">
+          {attempt.hardRules.map(rule => (
+            <RuleRow key={`${attempt.attemptIndex}-${rule.rule}`} rule={rule} />
+          ))}
+        </div>
+
+        <div className="grid gap-3 xl:grid-cols-2">
+          <AgentReviewPanel fallback="Agent B was skipped for this attempt." review={agentB} />
+          <AgentReviewPanel fallback="Agent C was skipped for this attempt." review={agentC} />
+        </div>
+      </div>
+    </details>
+  );
+};
+
+const ToolCallList = ({ calls }: { calls: ToolCallView[] }) => {
+  if (calls.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3 grid gap-2">
+      {calls.map(call => (
+        <div
+          className="grid gap-2 rounded-md border border-white/10 bg-[#0c0e12] px-3 py-2 md:grid-cols-[150px_110px_minmax(0,1fr)]"
+          key={`${call.name}-${call.status}-${call.outputSummary ?? "none"}`}
+        >
+          <div className="min-w-0">
+            <div className="font-mono text-[10px] uppercase text-[#89938d]">Tool</div>
+            <div className="mt-1 break-words font-mono text-xs text-[#e2e2e8]">{call.name}</div>
+          </div>
+          <div>
+            <div className="font-mono text-[10px] uppercase text-[#89938d]">Status</div>
+            <div className={`mt-1 font-mono text-xs ${toolStatusClass(call.status)}`}>
+              {call.status}
+              {typeof call.durationMs === "number" ? ` / ${call.durationMs}ms` : ""}
+            </div>
+          </div>
+          <div className="min-w-0 text-xs leading-5 text-[#bec9c2]">
+            {call.inputSummary && <div className="break-words">Input: {call.inputSummary}</div>}
+            {call.outputSummary && <div className="break-words">Output: {call.outputSummary}</div>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const MemoryAnomalyPanel = ({ anomalies }: { anomalies: MemoryAnomaly[] }) => {
+  if (anomalies.length === 0) {
+    return (
+      <div className="mt-3 rounded-md border border-[#88d6b6]/20 bg-[#88d6b6]/10 px-3 py-2 text-xs leading-5 text-[#d8f8e8]">
+        Memory anomaly: no amount spike, no frequency spike, no new-contract anomaly returned for this decision.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 grid gap-2">
+      {anomalies.map(anomaly => (
+        <div
+          className={`rounded-md border px-3 py-2 text-xs leading-5 ${memoryAnomalyClass(anomaly.severity)}`}
+          key={`${anomaly.kind}-${anomaly.reason}`}
+        >
+          <span className="font-mono uppercase">{anomaly.kind}</span>: {anomaly.reason}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const ExecutionDetailGrid = ({ response }: { response: ExecuteResponse }) => {
+  const operation =
+    response.decisionChain.agentProposal.proposal.action === "swap" ? "contract_call" : "transfer_tokens";
+
+  return (
+    <div className="mt-3 grid gap-2 md:grid-cols-2">
+      <DataPoint label="Backend" value={response.execution.backend} />
+      <DataPoint label="Operation" value={operation} />
+      <DataPoint label="Request ID" value={response.execution.requestId ?? "Not submitted"} />
+      <DataPoint label="Execution Status" value={response.execution.status} />
+      <DataPoint
+        className="md:col-span-2"
+        label="Target"
+        value={response.decisionChain.agentProposal.proposal.targetContract}
+      />
+    </div>
+  );
+};
+
+type ToolCallView = {
+  name: string;
+  status: string;
+  durationMs?: number;
+  inputSummary?: string;
+  outputSummary?: string;
 };
 
 const AuditResult = ({ response, userAddress }: { response: ExecuteResponse; userAddress?: string }) => {
@@ -488,11 +655,13 @@ const StepBlock = ({
   children,
   index,
   status,
+  summary,
   title,
 }: {
   children: React.ReactNode;
   index: string;
   status: "passed" | "review" | ExecutionStatus;
+  summary: string;
   title: string;
 }) => {
   const Icon = statusIcon(status);
@@ -503,10 +672,17 @@ const StepBlock = ({
         <span className="font-mono text-[11px] text-[#89938d]">STEP {index}</span>
         <Icon className={`h-5 w-5 ${statusIconClass(status)} xl:mt-2`} />
       </div>
-      <div>
-        <h3 className="m-0 text-sm font-semibold text-[#e2e2e8]">{title}</h3>
+      <details className="group min-w-0">
+        <summary className="grid cursor-pointer list-none gap-2 [&::-webkit-details-marker]:hidden md:grid-cols-[180px_minmax(0,1fr)_72px] md:items-center">
+          <h3 className="m-0 text-sm font-semibold text-[#e2e2e8]">{title}</h3>
+          <p className="m-0 min-w-0 text-xs leading-5 text-[#bec9c2]">{summary}</p>
+          <span className="flex shrink-0 items-center gap-1 font-mono text-[10px] uppercase text-[#89938d]">
+            Details
+            <ChevronDownIcon className="h-4 w-4 transition group-open:rotate-180" />
+          </span>
+        </summary>
         <div className="mt-2.5">{children}</div>
-      </div>
+      </details>
     </section>
   );
 };
@@ -536,7 +712,7 @@ const DataPoint = ({ className = "", label, value }: { className?: string; label
   return (
     <div className={`rounded-md border border-white/10 bg-[#0c0e12] px-3 py-2 ${className}`}>
       <div className="font-mono text-[10px] uppercase text-[#89938d]">{label}</div>
-      <div className="mt-1 truncate text-sm text-[#e2e2e8]">{value}</div>
+      <div className="mt-1 break-words text-sm leading-5 text-[#e2e2e8]">{value}</div>
     </div>
   );
 };
@@ -604,6 +780,122 @@ const DecisionChainEmpty = () => {
     </div>
   );
 };
+
+function proposalSummary(proposal: TxProposal): string {
+  const pair = proposal.tokenPair ?? tokenPairFromProposal(proposal);
+  return `${proposal.action.toUpperCase()} ${proposal.amount} ${pair} via ${proposal.targetContract}`;
+}
+
+function rulesSummary(rules: RuleCheck[]): string {
+  const passed = rules.filter(rule => rule.passed).length;
+  const rejected = rules.filter(rule => !rule.passed).length;
+  return rejected > 0
+    ? `${passed}/${rules.length} passed, ${rejected} blocked`
+    : `${passed}/${rules.length} checks passed`;
+}
+
+function agentSummary(review?: AgentReview): string {
+  if (!review) {
+    return "Skipped for this decision";
+  }
+
+  return `${review.passed ? "Passed" : "Flagged"} / ${review.riskLevel} risk`;
+}
+
+function executionSummary(response: ExecuteResponse): string {
+  const operation =
+    response.decisionChain.agentProposal.proposal.action === "swap" ? "contract_call" : "transfer_tokens";
+  return `${response.execution.backend} ${operation} / ${response.execution.status}`;
+}
+
+function resultSummary(response: ExecuteResponse): string {
+  if (response.execution.txHash) {
+    return `tx ${shortHash(response.execution.txHash)}`;
+  }
+
+  if (response.execution.blockNumber || response.execution.usdcReceived) {
+    return [
+      response.execution.blockNumber && `block ${response.execution.blockNumber}`,
+      response.execution.usdcReceived,
+    ]
+      .filter(Boolean)
+      .join(" / ");
+  }
+
+  return response.reason;
+}
+
+function stepToolCalls(response: ExecuteResponse, agent: string, localCalls: ToolCall[] | undefined): ToolCallView[] {
+  const normalizedLocal = (localCalls ?? []).map(normalizeToolCall);
+  const globalCalls = response.toolCalls.filter(call => call.agent === agent).map(normalizeToolEvidence);
+
+  return [...normalizedLocal, ...globalCalls];
+}
+
+function executionToolCalls(response: ExecuteResponse): ToolCallView[] {
+  return response.toolCalls
+    .filter(call => call.agent.toLowerCase().includes("execution") || call.tool.toLowerCase().includes("caw"))
+    .map(normalizeToolEvidence);
+}
+
+function normalizeToolCall(call: ToolCall): ToolCallView {
+  return {
+    name: call.name,
+    status: call.status,
+    durationMs: call.durationMs,
+    inputSummary: call.inputSummary,
+    outputSummary: call.outputSummary,
+  };
+}
+
+function normalizeToolEvidence(call: ToolCallEvidence): ToolCallView {
+  return {
+    name: call.tool,
+    status: call.status,
+    inputSummary: call.reason ?? resultSummaryText(call.result, "input_summary"),
+    outputSummary: resultSummaryText(call.result, "output_summary") ?? compactResult(call.result),
+  };
+}
+
+function resultSummaryText(result: Record<string, unknown>, key: string): string | undefined {
+  const value = result[key];
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function compactResult(result: Record<string, unknown>): string {
+  const entries = Object.entries(result).slice(0, 4);
+  if (entries.length === 0) {
+    return "No structured output returned";
+  }
+
+  return entries.map(([key, value]) => `${key}: ${String(value)}`).join("; ");
+}
+
+function toolStatusClass(status: string): string {
+  const normalized = status.toLowerCase();
+
+  if (normalized.includes("fail")) {
+    return "text-[#ffb4ab]";
+  }
+
+  if (normalized.includes("skip")) {
+    return "text-amber-200";
+  }
+
+  return "text-[#88d6b6]";
+}
+
+function memoryAnomalyClass(severity: string): string {
+  if (severity === "critical") {
+    return "border-rose-300/20 bg-rose-300/10 text-rose-100";
+  }
+
+  if (severity === "warning") {
+    return "border-amber-300/20 bg-amber-300/10 text-amber-100";
+  }
+
+  return "border-[#88d6b6]/20 bg-[#88d6b6]/10 text-[#d8f8e8]";
+}
 
 function rulesStepStatus(rules: RuleCheck[]): "passed" | "review" | "rejected" {
   if (rules.some(rule => !rule.passed && rule.severity === "reject")) {

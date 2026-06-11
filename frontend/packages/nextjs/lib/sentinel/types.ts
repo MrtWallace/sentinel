@@ -93,6 +93,14 @@ export type ToolCallEvidence = {
   reason?: string | null;
 };
 
+export type ToolCall = {
+  name: string;
+  status: "success" | "failed" | "skipped" | string;
+  durationMs?: number;
+  inputSummary?: string;
+  outputSummary?: string;
+};
+
 export type MemoryAnomaly = {
   kind: string;
   severity: "info" | "warning" | "critical" | string;
@@ -123,6 +131,7 @@ export type AgentProposal = {
   agent: "Agent A";
   proposal: TxProposal;
   reasoning: string;
+  toolCalls?: ToolCall[];
 };
 
 // 硬规则结果用于解释“为什么直接通过、拒绝或要求人工确认”。
@@ -131,6 +140,7 @@ export type RuleCheck = {
   passed: boolean;
   severity: "pass" | "confirm" | "reject";
   reason: string;
+  toolCalls?: ToolCall[];
 };
 
 // AgentReview 对应 Agent B / Agent C 的 LLM 审查结果。
@@ -142,6 +152,7 @@ export type AgentReview = {
   findings: string[];
   reasoning: string;
   suggestions: Suggestion[];
+  toolCalls?: ToolCall[];
 };
 
 export type Suggestion = {

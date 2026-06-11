@@ -1,6 +1,6 @@
 # Sentinel 前端进度记录
 
-> 最后更新：2026-06-12 04:57
+> ?????2026-06-12 06:04
 
 ## 进度记录约定
 
@@ -34,6 +34,7 @@
 | CP11 | Settings Page + Pact Sync Status | 2-4h | 2026-06-07 09:11 | 2026-06-07 09:37 | Code Done / Build + Screenshot Passed | Settings 页面、config save、Pact sync warning、左侧 Settings 导航已完成 |
 | CP12 | CAW Evidence Audit + Policy Deny Visual | 2-4h | 2026-06-07 08:45 | 2026-06-07 09:37 | Code Done / Build + Screenshot Passed | Audit user/status/page 控制和 CAW policy deny 证据展示已完成 |
 | CP13.5 | Judge Landing Polish + Evidence Panel | 1-2h | 2026-06-12 04:30 | 2026-06-12 04:57 | Code Done / Build + HTTP Smoke Passed | 首页首屏对齐 CP14：真实 CAW swap preset、执行流、证据面板和 CAW Pact 边界说明 |
+| CP14 | Decision Chain Expandable Details | 1-2h | 2026-06-12 05:19 | 2026-06-12 06:04 | Code Done / Typecheck + Lint Passed / Build Blocked by WSL | Decision Chain steps default collapsed; tool-use, memory anomaly, execution details, and retry attempts are expandable |
 
 当前整体判断：
 
@@ -42,10 +43,33 @@
 - Audit 行已支持展开/收起 toggle。
 - dev server 运行中（需确认端口 3000 上是最新进程，否则浏览器刷新拿到旧代码）。
 - 后端 FastAPI 已在 `http://127.0.0.1:8000` 启动。
-- 当前 checkpoint：CP13.5 已完成代码实现和首页 HTTP smoke，等待用户浏览器录制前 QA。
+- Current checkpoint: CP14 code is implemented; production build and dev HTTP smoke are blocked by intermittent WSL `E_UNEXPECTED` / `/mnt/z` mount failures and need rerun after the environment stabilizes.
 
 ## 当前进度详情
 
+### 2026-06-12 前端 Checkpoint 14：Decision Chain Expandable Details
+
+- 开始时间：2026-06-12 05:19。
+- Current status: Code Done / Typecheck + Lint Passed / Build Blocked by WSL.
+- 目标：
+  - Decision Chain 每步默认 collapsed，点击 header 展开/收起详情。
+  - Agent A target 支持长文本换行，不再截断 `CAW contract_call → Uniswap V3 SwapRouter`。
+  - 展开区展示 tool-use evidence；后端未返回时 graceful degradation。
+  - Agent C 风险审查内展示 memory anomaly。
+  - Agentic Retry 的 attempts 支持点击展开，能查看第一轮失败、suggestion、hard rules 和 Agent B/C review。
+- 已完成：
+  - `DecisionChain.tsx` 增加 collapsed `StepBlock`、tool call 展示、memory anomaly 面板、execution detail 摘要。
+  - `AttemptCard` 改为可展开详情，默认收起，避免只看到最后成功案例。
+  - `DataPoint` 改为 `break-words`，长 target 可完整显示。
+  - `mockData.ts` 为真实 CAW swap 和 Agentic Retry 增加 tool/memory evidence。
+  - CP13.5 右列 `Chain Evidence` 补充 submitted 状态、swap wrap/approve/swap sub-tx 折叠、Etherscan/Blockscout 链接。
+  - Hero 内 `Execution Flow` 改名为 `End-to-end Flow`，明确它是高层 demo path，不替代 Decision Chain。
+- Verification:
+  - `yarn workspace @se-2/nextjs check-types` passed.
+  - `yarn workspace @se-2/nextjs lint` passed with no warnings after a small `settings/page.tsx` prettier-only cleanup.
+  - `git diff --check` passed.
+  - `yarn workspace @se-2/nextjs build` not verified: Next exited 1 during optimized production build while WSL repeatedly emitted `Wsl/Service/E_UNEXPECTED` and `/mnt/z` mount failures; no JS/TS compile error was printed.
+  - Dev HTTP smoke not verified: Next dev did not return a stable 3000 response during the same WSL service instability window.
 ### 2026-06-12 前端 Checkpoint 13.5：Judge Landing Polish + Evidence Panel
 
 - 开始时间：2026-06-12 04:30。

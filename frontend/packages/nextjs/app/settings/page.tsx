@@ -322,9 +322,7 @@ const SettingsContent = () => {
               {isSubmittingPact ? "Submitting..." : "Submit Pact to CAW"}
             </button>
             {!canSubmitPact && walletStatus === "paired" && pactStatus !== "none" && (
-              <p className="m-0 mt-2 text-center text-[10px] text-[#89938d]">
-                Pact already submitted ({pactStatus})
-              </p>
+              <p className="m-0 mt-2 text-center text-[10px] text-[#89938d]">Pact already submitted ({pactStatus})</p>
             )}
           </div>
         </aside>

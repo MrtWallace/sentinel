@@ -126,6 +126,87 @@ const emptyEvidence = {
   memoryAnomalies: [],
 } satisfies Pick<ExecuteResponse, "toolCalls" | "memoryAnomalies">;
 
+const realCawSwapEvidence = {
+  toolCalls: [
+    {
+      agent: "Agent A",
+      tool: "parse_intent",
+      status: "succeeded",
+      result: {
+        input_summary: "Swap 0.0005 ETH to USDC",
+        output_summary: "action: swap; amount: 0.0005 ETH; token_out: USDC",
+      },
+    },
+    {
+      agent: "Agent B",
+      tool: "injection_check",
+      status: "succeeded",
+      result: { output_summary: "No prompt-injection pattern detected" },
+    },
+    {
+      agent: "Agent B",
+      tool: "contract_allowlist",
+      status: "succeeded",
+      result: { output_summary: "CAW contract_call target is allowlisted" },
+    },
+    {
+      agent: "Agent C",
+      tool: "amount_exposure",
+      status: "succeeded",
+      result: { output_summary: "0.0005 ETH is within autonomous swap bounds" },
+    },
+    {
+      agent: "Agent C",
+      tool: "memory_anomaly",
+      status: "succeeded",
+      result: { output_summary: "no amount spike; no frequency spike; known Uniswap V3 route" },
+    },
+    {
+      agent: "Execution",
+      tool: "submit_caw_contract_call",
+      status: "succeeded",
+      result: { output_summary: "wrap ETH, approve WETH, exactInputSingle submitted via CAW" },
+    },
+    {
+      agent: "Execution",
+      tool: "read_caw_transaction",
+      status: "succeeded",
+      result: { output_summary: "swap tx mined in block 11018833; received 5.499668 USDC" },
+    },
+  ],
+  memoryAnomalies: [],
+} satisfies Pick<ExecuteResponse, "toolCalls" | "memoryAnomalies">;
+
+const agentRetryEvidence = {
+  toolCalls: [
+    {
+      agent: "Agent A",
+      tool: "parse_intent",
+      status: "succeeded",
+      result: { output_summary: "action: swap; amount: 0.2 ETH; token_out: USDC" },
+    },
+    {
+      agent: "Agent C",
+      tool: "amount_exposure",
+      status: "succeeded",
+      result: { output_summary: "0.2 ETH exceeds autonomous execution comfort band" },
+    },
+    {
+      agent: "Agent C",
+      tool: "reproposal_suggestion",
+      status: "succeeded",
+      result: { output_summary: "suggest amount -> 0.01 ETH before retry" },
+    },
+  ],
+  memoryAnomalies: [
+    {
+      kind: "amount_spike_vs_recent_median",
+      severity: "warning",
+      reason: "Initial 0.2 ETH request is above recent bounded-demo swap size; retry reduces exposure.",
+    },
+  ],
+} satisfies Pick<ExecuteResponse, "toolCalls" | "memoryAnomalies">;
+
 const realCawSwapChain: DecisionChain = {
   agentProposal: {
     agent: "Agent A",
@@ -611,7 +692,7 @@ export const MOCK_EXECUTE_RESPONSES: Record<IntentScenario, ExecuteResponse> = {
         real_tx_enabled: true,
       },
     },
-    ...emptyEvidence,
+    ...realCawSwapEvidence,
   },
   caw_pact_deny: {
     txId: "demo-005",
@@ -650,7 +731,7 @@ export const MOCK_EXECUTE_RESPONSES: Record<IntentScenario, ExecuteResponse> = {
     decisionChain: agentRetryChain,
     attempts: agentRetryAttempts,
     execution: mockExecutionNotSubmitted,
-    ...emptyEvidence,
+    ...agentRetryEvidence,
   },
   blocked_swap: {
     txId: "demo-003",
