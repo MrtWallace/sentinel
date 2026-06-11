@@ -187,6 +187,9 @@ export function mapBackendExecution(execution: BackendExecutionResult | null | u
     walletAddress: execution.caw_wallet_address ?? execution.wallet_address ?? undefined,
     pactId: execution.pact_id ?? undefined,
     policyReason: execution.policy_reason ?? undefined,
+    blockNumber: rawString(execution.raw, "block_number") ?? rawString(execution.raw, "block"),
+    usdcReceived: rawString(execution.raw, "usdc_received"),
+    realTxEnabled: rawBoolean(execution.raw, "real_tx_enabled"),
     raw: execution.raw,
   };
 }
@@ -242,6 +245,26 @@ function auditSummaryReason(dto: BackendAuditLogSummary): string {
   }
 
   return `Decision: ${dto.decision}`;
+}
+
+function rawString(raw: Record<string, unknown> | undefined, key: string): string | null {
+  const value = raw?.[key];
+
+  if (typeof value === "string" && value.trim()) {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return String(value);
+  }
+
+  return null;
+}
+
+function rawBoolean(raw: Record<string, unknown> | undefined, key: string): boolean | null {
+  const value = raw?.[key];
+
+  return typeof value === "boolean" ? value : null;
 }
 
 function mapBackendDecisionChain(dto: BackendExecuteResponse, attempts: AttemptRecord[]): DecisionChain {

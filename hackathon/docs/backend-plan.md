@@ -1,7 +1,7 @@
 # Sentinel Hackathon — 后端 & 合约稳定计划
 
 > 目的：记录 Sentinel 黑客松后端/合约方向、已确认取舍、checkpoint 定义和长期测试策略。
-> 最后更新：2026-06-07
+> 最后更新：2026-06-12
 > 短期进度、当前阻塞、最近完成项见 `hackathon/docs/backend-progress.md`。
 
 ## 语言约定
@@ -36,13 +36,13 @@ Sentinel 不应该只是一个交易解析器，而要表现为 CAW 之上的 ri
 4. 两个 LLM 审查员分别进行安全审计和 DeFi 风险分析。
 5. DecisionEngine 给出 execute、confirm 或 reject。
 6. AgenticLoop 在 reject + suggestions 时最多重生成 2 次 proposal。
-7. Sentinel 通过后，CAW 在 active pact 范围内真实执行 safe transfer。
+7. Sentinel 通过后，CAW Execution Backend 在 active pact 范围内真实执行 `transfer_tokens` 或 `contract_call` Uniswap V3 swap。
 8. 完整决策链路和 CAW request/transaction evidence 写入审计日志，供前端展示和复盘。
 
 ## 已确认方向
 
-- Cobo 主 demo 路径采用 **transfer-first**：至少一条 safe transfer 通过 CAW `transfer_tokens` 真实执行。
-- `swap` 继续保留为风控展示和 stretch goal；CAW `contract_call` swap 不进入 MVP 硬门槛。
+- Cobo 主 demo 路径采用 **CAW Execution Backend**：CAW `transfer_tokens` 与 CAW `contract_call` Uniswap V3 swap 都已有真实 Sepolia 证据。
+- CP14 已完成：swap 是当前真实 CAW 主线能力之一；真实路径为 wrap ETH → approve WETH → Uniswap V3 `exactInputSingle`。
 - 后端主线使用 FastAPI，配合 Pydantic 定义请求/响应模型；Flask 作为后期对照练习，不进入 MVP 主线。
 - `CONFIRM` 是 MVP 阶段的后端终态；`/api/confirm` 第一版只更新审计状态，不触发真实链上执行。
 - 真实 Sepolia 执行必须受 `ENABLE_REAL_TX=true` 控制，默认走 dry-run/mock，避免 demo 和开发误触发。
@@ -58,8 +58,8 @@ Sentinel 不应该只是一个交易解析器，而要表现为 CAW 之上的 ri
 - Agent 化采用 bounded retry loop：最多重试 2 次，建议驱动，所有 attempt 写入审计日志，不做无限自治。
 - CAW Pact 在 demo 前预先提交并由 owner 审批；运行时只在 active pact 范围内执行，不在每次 `/api/execute` 内临时等待 owner approval。
 - 提交截止时间按 `2026-06-13 12:00` 规划；MVP 范围优先保证 CAW `transfer_tokens`、Sentinel reject、CAW policy deny 三条稳定 demo。
-- CAW 真实调用是 Cobo 赛道 MVP gate：最终 demo 至少要有一条通过 CAW SDK/API 完成的真实 `transfer_tokens` 资金操作，只有 mock/simulator 不满足赛道要求。
-- CAW mock/simulator 只用于开发、测试和 fallback；demo 主路径必须展示 CAW wallet、active pact、request/transaction id，时间允许再补 testnet tx hash。
+- CAW 真实调用是 Cobo 赛道 MVP gate：最终 demo 展示真实 `transfer_tokens` 和真实 `contract_call` swap，只有 mock/simulator 不满足赛道要求。
+- CAW mock/simulator 只用于开发、测试和 fallback；demo 主路径必须展示 CAW wallet、active pact、CAW transaction / tx hash evidence。
 - Agentic 能力采用 `ReproposalAgent + MutationGuard + AgenticLoop`：LLM/mock 负责重新提案，确定性 guard 负责验证风险是否真的降低。
 - CP4/CP5 不做多笔交易拆分，`TxProposal` 仍保持单笔交易模型；拆单策略只作为 reasoning / v1.1 方向。
 - Solo MVP 优先级按 P0/P1/P2 执行，先暴露 CAW 真实调用风险，再补 API 和 demo polish。
@@ -77,7 +77,7 @@ Sentinel 不应该只是一个交易解析器，而要表现为 CAW 之上的 ri
 | 调整 | 目的 | 预计耗时 |
 |---|---|---:|
 | CAW Setup Spike 提前到 CP4.5 | 尽早验证 CLI/SDK/wallet/pact 是否可用 | 1-3h |
-| Cobo demo transfer-first | 保证至少一条真实 CAW 资金操作 | 文档 0.5h；实现 2-4h |
+| CAW execution mainline | 保证真实 `transfer_tokens` + `contract_call` swap 资金操作 | 文档 0.5h；实现 2-4h |
 | CAW Evidence Checklist | 确保提交材料满足 Cobo 赛道证据要求 | 0.5h |
 
 ### P1：紧随 P0
@@ -123,9 +123,11 @@ Sentinel 不应该只是一个交易解析器，而要表现为 CAW 之上的 ri
 
 响应结构需要包含前端可直接展示的 `status`、`decision_chain`、`attempts`、`execution`、`tx_id`、`decision_reason`、CAW wallet/pact/request evidence 等字段。具体 Pydantic schema 在实现阶段再细化，避免计划文档过度膨胀。
 
-### Transfer-first，Swap 保留为风控展示
+### CAW Execution Backend：Transfer + Swap
 
-`transfer` 是 Cobo MVP 主执行链路，必须走：
+`transfer` 与 `swap` 都走同一套 Sentinel 风控链路，再进入 CAW Execution Backend。
+
+`transfer` 走：
 
 - 金额规则
 - 收款地址黑名单
@@ -135,18 +137,17 @@ Sentinel 不应该只是一个交易解析器，而要表现为 CAW 之上的 ri
 - CAW `transfer_tokens` 真实执行或 policy deny
 - 审计日志和前端 evidence 展示
 
-`swap` 继续走完整风控链路，但执行层可先 dry-run/mock：
+`swap` 走：
 
 - 滑点规则
 - 金额规则
 - 合约白名单
 - 频率规则
 - Agent B/C 审查
-- 模拟
-- 执行或 dry-run
+- CAW `contract_call` 真实 3 步执行：wrap ETH → approve WETH → Uniswap V3 `exactInputSingle`
 - 审计日志
 
-CAW `contract_call` swap 作为 stretch goal，只有 safe transfer 稳定后再做。
+CP14 已证明真实 Uniswap V3 swap 可在 Sepolia 上链；mock/simulator 只保留为开发 fallback。
 
 ### LLM 失败时保守处理
 
@@ -220,7 +221,7 @@ Runtime:
 
 - CAW policy denied 时返回 `REJECT`，写入 audit log，并在前端展示 CAW deny reason。
 - CAW pact policy 与 Sentinel hard rules 对齐：金额限制、合约 allowlist、频率限制、function selector / params match。
-- 开发默认 `ENABLE_REAL_TX=false`，不发真实 CAW transaction，只返回 dry-run / mocked result；Cobo demo 的 safe transfer 场景必须在受控测试资产下设置 `ENABLE_REAL_TX=true` 并真实调用 CAW。
+- 开发默认 `ENABLE_REAL_TX=false`，不发真实 CAW transaction，只返回 dry-run / mocked result；Cobo demo 的 transfer 与 swap 场景必须在受控测试资产下设置 `ENABLE_REAL_TX=true` 并真实调用 CAW。
 - 运行时使用 active pact 的 scoped credentials，不在每笔交易中临时提交 pact 等待审批。
 
 ### CAW Evidence Checklist
@@ -229,8 +230,8 @@ Cobo 提交和 demo 至少保留以下证据：
 
 - CAW wallet address。
 - active pact id / 截图 / CLI 状态记录。
-- 一条 safe transfer 的 CAW request id 或 transaction record。
-- 时间允许则补 testnet tx hash / explorer 链接。
+- 一条 safe transfer 的 CAW transaction record / tx hash。
+- 一条 CAW `contract_call` Uniswap V3 swap 证据：wrap tx、approve tx、swap tx、block number、USDC received。
 - 一条 Sentinel reject：展示 hard rule 或 Agent 审查拒绝，且不触发 CAW。
 - 一条 CAW policy deny：Sentinel 通过，但 CAW Pact 拒绝，展示双层防护。
 - 对应 Sentinel audit record：intent、proposal、rules、agent results、decision、execution result。
@@ -239,9 +240,9 @@ Cobo 提交和 demo 至少保留以下证据：
 
 Demo 先按场景反推后端字段和前端展示：
 
-1. **Sentinel reject before CAW**：高金额或高滑点交易被 Sentinel 拒绝，CAW 不被调用。
-2. **Agent revises risky proposal**：Agent B/C 给出 suggestion，ReproposalAgent 重生成 proposal，MutationGuard 验证风险降低。
-3. **CAW executes safe transfer**：Sentinel 决策 execute，CAW 在 active pact 范围内真实 `transfer_tokens`。
+1. **Real CAW swap**：Sentinel 决策 execute，CAW `contract_call` 完成 wrap → approve → Uniswap V3 swap。
+2. **CAW executes safe transfer**：Sentinel 决策 execute，CAW 在 active pact 范围内真实 `transfer_tokens`。
+3. **Sentinel reject before CAW**：高金额或高滑点交易被 Sentinel 拒绝，CAW 不被调用。
 4. **CAW policy deny**：Sentinel 通过但 CAW Pact 拒绝，前端展示 CAW deny reason。
 
 ## DecisionEngine 初版策略
@@ -361,8 +362,8 @@ Demo 先按场景反推后端字段和前端展示：
 - 定义 `ExecutionBackend` 接口。
 - `LocalSmartAccountExecutor` 保留为 baseline/fallback。
 - `CawExecutor` 作为 Cobo 赛道 demo 的 primary executor。
-- CP6 是 Cobo 赛道硬门槛，优先级高于完整 FastAPI polish 和 `contract_call` swap。
-- 先跑通真实 CAW `transfer_tokens`，拿到 CAW request/transaction id；再实现 `contract_call`。
+- CP6 是 Cobo 赛道硬门槛，优先级高于完整 FastAPI polish。
+- 先跑通真实 CAW `transfer_tokens`，拿到 CAW request/transaction id；CP14 已继续完成 `contract_call` Uniswap V3 swap。
 - simulator 只能作为开发 fallback，不能作为 Cobo demo 的主执行证明。
 - TransactionSimulator 先支持 transfer/swap dry-run，live eth_call 可用则使用，不可用时 mock fallback。
 - 配置项：
@@ -408,12 +409,12 @@ Demo 先按场景反推后端字段和前端展示：
   - `REVIEWER_MODE=mock|llm`
   - `REPROPOSAL_MODE=mock|llm`
 
-### CP8 / Phase 8：Stretch：合约事件 / contract_call swap / polish
+### CP8 / Phase 8：原 Stretch：合约事件 / contract_call swap / polish
 
 - 给 `withdraw`、`setAgent`、`setDailyLimit` 补事件。
 - 补 Foundry 测试，确认事件 emit 和原有权限/限额逻辑不变。
 - 不新增复杂 guard，不改变 `execute(address,uint256,bytes)` 的行为。
-- 时间允许再做 CAW `contract_call` swap 和 LLM reproposal polish。
+- 历史计划中 CAW `contract_call` swap 属于 stretch；当前 CP14 已完成真实 Uniswap V3 swap。
 
 ## Post-MVP Cobo + Agent Checkpoint 定义
 
@@ -490,13 +491,13 @@ Demo 先按场景反推后端字段和前端展示：
 
 ### CP14 / Phase 14：CAW contract_call Demo Path
 
-- 目标：除 `transfer_tokens` 外，展示 CAW `contract_call` 能力。
+- 目标：除 `transfer_tokens` 外，展示 CAW `contract_call` 能力。当前已完成真实 Uniswap V3 swap。
 - 后端职责：
-  - 优先选择白名单 MockDEX 或受控 Sepolia 合约，避免 Uniswap route 不稳定影响 demo。
+  - 使用白名单 Sepolia 合约执行真实 Uniswap V3 swap：WETH、USDC、SwapRouter02。
   - `contract_call` 必须受 Sentinel RiskPipeline + CAW Pact 双层限制。
   - CAW result 写入同一套 `ExecutionResult` / audit evidence。
 - 范围边界：
-  - 不强求真实 Uniswap swap，只要能证明 CAW contract_call 集成进执行层。
+  - 已完成真实 Uniswap V3 swap；后续只做稳定性、监控和更严格 policy template。
 
 ### CP15 / Phase 15：Read-only MCP Server
 
@@ -556,15 +557,16 @@ Demo 先按场景反推后端字段和前端展示：
 
 ### Demo 用例
 
-- 成功 safe transfer：通过 Sentinel，CAW 真实 `transfer_tokens`，展示 request/transaction id。
+- 成功 CAW swap：通过 Sentinel，CAW 真实 `contract_call`，展示 wrap / approve / swap tx。
+- 成功 safe transfer：通过 Sentinel，CAW 真实 `transfer_tokens`，展示 transaction id / tx hash。
 - 高风险 swap：硬规则拒绝，跳过 Agent/执行。
 - 边界 swap：返回 `confirm_needed`，前端按钮调用 `/api/confirm` 更新审计状态。
 - 普通 transfer：通过基础安全链路，证明普通转账未缺失。
-- safe transfer via CAW：展示 CAW wallet address、pact active、transaction/request id。
-- Cobo 必做真实执行：至少一条 safe transfer 通过 CAW SDK/API 发起，不能只展示 mock/simulated hash。
+- CAW execution evidence：展示 CAW wallet address、pact active、transfer tx、contract_call swap tx。
+- Cobo 必做真实执行：`transfer_tokens` 与 `contract_call` swap 均通过 CAW SDK/API 发起，不能只展示 mock/simulated hash。
 - Sentinel hard rule reject：不触发 CAW。
 - CAW pact deny：Sentinel 通过，但 CAW policy 拒绝，展示双层防护。
-- 时间允许再做 `contract_call` swap。
+- `contract_call` swap 已作为 CP14 完成，后续只做生产化补强。
 
 ## 测试计划
 
@@ -595,7 +597,7 @@ Demo 先按场景反推后端字段和前端展示：
 - Sentinel reject 时 `execution_backend` 不被调用。
 - CAW policy denied 时返回 reject，并包含 CAW reason。
 - `ENABLE_REAL_TX=false` 时不发真实 CAW transaction。
-- Cobo demo 配置下 `ENABLE_REAL_TX=true` 时，`/api/execute` 可以触发 CAW `transfer_tokens` 并返回 CAW request/transaction id。
+- Cobo demo 配置下 `ENABLE_REAL_TX=true` 时，`/api/execute` 可以触发 CAW `transfer_tokens` 或 `contract_call` swap，并返回 CAW evidence。
 
 ### Foundry 合约测试
 
@@ -605,16 +607,16 @@ Demo 先按场景反推后端字段和前端展示：
 
 ### 手动验收场景
 
-- `Swap 0.01 ETH to USDC`：通过链路。
+- `Swap 0.0005 ETH to USDC`：通过真实 CAW `contract_call` Uniswap V3 swap 链路。
 - `Swap 1 ETH to USDC`：被硬规则拒绝。
 - 边界金额 swap：返回 `confirm_needed`。
 - 普通 `transfer`：基础链路可用。
 - `ENABLE_REAL_TX` 未开启时不会真实发交易。
 - CAW wallet address 可展示。
 - active pact 记录或截图可展示。
-- CAW transaction/request id 必须可展示；testnet tx hash 时间允许则补。
+- CAW transaction/request id 或 tx hash 必须可展示；swap 展示 wrap / approve / swap tx。
 - 至少展示一条 Sentinel reject 和一条 CAW policy deny。
-- 至少展示一条 CAW 真实 safe transfer，不接受只用 mock/simulator 作为 Cobo 主路径。
+- 至少展示一条 CAW 真实 safe transfer 和一条 CAW 真实 contract_call swap，不接受只用 mock/simulator 作为 Cobo 主路径。
 
 ## Cobo Agentic Wallet (CAW) 集成方案
 
@@ -695,7 +697,7 @@ Sentinel 风控在 CAW 之前做智能判断；CAW Pact 在执行时做资金权
 | # | 任务 | 说明 |
 |---|---|---|
 | C7 | CAW 审计日志 + Sentinel 本地日志合并展示 | 前端 audit 页更丰富 |
-| C8 | `contract_call` swap 完整实盘路径 | 若 transfer demo 稳定后再做 |
+| C8 | `contract_call` swap 完整实盘路径 | CP14 已完成真实 Uniswap V3 swap |
 | C9 | 多 Agent 钱包（A2A 方向） | 每个 Agent 独立 CAW 钱包，v1.1+ |
 
 ### 关键代码方向
@@ -778,9 +780,10 @@ caw_execution: Optional[CawExecutionResult]
 - CAW wallet 成功创建并 pairing。
 - 至少一个 active pact 可展示。
 - 至少一条 safe transfer 通过 CAW SDK/API 真实发起，可稳定演示。
+- 至少一条 `contract_call` Uniswap V3 swap 通过 CAW SDK/API 真实发起，可展示 wrap / approve / swap tx。
 - Sentinel 风控 reject 时不触发 CAW。
 - CAW policy denied 时可以展示 policy reason。
-- Demo 中有 CAW wallet address、active pact、request id / transaction record；时间允许则补 testnet tx hash。
+- Demo 中有 CAW wallet address、active pact、transfer transaction record、swap tx hashes。
 - CAW simulator / mocked success 只能作为开发备份，不作为 Cobo 赛道主验收路径。
 
 ### 参考链接
@@ -799,7 +802,7 @@ caw_execution: Optional[CawExecutionResult]
 - `confirm_needed` 后批准是否真实执行链上交易，以及如何处理重复点击、状态保存和交易失败。
 - 金额阈值是否从统一 ETH 计价升级为 token-specific limit。
 - 是否读取链上风控事件作为审计数据补充。
-- CAW `contract_call` swap 从 stretch goal 升级为主路径的条件和风险。
+- CAW `contract_call` swap 的生产化安全模板、监控和失败恢复策略。
 - CAW webhook / callback 生产化，用于异步更新 audit tx status。
 - CAW PactSpec 是否由 Sentinel hard rules 自动生成，还是手动维护 demo pact。
 - 多 Agent / A2A 钱包经济体是否进入 v1.1，而不是当前 Cobo MVP。

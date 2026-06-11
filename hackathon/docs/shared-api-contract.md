@@ -324,7 +324,7 @@ Request:
 ```json
 {
   "user_address": "0xabc...",
-  "intent": "Send 0.001 ETH to 0x1111111111111111111111111111111111111111"
+  "intent": "Swap 0.0005 ETH to USDC"
 }
 ```
 
@@ -334,7 +334,7 @@ Core response fields:
 {
   "tx_id": "uuid",
   "user_address": "0xabc...",
-  "intent": "Send 0.001 ETH to 0x111...",
+  "intent": "Swap 0.0005 ETH to USDC",
   "status": "executed",
   "decision": "execute",
   "decision_reason": "All checks passed.",
@@ -360,7 +360,7 @@ Core response fields:
     "request_id": "sentinel-uuid",
     "caw_transaction_id": "caw_tx_123",
     "tx_hash": "0x...",
-    "reason": "CAW transfer status: Success",
+    "reason": "CAW contract_call swap status: Success",
     "policy_reason": null,
     "fallback_reason": null,
     "pending_reason": null,
@@ -816,11 +816,12 @@ get_audit_log(tx_id: str)
 
 ```text
 Safe CAW transfer: Send 0.001 ETH to 0x1111111111111111111111111111111111111111
+Real CAW swap: Swap 0.0005 ETH to USDC
 CAW policy deny: Send 0.005 ETH to 0x1111111111111111111111111111111111111111
 Sentinel hard reject: Swap 1 ETH to USDC
 Agent retry: Swap 0.2 ETH to USDC
 Manual review: Send 0.03 ETH to 0x742d...
-CAW contract_call: controlled MockDEX / whitelisted contract interaction
+CAW contract_call: Swap 0.0005 ETH to USDC via Uniswap V3
 ```
 
 ---

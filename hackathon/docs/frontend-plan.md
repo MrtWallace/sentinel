@@ -768,26 +768,28 @@ yarn workspace @se-2/nextjs lint
 
 目标：
 
-- 在前端展示 CAW 不只支持 transfer，也能执行受控 contract_call。
+- 在前端展示 CAW 不只支持 transfer，也能执行真实受控 contract_call。
 
 产物：
 
-- 增加一个稳定 preset，例如 whitelisted MockDEX / controlled contract call。
+- 增加真实 swap preset：`Swap 0.0005 ETH to USDC`。
 - DecisionChain / Audit evidence 显示：
   - target contract。
   - function selector 或 action label。
-  - CAW contract_call request id。
+  - CAW contract_call request id / transaction evidence（如后端返回）。
+  - wrap tx / approve tx / swap tx。
+  - block number / USDC received。
   - policy result。
 - 如果后端选择 dry-run 或 mock evidence，UI 必须明确标注，不暗示真实链上执行。
 
 审查重点：
 
-- contract_call 不抢 safe transfer 主线。
-- UI 文案不把 MockDEX 伪装成 Uniswap 实盘。
+- contract_call 与 safe transfer 同属 CAW Execution Backend 主线。
+- UI 文案必须明确这是 Sepolia hackathon prototype，不是 mainnet trading product。
 
 学习点：
 
-- 为什么 Cobo 赛道展示 contract_call 能力有价值，但 demo 稳定性优先。
+- 为什么 Cobo 赛道展示 contract_call 能力有价值，以及为什么生产化仍需要更严格 policy、监控和模拟。
 
 ### Checkpoint 13.5：Chain Evidence Panel（右列三状态）
 

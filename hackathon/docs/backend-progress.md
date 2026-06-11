@@ -1,7 +1,7 @@
 # Sentinel Hackathon — 后端 & 合约进度
 
 > 目的：只记录短期状态，包括 checkpoint 进度表、当前阻塞、最近完成项。
-> 最后更新：2026-06-09
+> 最后更新：2026-06-12 04:16
 > 稳定方向和 checkpoint 定义见 `hackathon/docs/backend-plan.md`。
 
 ## 更新约定
@@ -27,7 +27,7 @@
 | CP7 | Demo Evidence + README + Script | 2-4h | 2026-06-05 18:02 | 2026-06-05 18:04 | Done | README + demo script + proposal 进度已校准 |
 | CP7.5 | Provider-agnostic LLM Reviewers | 3-5h | 2026-06-05 18:04 | 2026-06-05 18:11 | Done | OpenAI-compatible LLM client + real reviewer smoke 完成 |
 | CP7.6 | LLM Reproposal + Real Integration Smoke | 1-2h | 2026-06-05 18:14 | 2026-06-05 18:25 | Done | `REPROPOSAL_MODE=llm` 已接 API，真实 LLM reproposal + LLM reviewers + CAW deny 组合烟测完成 |
-| CP8 | Stretch：合约事件 / contract_call swap / polish | 2-5h | 待开始 | 待完成 | Stretch | 时间允许再做，不阻塞 Cobo MVP |
+| CP8 | Historical stretch：合约事件 / contract_call swap / polish | 2-5h | 待开始 | 待完成 | Superseded | `contract_call` swap 后续已由 CP14 完成 |
 | CP9 | User CAW Account Lifecycle | 3-5h | 2026-06-06 06:43 | 2026-06-06 06:51 | Done | per-user CAW wallet store + `/api/wallet/*` 已完成；执行路由留到 CP11 |
 | Shared CP1 | CAW status + execute response contract | 0.5-1h | 2026-06-06 07:17 | 2026-06-06 07:17 | Done | 锁定 `/api/execute` 的 `caw` object、execution evidence、no_wallet/pact_not_active/policy_denied/pending shape |
 | CP10 | Intent Input Guard | 1-2h | 2026-06-06 07:54 | 2026-06-06 07:57 | Done | sanitize、schema validation、prompt injection pattern、intent/proposal anomaly 已接入 `/api/execute`；异常 fail closed |
@@ -47,18 +47,28 @@
 2. **CP18 可穿插**：JWT 和 rate limit 与 CP11 强相关，但第一版可以先做最小签名登录，不扩展完整用户系统。
 3. **CP12 + CP13 稳定产品闭环**：用户风险配置、Pact sync 状态、SQLite audit 是前端设置页和审计页的基础。
 4. **CP15-CP17 做 Agent 证据层**：MCP、tool calling、memory anomaly 证明这是 Agent 项目，但保持 read-only / bounded，不抢 CAW 主线。
-5. **CP14 和 CP19 后置**：`contract_call` 是 Cobo 加分项；Planner/Reflector 是 P3，不在当前 demo 稳定前启动。
+5. **CP14 已完成，CP19 后置**：`contract_call` Uniswap V3 swap 已作为 Cobo 主线证据完成；Planner/Reflector 是 P3，不在当前 demo 稳定前启动。
 
 ## 当前阻塞
 
 - 无明确外部阻塞。
-- 当前进行：CP14 CAW contract_call Demo Path 或 CP15 Read-only MCP Server 待选；CP13 SQLite Audit + CAW Evidence Query 已完成。
-- Cobo 赛道新增工作量约 10-16h；其中真实 CAW setup + `transfer_tokens` 是硬门槛，不能用 mock/simulator 替代。
+- 当前进行：黑客松提交材料 polish；CP14 CAW contract_call Demo Path 已完成，CP15 Read-only MCP Server 仍为后续可选项。
+- Cobo 赛道新增工作量约 10-16h；真实 CAW setup、`transfer_tokens` 和 CP14 `contract_call` swap 构成当前主证据，不能用 mock/simulator 替代。
 - agentic 优化当前只保留 MCP、tool calling、memory anomaly 作为证据层；Planner/Reflector/多步自治明确后置到 CP19 / P3。
 - 提交截止：2026-06-13 12:00。当前判断仍可完成；后续执行顺序调整为 CP10 input guard -> CP11 user-scoped CAW execution -> CP18 minimal auth/rate limit -> CP12 config/pact sync -> CP13 SQLite audit；CP15-CP17 作为 Agent 证据层穿插，CP14/CP19 后置。
 - 前端需要后续同步：DecisionChain 支持 attempts；状态栏从 SmartAccount 主视角调整为 CAW wallet / pact 主视角；Audit 展示 CAW request id、policy result、tx hash。
 
 ## 最近完成项
+
+### 2026-06-12 README / Submission Docs Polish
+
+- 已确认本地 `main` 与 `origin/main` 同步：ahead/behind = `0/0`，当前 HEAD = `4c46740`。
+- 已将 README、hackathon README、proposal、demo script、shared API contract 和 backend plan 的当前口径更新为 CP14 完成状态。
+- README 对外定位改为 CAW-governed autonomous trading execution agent，并明确支持：
+  - CAW `transfer_tokens`
+  - CAW `contract_call` Uniswap V3 swap（wrap → approve → exactInputSingle）
+- README Demo Evidence 只使用仓库已记录证据：CAW wallet address、Pact ID、transfer CAW tx ID、transfer tx hash、wrap tx、approve tx、swap tx、block number、USDC received。
+- 已补 Security Boundary：Sentinel 是 hackathon prototype / reference implementation，不是 production custody system 或 mainnet trading product。
 
 ### 2026-06-09 CP14 — 真实 CAW Sepolia Swap 成功
 
@@ -596,9 +606,9 @@ OK
   - CP5：Minimal `/api/execute` + attempts/execution shape。
   - CP6：真实 CAW `transfer_tokens`。
   - CP7：CAW evidence checklist + README + demo script。
-  - CP8：contract_call swap / 合约事件 / polish，全部降为 stretch。
+  - CP8：contract_call swap / 合约事件 / polish 当时后置；后续 CP14 已完成真实 swap。
 - 优先级确认：
-  - P0：CAW setup、transfer-first、CAW evidence checklist。
+  - P0：CAW setup、真实 CAW evidence checklist（当时先以 transfer 稳定主线起步）。
   - P1：minimal API、demo script、SmartAccount 明确降级。
   - P2：DeepSeek Agent B/C 后移、失败预案、前端证据展示。
 
@@ -652,7 +662,7 @@ OK
   - 若 CAW setup 不在 CP6 前卡住，MVP 可完成。
 - MVP 优先级：
   - 必做：AgenticLoop、attempts audit、Minimal FastAPI mock API、真实 CAW `transfer_tokens`、CAW policy deny demo。
-  - Stretch：CAW `contract_call` swap、tool_calls/observations、多笔拆单。
+  - 后置项：CAW `contract_call` swap（后续 CP14 已完成）、tool_calls/observations、多笔拆单。
 
 ### 2026-06-02 CP4 中途收尾
 
@@ -691,7 +701,7 @@ OK
 - 当前判断：
   - 最小可演示版新增约 6-8h。
   - 完整 Cobo demo 新增约 12-18h。
-  - 为控制风险，先保证 CAW `transfer_tokens` + policy denied demo，`contract_call` swap 作为 stretch goal。
+  - 当时为控制风险，先保证 CAW `transfer_tokens` + policy denied demo；后续 CP14 已完成 `contract_call` swap。
 
 ### 2026-06-01 后端编码 Checkpoint 3（完成）
 

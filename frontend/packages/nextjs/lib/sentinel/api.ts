@@ -117,10 +117,7 @@ export async function createCawWallet(request: CreateCawWalletRequest): Promise<
   };
 }
 
-export async function submitPact(
-  userAddress: string,
-  limits: Record<string, unknown>,
-): Promise<CawWalletBinding> {
+export async function submitPact(userAddress: string, limits: Record<string, unknown>): Promise<CawWalletBinding> {
   const backendResponse = await postWalletAction(WALLET_PACT_PROXY_PATH, {
     user_address: userAddress,
     limits,
@@ -550,6 +547,18 @@ function detectIntentScenario(intent: string): IntentScenario {
   const normalizedIntent = intent.toLowerCase();
   const swapEthAmount = getEthToUsdcSwapAmount(normalizedIntent);
 
+  if (
+    normalizedIntent.includes("ignore previous instructions") ||
+    normalizedIntent.includes("transfer all funds") ||
+    normalizedIntent.includes("override")
+  ) {
+    return "prompt_injection";
+  }
+
+  if (normalizedIntent.includes("send 0.005 eth")) {
+    return "caw_pact_deny";
+  }
+
   if (swapEthAmount !== null && swapEthAmount >= 1) {
     return "blocked_swap";
   }
@@ -562,7 +571,7 @@ function detectIntentScenario(intent: string): IntentScenario {
     return "confirm_transfer";
   }
 
-  return "safe_swap";
+  return "real_caw_swap";
 }
 
 function getEthToUsdcSwapAmount(normalizedIntent: string): number | null {

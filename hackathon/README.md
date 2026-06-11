@@ -1,6 +1,6 @@
 # Sentinel Hackathon — AI×Web3 School
 
-> **项目**: Sentinel — 让 AI Agent 安全地参与链上经济活动
+> **项目**: Sentinel — CAW-governed autonomous trading execution agent
 > **赛道**: Cobo — Agentic Economy × Cobo Agentic Wallet
 > **方向**: 04｜Autonomous Trading — 带风控的自主交易 Agent
 > **学员**: Mr Wallace (#3752)
@@ -10,7 +10,7 @@
 - `proposal.md` — 项目提案（1 页 memo）
 - `docs/shared-api-contract.md` — 前后端联调 API contract（单一真值源）
 - `docs/backend-plan.md` — 后端稳定计划和 checkpoint 定义
-- `docs/backend-progress.md` — 后端实时进度（CP1-13 Done）
+- `docs/backend-progress.md` — 后端实时进度（CP1-14 Done）
 - `docs/frontend-plan.md` — 前端稳定计划和 checkpoint 定义
 - `docs/frontend-progress.md` — 前端实时进度（CP0-12 Done）
 - `docs/demo-script.md` — 3-5 分钟 demo 脚本（4 个场景）
@@ -36,7 +36,7 @@ DecisionEngine → execute / confirm / reject
     ↓
 AgenticLoop — reject 时最多重试 2 次（ReproposalAgent + MutationGuard）
     ↓
-CAW Pact 执行 — active pact 范围内真实 transfer
+CAW Execution Backend — `transfer_tokens` bounded transfer / `contract_call` Uniswap V3 swap
     ↓
 SQLite 审计日志 — 完整决策链路 + CAW evidence
 ```
@@ -53,6 +53,10 @@ Cobo Agentic Wallet 层（静态策略兜底）
 
 Sentinel 拦逻辑风险，CAW Pact 拦资金越权。两者互补。
 
+## 安全边界
+
+Sentinel 是 hackathon prototype / reference implementation，用 Sepolia 展示受限自治资金操作。它不是 production custody system，也不是 mainnet trading product；生产化需要正式安全审计、更完整模拟、更严格 policy template、监控和运维控制。
+
 ## 技术栈
 
 | 层 | 技术 |
@@ -66,14 +70,14 @@ Sentinel 拦逻辑风险，CAW Pact 拦资金越权。两者互补。
 
 ## 当前状态
 
-- **后端**: CP1-13 Done，136 tests passing
+- **后端**: CP1-14 Done，真实 CAW `transfer_tokens` + `contract_call` swap 已上链验证
 - **前端**: CP0-12 Done（execute console, audit, settings, CAW lifecycle）
 - **集成**: `integration/caw-demo` branch 已合并前后端
 - **提交截止**: 2026-06-13 12:00
 
 ## Demo 场景
 
-1. ✅ **Safe CAW Transfer** — 低风险转账，Sentinel + CAW 双层通过
-2. 🚫 **Sentinel Hard Reject** — 超限额交易，硬规则直接拦截，CAW 不触达
-3. 🔄 **Agentic Retry** — 中风险交易，Agent 建议降额，MutationGuard 验证后重试通过
+1. ✅ **Real CAW Swap** — `contract_call` 走 wrap → approve → Uniswap V3 exactInputSingle
+2. ✅ **Safe CAW Transfer** — `transfer_tokens` 低风险转账，Sentinel + CAW 双层通过
+3. 🚫 **Sentinel Hard Reject** — 超限额交易，硬规则直接拦截，CAW 不触达
 4. ⛔ **CAW Policy Deny** — Sentinel 通过但 CAW Pact 拒绝，展示双层防护

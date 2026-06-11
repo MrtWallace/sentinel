@@ -1,6 +1,6 @@
 # Sentinel 前端进度记录
 
-> 最后更新：2026-06-07 08:20
+> 最后更新：2026-06-12 04:57
 
 ## 进度记录约定
 
@@ -33,6 +33,7 @@
 | CP10 | Intent Input Guard UX | 1-2h | 2026-06-07 05:15 | 2026-06-07 05:25 | Code Done / Tests Passed | 前端输入校验：长度限制(500)、控制字符、prompt injection 提示；后端 security rejection 展示 |
 | CP11 | Settings Page + Pact Sync Status | 2-4h | 2026-06-07 09:11 | 2026-06-07 09:37 | Code Done / Build + Screenshot Passed | Settings 页面、config save、Pact sync warning、左侧 Settings 导航已完成 |
 | CP12 | CAW Evidence Audit + Policy Deny Visual | 2-4h | 2026-06-07 08:45 | 2026-06-07 09:37 | Code Done / Build + Screenshot Passed | Audit user/status/page 控制和 CAW policy deny 证据展示已完成 |
+| CP13.5 | Judge Landing Polish + Evidence Panel | 1-2h | 2026-06-12 04:30 | 2026-06-12 04:57 | Code Done / Build + HTTP Smoke Passed | 首页首屏对齐 CP14：真实 CAW swap preset、执行流、证据面板和 CAW Pact 边界说明 |
 
 当前整体判断：
 
@@ -41,9 +42,33 @@
 - Audit 行已支持展开/收起 toggle。
 - dev server 运行中（需确认端口 3000 上是最新进程，否则浏览器刷新拿到旧代码）。
 - 后端 FastAPI 已在 `http://127.0.0.1:8000` 启动。
-- 下一个 checkpoint：CP12（CAW Evidence Audit + Policy Deny Visual）。
+- 当前 checkpoint：CP13.5 已完成代码实现和首页 HTTP smoke，等待用户浏览器录制前 QA。
 
 ## 当前进度详情
+
+### 2026-06-12 前端 Checkpoint 13.5：Judge Landing Polish + Evidence Panel
+
+- 开始时间：2026-06-12 04:30。
+- 完成时间：2026-06-12 04:57。
+- 当前状态：Code Done / Build + HTTP Smoke Passed。
+- 目标：
+  - 首页首屏 30-60 秒内讲清：natural-language intent → risk decision → CAW Pact → real Uniswap V3 swap → on-chain evidence → audit trail。
+  - 第一个 preset 改成 `Real CAW Swap` / `Swap 0.0005 ETH to USDC`。
+  - 首页增加可见 Evidence Panel，展示 CAW wallet、Pact、execution backend、real tx mode、swap tx、block、USDC received、audit id/link。
+  - 明确 CAW Pact 是硬执行边界。
+- 已完成：
+  - 首页 hero 文案改为 `CAW-governed autonomous trading execution agent`，并补充 Sentinel 如何把 natural-language trading intents 转为 risk-bounded CAW operations、真实 Sepolia Uniswap V3 swap 和 audit trail。
+  - Presets 顺序改为 Real CAW Swap、CAW Pact Deny、Sentinel Hard Reject、Prompt Injection Blocked、Agentic Retry。
+  - 首页增加 compact Execution Flow：Intent → Risk Engine → CAW Execution → On-chain Evidence → Audit Trail。
+  - 首页增加 Evidence Panel；未运行 intent 时显示 CP14 demo evidence，运行后优先显示当前后端/API 响应中的 CAW wallet、Pact、backend、real tx、swap tx、block、USDC received、audit id。
+  - mock fallback 与 mapper 已补齐 CP14 real CAW swap evidence 字段，保持真实后端 API 优先。
+- 验证结果：
+  - `yarn workspace @se-2/nextjs check-types` passed。
+  - `yarn workspace @se-2/nextjs lint` passed with one pre-existing prettier warning in untouched `app/settings/page.tsx`。
+  - `git diff --check` passed。
+  - `yarn workspace @se-2/nextjs build` passed；保留既有 RainbowKit/Wagmi dynamic dependency warnings。
+  - `curl -I http://127.0.0.1:3000/` returned `HTTP/1.1 200 OK` after dev server warm-up。
+  - 过期措辞扫描未命中 `safe_swap`、`mock-only`、`future target`、`transfer-only`、`contract_call is not implemented` 等目标短语。
 
 ### 2026-06-07 前端 Checkpoint 11：Settings Page + Pact Sync Status
 

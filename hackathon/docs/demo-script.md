@@ -1,11 +1,11 @@
 # Sentinel Demo Script
 
 > Target length: 3-5 minutes.
-> Goal: show Agentic Commerce with real CAW execution and double-layer risk control.
+> Goal: show CAW-governed autonomous trading execution with real CAW evidence and double-layer risk control.
 
 ## Opening
 
-Sentinel is a risk-aware autonomous trading agent.
+Sentinel is a CAW-governed autonomous trading execution agent.
 
 It lets an AI agent execute wallet operations, but only inside two safety layers:
 
@@ -14,10 +14,39 @@ Sentinel risk layer
   -> rules, reviewers, bounded retry, audit
 
 Cobo Agentic Wallet layer
-  -> active Pact, wallet policy, transfer enforcement
+  -> active Pact, wallet policy, transfer_tokens + contract_call enforcement
 ```
 
-## Scene 1 — Safe CAW Transfer
+## Scene 1 — Real CAW Swap
+
+Input:
+
+```text
+Swap 0.0005 ETH to USDC
+```
+
+Show:
+
+- `/api/execute` response.
+- `status = executed`.
+- `sentinel_decision = execute`.
+- `execution.backend = caw`.
+- CAW `contract_call` execution.
+- 3 on-chain steps:
+  - wrap ETH → WETH.
+  - approve WETH to Uniswap V3 router.
+  - execute `exactInputSingle`.
+- Wrap tx, approve tx, swap tx.
+- Block number and USDC received.
+- Audit detail by `tx_id`.
+
+Talking point:
+
+```text
+Sentinel approved a bounded swap, and CAW executed the real Uniswap V3 path through contract_call.
+```
+
+## Scene 2 — Safe CAW Transfer
 
 Input:
 
@@ -27,21 +56,19 @@ Send 0.001 ETH
 
 Show:
 
-- `/api/execute` response.
 - `status = executed`.
 - `sentinel_decision = execute`.
 - `execution.backend = caw`.
-- CAW request id.
+- CAW `transfer_tokens`.
 - CAW transaction id / tx hash.
-- Audit detail by `tx_id`.
 
 Talking point:
 
 ```text
-The agent made a low-risk transfer decision, and CAW executed it through an active Pact.
+The same CAW execution backend supports bounded transfers and controlled contract calls.
 ```
 
-## Scene 2 — Sentinel Hard Rule Reject
+## Scene 3 — Sentinel Hard Rule Reject
 
 Input:
 
@@ -63,7 +90,7 @@ Talking point:
 Hard rules are fail-fast. If Sentinel rejects before agent review, CAW is never called.
 ```
 
-## Scene 3 — Agentic Retry
+## Scene 4 — Agentic Retry
 
 Input:
 
@@ -88,7 +115,7 @@ Talking point:
 This is bounded autonomy: the agent can adapt, but only within deterministic mutation guards.
 ```
 
-## Scene 4 — CAW Policy Deny
+## Scene 5 — CAW Policy Deny
 
 Input:
 
@@ -118,7 +145,9 @@ Show or mention:
 
 - CAW wallet address.
 - Active pact ID.
-- Safe transfer request id / tx hash.
+- Safe transfer CAW transaction id / tx hash.
+- Wrap tx / approve tx / swap tx.
+- Block number and USDC received.
 - Policy deny reason.
 - Sentinel audit record.
 

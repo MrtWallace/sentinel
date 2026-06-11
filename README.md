@@ -1,8 +1,8 @@
-# Sentinel — Risk-Aware Agentic Wallet Execution
+# Sentinel — CAW-Governed Autonomous Trading Execution Agent
 
 [![CI](https://github.com/MrtWallace/sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/MrtWallace/sentinel/actions/workflows/ci.yml)
 
-Sentinel is a risk-aware autonomous trading execution agent built on Cobo Agentic Wallet.
+Sentinel is a CAW-governed autonomous trading execution agent built on Cobo Agentic Wallet.
 
 It converts natural-language trading and payment intents into bounded on-chain actions, evaluates them through deterministic risk rules and LLM reviewers, and executes approved actions through CAW with Pact policy enforcement.
 
@@ -10,6 +10,8 @@ For the hackathon demo, Sentinel supports two real CAW execution paths on Sepoli
 
 1. `transfer_tokens` — bounded asset transfers
 2. `contract_call` — Uniswap V3 swap execution through a 3-step `wrap → approve → swap` flow
+
+This is a hackathon prototype and reference implementation, not a production custody system or mainnet trading product.
 
 ## Problem
 
@@ -42,7 +44,7 @@ Input Guard — injection detection, intent validation (24 patterns)
   ↓
 Agent A — LLM parses intent into structured TxProposal
   ↓
-Hard Rules — 6 deterministic checks (Amount, Slippage, Whitelist, Approval, Frequency, Strategy)
+Hard Rules — 5 deterministic checks (Amount, Slippage, Whitelist, Approval, Frequency)
   ↓
 Agent B — Security audit (LLM, 6 dimensions)
 Agent C — Risk analysis (LLM, 6 dimensions)
@@ -51,7 +53,9 @@ Decision Engine — execute / confirm / reject (priority cascade)
   ↓
 AgenticLoop — if rejected + suggestions, retry with safer params (max 2 retries)
   ↓
-CAW transfer_tokens — real on-chain execution through Cobo Agentic Wallet
+CAW Execution Backend
+  ├─ transfer_tokens — bounded asset transfers
+  └─ contract_call — Uniswap V3 swap execution (wrap → approve → swap)
   ↓
 Audit Logger — full decision chain stored in SQLite with sensitive field redaction
 ```
@@ -135,10 +139,12 @@ Show: /audit page → click any row → DecisionChain expansion
 ## Demo Evidence (Sepolia Testnet)
 ```text
 CAW Wallet:     0x927f175c85d61237f817b499f739336b498384fe
+Pact ID:        e71f5662-5e23-4990-bf22-f6161c779cdd
 Chain:          Sepolia
 
 Transfer (CAW transfer_tokens):
-  0xc1bffdc320c41e9a4d23969fcdeb2dfdb9874808317a3bfe81f873e127f9fd5d
+  CAW tx ID: f56d37ca-7475-4349-a964-c9755027a2c0
+  Tx hash:   0xc1bffdc320c41e9a4d23969fcdeb2dfdb9874808317a3bfe81f873e127f9fd5d
 
 Swap (CAW contract_call — wrap + approve + Uniswap V3 exactInputSingle):
   Wrap:    0x4d9c59ece554a869305334212e39733062a0552317be88a9aec5aaa8c3fa4104
@@ -173,6 +179,12 @@ Security hardening:
 - CAW policy denial detection
 - Intent-proposal cross-validation (action, amount, address mismatch detection)
 
+## Security Boundary
+
+Sentinel is a hackathon prototype and reference implementation. It demonstrates bounded autonomous fund operations on Sepolia testnet through CAW `transfer_tokens` and CAW `contract_call` swap execution.
+
+It is not a production custody system or a mainnet trading product. Production use would require formal security review, expanded simulation, stricter policy templates, monitoring, and operational controls.
+
 ## Quick Start
 
 ```bash
@@ -197,10 +209,13 @@ make build   # Frontend production build
 ## API
 
 ```bash
-# Execute a transaction
+# Execute the real swap mainline
 curl -X POST http://127.0.0.1:8000/api/execute \
   -H "Content-Type: application/json" \
-  -d '{"intent":"Send 0.001 ETH to 0x1111111111111111111111111111111111111111"}'
+  -d '{
+    "user_address": "0xabc...",
+    "intent": "Swap 0.0005 ETH to USDC"
+  }'
 
 # Audit list
 curl http://127.0.0.1:8000/api/audit-log
@@ -227,7 +242,7 @@ ENABLE_REAL_TX=false
 EXECUTION_BACKEND=caw
 ENABLE_REAL_TX=false
 
-# Real CAW transfer (Sepolia testnet)
+# Real CAW execution: transfer_tokens + contract_call swap (Sepolia testnet)
 EXECUTION_BACKEND=caw
 ENABLE_REAL_TX=true
 ```
@@ -279,7 +294,7 @@ agent/
   reviewers.py        Agent B/C (mock + LLM, 6-dimension prompts)
   reproposal.py       reproposal agent + MutationGuard
   risk/
-    rules.py          6 hard rules (Amount, Slippage, Whitelist, Approval, Frequency, Strategy)
+    rules.py          5 hard rules (Amount, Slippage, Whitelist, Approval, Frequency)
     decision.py       DecisionEngine (priority cascade)
     pipeline.py       RiskPipeline
   execution.py        mock / CAW execution backend
@@ -311,7 +326,7 @@ scripts/
 
 - **Track**: Cobo — Agentic Economy × Cobo Agentic Wallet
 - **Direction**: Autonomous Trading
-- **What**: Risk-aware agent that executes transfers through CAW with dual-layer safety
+- **What**: Risk-aware agent that executes transfers and Uniswap V3 swaps through CAW with dual-layer safety
 - **CAW role**: Agent holds trading funds, executes within Pact-enforced boundaries
 - **Current demo**: CAW `transfer_tokens` + `contract_call` (Uniswap V3 swap) with real Sepolia on-chain execution
 - **Next target**: Multi-step strategy execution (arbitrage, rebalance, LP) via the same risk pipeline — see `post-mvp-requirements.md` §4.5

@@ -12,6 +12,8 @@
 
 > Hackathon/Cobo方向补充(2026-06-06)：当前赛道优先级调整为 **Cobo Agentic Wallet (CAW) 优先的DeFi执行层**。SmartAccount仍是历史MVP和本地/降级执行基线，但评审Demo应尽量完整展示CAW钱包生命周期、CAW Pact护栏、CAW执行证据和策略拒绝链路。
 
+> CP14更新(2026-06-12)：Sentinel 已从早期转账主线升级为 **CAW-governed autonomous trading execution agent**。当前真实 CAW 执行能力包括 `transfer_tokens` 和 `contract_call` Uniswap V3 swap；swap 主线是 wrap ETH → approve WETH → `exactInputSingle`，已在 Sepolia 上链验证。
+
 ---
 
 ## 2. 项目的"为什么"
@@ -99,7 +101,7 @@
 
 **执行顺序**：A基础转账(Day1-2) → B+C+D扩展(Day3-4) → Mock DEX swap(Day5，降级方案)
 
-> ⚠️ Uniswap V3 直连方案调试失败（SmartAccount→Uniswap 路径有未知错误，直接调 Uniswap 成功但通过合约转发失败）。已切换 Mock DEX 方案，可在 v2 版本再攻 Uniswap。
+> ⚠️ 历史SmartAccount路径说明：Uniswap V3 直连方案曾调试失败（SmartAccount→Uniswap 路径有未知错误，直接调 Uniswap 成功但通过合约转发失败），当时切换过 Mock DEX 方案。当前 Cobo/CAW 路径已经通过 CAW `contract_call` 完成真实 Uniswap V3 swap，本段只作为历史背景。
 
 ### MVP明确不包含(防止scope creep)
 - ❌ 复杂规则引擎(只支持daily limit)
@@ -244,7 +246,7 @@ frontend worktree:
 "From intent to execution. Sepolia today, mainnet next."
 ```
 
-**备用方案**（如Uniswap做不通）：改用自己部署的Mock DEX合约演示swap。故事和定位不降级，技术可简化。
+**历史备用方案**（SmartAccount阶段如Uniswap做不通）：改用自己部署的Mock DEX合约演示swap。当前 CAW demo 已有真实 Uniswap V3 contract_call swap 证据，不再以 Mock DEX 作为主线。
 
 ---
 
@@ -288,18 +290,17 @@ frontend worktree:
 
 ## 10. 当前状态(每次更新)
 ```
-最后更新：2026-06-08
-当前阶段：Hackathon Post-MVP / Security Hardening + Eval Framework
+最后更新：2026-06-12
+当前阶段：Hackathon submission polish / CP14 complete
 当前分支：
-- backend worktree: /home/admini/sentinel-backend @ feature/backend-risk-pipeline
-- frontend worktree: /home/admini/sentinel-frontend @ feature/frontend-risk-console
+- main（integration/caw-demo 已合并，后续开发继续在 main）
 本轮目标：
-- Security Hardening：已修复 input_guard 注入检测、AmountRule 负数/零值、unknown action 拦截、Agent B/C prompt 加强
-- Eval Framework：已新建 eval_pipeline.py 3层评估（E2E/Trajectory/Safety），总分 93%
-- 后续：CP14 CAW contract_call 或 CP15 Read-only MCP Server
+- README 和 hackathon docs 对齐 CP14 完成状态
+- 对外定位：CAW-governed autonomous trading execution agent
+- 明确真实 CAW 执行能力：`transfer_tokens` + `contract_call` Uniswap V3 swap
 卡点：
-- 剩余 5 个 eval FAIL 是 demo parser 限制（中文解析、JSON payload、无金额 transfer），非安全漏洞
-- CAW contract_call swap 待 transfer 主线稳定后再做
+- 无明确外部阻塞
+- CAW request id / swap CAW transaction id 若未在仓库文档中完整记录，不要补造；README 只使用已有证据
 合约地址：0xad7C1EBe561C9359C657FA36a156Cd213C8E6d7c（Sepolia，历史SmartAccount MVP版本）
 ```
 

@@ -1,4 +1,4 @@
-# Sentinel — 让 AI Agent 安全地参与链上经济活动
+# Sentinel — CAW-governed autonomous trading execution agent
 
 > **赛道**: Cobo — Agentic Economy × Cobo Agentic Wallet
 > **方向**: 04｜Autonomous Trading — 带风控的自主交易 Agent
@@ -26,13 +26,13 @@
 
 ## 3. 解决方案
 
-Sentinel = **AI 风控层** + **Cobo Agentic Wallet (CAW)**，实现受控边界内的自主交易。
+Sentinel = **AI 风控层** + **Cobo Agentic Wallet (CAW)**，实现受控边界内的自主交易执行。
 
 - **Sentinel** 负责执行前的 AI 风险判断（该不该做、值不值得做、有没有异常）
 - **CAW** 负责资金权限边界和 infrastructure-enforced policy 兜底（做多少、在哪做）
 - 两层互补：AI 风控拦逻辑风险，CAW Pact 拦资金越权
 
-**一句话 pitch**: Sentinel 让 AI Agent 在受控边界内自主执行链上交易 — 多 Agent 风控 + 智能账户权限 + 完整审计链路。
+**一句话 pitch**: Sentinel 是一个 CAW-governed autonomous trading execution agent：多 Agent 风控先判断，CAW Pact 再约束，最终通过真实 CAW `transfer_tokens` 或 `contract_call` 完成测试网执行。
 
 ## 4. MVP Demo 链路
 
@@ -43,12 +43,12 @@ Sentinel = **AI 风控层** + **Cobo Agentic Wallet (CAW)**，实现受控边界
   → Agent B (Security) + Agent C (Risk) 并行审查
   → DecisionEngine 决策（execute / confirm / reject）
   → Bounded Retry Loop（最多 2 次，reject 时根据建议重生成）
-  → CAW Pact 执行（受 pact 资金边界约束）
+  → CAW Execution Backend（`transfer_tokens` / `contract_call`，受 pact 资金边界约束）
   → 完整审计日志
 ```
 
 **Demo 展示三个场景：**
-1. ✅ **正常执行**: 低风险 transfer/swap，通过所有检查，至少一条 safe transfer 通过 CAW 真实执行
+1. ✅ **正常执行**: 低风险 transfer/swap 通过所有检查；CAW `transfer_tokens` 与 `contract_call` Uniswap V3 swap 都有真实 Sepolia 证据
 2. 🚫 **被拦截**: 高滑点/超限额交易，被硬规则或 Agent 审查拒绝
 3. ⚠️ **人工确认**: 中风险交易，等待用户确认后执行
 
@@ -105,9 +105,9 @@ Sentinel = **AI 风控层** + **Cobo Agentic Wallet (CAW)**，实现受控边界
 ### Web3 层
 - **主执行路径**: CAW — Agent 的资金账户，受 Pact policy 约束
 - **Fallback / 技术展示**: SmartAccount.sol (ERC-4337) — Foundry 测试 + Sepolia 部署
-- Uniswap V3 exactInputSingle 作为 swap 执行
+- Uniswap V3 exactInputSingle 作为真实 swap 执行；CAW `contract_call` 采用 wrap → approve → swap 三步主线
 - CAW Pact 在 demo 前预先提交并由 owner 审批
-- Cobo demo 至少展示一条真实 CAW `transfer_tokens` request/transaction id，mock/simulator 只作为开发 fallback
+- Cobo demo 展示真实 CAW `transfer_tokens` 和真实 CAW `contract_call` swap；mock/simulator 只作为开发 fallback
 
 ### 风控层
 - **硬规则** (代码，零 LLM 成本): 滑点/金额/白名单/频率
@@ -116,6 +116,10 @@ Sentinel = **AI 风控层** + **Cobo Agentic Wallet (CAW)**，实现受控边界
 - **CAW Policy**: infrastructure-enforced 资金边界，兜底防护
 
 ## 6. 风险边界
+
+Sentinel 是 hackathon prototype / reference implementation，用 Sepolia 展示受限自治资金操作。它不是 production custody system，也不是 mainnet trading product。
+
+生产化需要正式安全审计、更完整模拟、更严格 policy template、监控和运维控制。
 
 | 维度 | 处理方式 |
 |------|----------|
@@ -135,7 +139,7 @@ Sentinel = **AI 风控层** + **Cobo Agentic Wallet (CAW)**，实现受控边界
 | Agent A (Intent Parser) | ✅ 完成 | 结构化 JSON 输出 + 6 个 intent 测试 |
 | RiskPipeline 硬规则 | ✅ 完成 | 5 条规则 + 37 个单元测试 |
 | DecisionEngine + AgenticLoop | ✅ 完成 | bounded retry、suggestions、MutationGuard、attempts |
-| CAW 集成 | ✅ 完成 | CAW wallet/pact/SDK/API transfer/policy deny 已验通 |
+| CAW 集成 | ✅ 完成 | CAW wallet/pact/SDK/API transfer/policy deny 已验通；CP14 `contract_call` Uniswap V3 swap 已上链 |
 | FastAPI 后端 | ✅ 完成 | `/api/execute`、audit list/detail、CAW execution result |
 | 前端 UI | 🔨 进行中 | 独立 worktree 开发中 |
 | E2E Demo | 🔨 进行中 | demo script / evidence checklist 已补 |
@@ -144,8 +148,8 @@ Sentinel = **AI 风控层** + **Cobo Agentic Wallet (CAW)**，实现受控边界
 
 ## 8. 验证方式
 
-- 测试网交易记录：已有 CAW 真实 safe transfer tx hash；若时间允许补 swap tx
-- CAW Pact 演示：展示 pact 预设 → 真实 CAW transfer → policy denied 场景
+- 测试网交易记录：已有 CAW 真实 safe transfer tx hash，以及 CP14 wrap / approve / Uniswap V3 swap tx hash
+- CAW Pact 演示：展示 pact 预设 → 真实 CAW transfer / contract_call swap → policy denied 场景
 - Demo 视频：完整展示"正常执行"、"被拦截"、"人工确认"三个场景
 - Repo：README 说明架构、部署步骤、风控逻辑、CAW 集成
 - 审计日志：每笔交易的完整决策链路（intent → rules → agents → decision → execution）
@@ -170,10 +174,10 @@ Cobo 赛道核心要求：**Agent 在受控边界内参与经济活动**。
 | 维度 | 分值 | Sentinel 得分点 |
 |------|------|----------------|
 | **Innovation 创新性** | 10 | 多 Agent 风控 + CAW 双层防护 + Bounded AgenticLoop（LLM 想 + 代码验的 MutationGuard）。不是单 LLM 多 prompt，而是 Agent 审查 → 建议 → 自动修正 → 代码验证的完整闭环 |
-| **Technical Execution 技术实现** | 10 | 后端 82 个单元测试（intent/risk/pipeline/decision/reviewers/reproposal/loop/API/audit/execution）、合约 14 Foundry 测试、Sepolia 真实部署 + 验证、FastAPI、CAW 真实 `transfer_tokens` 集成。核心 demo 功能全部可运行 |
+| **Technical Execution 技术实现** | 10 | 后端单元测试、合约 Foundry 测试、Sepolia 真实部署 + 验证、FastAPI、CAW 真实 `transfer_tokens` 与 `contract_call` Uniswap V3 swap。核心 demo 功能全部可运行 |
 | **User Experience 用户体验** | 10 | NL 输入 → Agent 推理可视化 → 决策链路展示 → 审计日志。用户路径清晰：输入意图 → 看到 Agent 如何决策 → 理解为什么通过/拒绝 → 查看链上证据 |
 | **Ecosystem Impact 生态影响** | 10 | Sentinel 定义了"AI Agent 安全参与链上经济活动"的基础设施范式。后续可扩展：多链支持、更多 DeFi 协议、DAO 金库自动化、Agent 市场准入标准 |
-| **Demo Quality 演示质量** | 10 | 三个场景完整覆盖：✅ 正常执行（低风险 CAW safe transfer）→ 🚫 风控拦截（超限额被拒 + Agent 给出修正建议）→ ⚠️ CAW 双层防护（Sentinel 通过但 CAW Pact 拒绝）|
+| **Demo Quality 演示质量** | 10 | 场景覆盖：✅ 真实 CAW swap（wrap → approve → Uniswap V3）→ ✅ CAW safe transfer → 🚫 Sentinel 风控拦截 → ⚠️ CAW 双层防护（Sentinel 通过但 CAW Pact 拒绝）|
 
 ## 11. 技术栈
 
@@ -187,4 +191,4 @@ Cobo 赛道核心要求：**Agent 在受控边界内参与经济活动**。
 
 ---
 
-> **Last updated**: 2026-06-02
+> **Last updated**: 2026-06-12

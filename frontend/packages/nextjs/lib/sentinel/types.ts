@@ -2,7 +2,13 @@ export type ExecutionStatus = "executed" | "rejected" | "confirm_needed" | "fail
 
 export type RiskLevel = "low" | "medium" | "high";
 
-export type IntentScenario = "safe_swap" | "agent_retry_swap" | "blocked_swap" | "confirm_transfer";
+export type IntentScenario =
+  | "real_caw_swap"
+  | "caw_pact_deny"
+  | "blocked_swap"
+  | "prompt_injection"
+  | "agent_retry_swap"
+  | "confirm_transfer";
 
 export type ApiErrorKind = "network" | "timeout" | "execution_failed";
 
@@ -204,6 +210,9 @@ export type ExecutionResult = {
   walletAddress?: string | null;
   pactId?: string | null;
   policyReason?: string | null;
+  blockNumber?: string | null;
+  usdcReceived?: string | null;
+  realTxEnabled?: boolean | null;
   raw?: Record<string, unknown>;
 };
 
