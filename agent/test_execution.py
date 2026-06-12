@@ -152,6 +152,37 @@ class ExecutionBackendTest(unittest.TestCase):
         self.assertEqual(result.policy_reason, "matched_pact_transfer_deny_if")
         self.assertIn("policy", result.reason)
 
+    def test_caw_executor_real_swap_aggregates_step_evidence(self):
+        tx = TxProposal(
+            action="swap",
+            amount="0.0005",
+            from_token="ETH",
+            to_token="USDC",
+            to_contract="0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E",
+            calldata="0x414bf389",
+            value="0x1c6bf52634000",
+        )
+        config = CawConfig(
+            api_url="https://api.agenticwallet.cobo.com",
+            api_key="agent-key",
+            wallet_id="wallet-id",
+            pact_id="pact-id",
+            src_address="0x927f175c85d61237f817b499f739336b498384fe",
+            enable_real_tx=True,
+        )
+        factory = FakeSwapCawClientFactory()
+
+        result = CawExecutor(config=config, client_factory=factory).execute(tx, "tx-1")
+
+        self.assertEqual(result.status, "succeeded")
+        self.assertEqual(result.tx_hash, "0xswap")
+        self.assertEqual(result.raw["wrap_tx"], "0xwrap")
+        self.assertEqual(result.raw["approve_tx"], "0xapprove")
+        self.assertEqual(result.raw["swap_tx"], "0xswap")
+        self.assertEqual(result.raw["block_number"], "11018833")
+        self.assertEqual(result.raw["usdc_received"], "5.499668 USDC")
+        self.assertTrue(result.raw["real_tx_enabled"])
+
 
 class ExplodingClientFactory:
     def __call__(self, base_url, api_key):
@@ -192,6 +223,54 @@ class FakeCawClient:
         if self.transfer_error:
             raise self.transfer_error
         return self.transfer_response
+
+
+class FakeSwapCawClientFactory:
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, base_url, api_key):
+        return FakeSwapCawClient(self)
+
+
+class FakeSwapCawClient:
+    def __init__(self, factory):
+        self.factory = factory
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def get_pact(self, pact_id):
+        return {"id": pact_id, "status": "active", "api_key": "pact-key"}
+
+    async def contract_call(self, **kwargs):
+        self.factory.calls.append(kwargs)
+        request_id = kwargs["request_id"]
+        if request_id.endswith("-wrap"):
+            return {
+                "id": "caw-wrap",
+                "request_id": request_id,
+                "status": "Success",
+                "transaction_hash": "0xwrap",
+            }
+        if request_id.endswith("-approve"):
+            return {
+                "id": "caw-approve",
+                "request_id": request_id,
+                "status": "Success",
+                "transaction_hash": "0xapprove",
+            }
+        return {
+            "id": "caw-swap",
+            "request_id": request_id,
+            "status": "Success",
+            "transaction_hash": "0xswap",
+            "block_number": "11018833",
+            "usdc_received": "5.499668 USDC",
+        }
 
 
 class FakePolicyDeniedError(Exception):

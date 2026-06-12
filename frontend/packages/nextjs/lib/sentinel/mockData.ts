@@ -242,6 +242,18 @@ const realCawSwapChain: DecisionChain = {
       severity: "pass",
       reason: "WETH, USDC, and Uniswap V3 SwapRouter are allowlisted for the Sepolia demo.",
     },
+    {
+      rule: "ApprovalRule",
+      passed: true,
+      severity: "pass",
+      reason: "WETH approval is bounded to the Uniswap V3 SwapRouter execution path.",
+    },
+    {
+      rule: "FrequencyRule",
+      passed: true,
+      severity: "pass",
+      reason: "No recent execution frequency spike was detected for this CAW wallet.",
+    },
   ],
   agentReviews: [
     {

@@ -2,14 +2,17 @@ from dataclasses import asdict
 import json
 
 from llm import LLMClient
-from models import AgentResult, Suggestion, TxProposal
+from models import AgentResult, Suggestion, ToolCallEvidence, TxProposal
+from tools import AgentToolRegistry, tool_calls_to_dicts
 
 
 class MockSecurityAuditor:
-    def __init__(self, mode="safe"):
+    def __init__(self, mode="safe", tool_registry: AgentToolRegistry | None = None):
         self.mode = mode
+        self.tool_registry = tool_registry or AgentToolRegistry.default()
 
     def review(self, tx: TxProposal) -> AgentResult:
+        tool_calls = self.tool_registry.run_for_review("SecurityAuditor", tx)
         if self.mode == "high_risk":
             return AgentResult(
                 agent_name="SecurityAuditor",
@@ -34,6 +37,7 @@ class MockSecurityAuditor:
                         rejection_code="unknown_contract",
                     ),
                 ],
+                tool_calls=tool_calls,
             )
 
         return AgentResult(
@@ -42,14 +46,17 @@ class MockSecurityAuditor:
             risk_level="low",
             findings=[],
             reasoning="Mock security auditor: address known, no injection detected, approval amount normal.",
+            tool_calls=tool_calls,
         )
 
 
 class MockRiskAnalyst:
-    def __init__(self, mode="safe"):
+    def __init__(self, mode="safe", tool_registry: AgentToolRegistry | None = None):
         self.mode = mode
+        self.tool_registry = tool_registry or AgentToolRegistry.default()
 
     def review(self, tx: TxProposal) -> AgentResult:
+        tool_calls = self.tool_registry.run_for_review("RiskAnalyst", tx)
         if self.mode == "high_risk":
             return AgentResult(
                 agent_name="RiskAnalyst",
@@ -68,6 +75,7 @@ class MockRiskAnalyst:
                         rejection_code="amount_too_high",
                     )
                 ],
+                tool_calls=tool_calls,
             )
 
         return AgentResult(
@@ -76,14 +84,17 @@ class MockRiskAnalyst:
             risk_level="low",
             findings=[],
             reasoning="Mock risk analyst: amount within normal range, slippage acceptable.",
+            tool_calls=tool_calls,
         )
 
 
 class LLMSecurityAuditor:
-    def __init__(self, llm: LLMClient):
+    def __init__(self, llm: LLMClient, tool_registry: AgentToolRegistry | None = None):
         self.llm = llm
+        self.tool_registry = tool_registry or AgentToolRegistry.default()
 
     def review(self, tx: TxProposal) -> AgentResult:
+        tool_calls = self.tool_registry.run_for_review("SecurityAuditor", tx)
         return _review_with_llm(
             llm=self.llm,
             agent_name="SecurityAuditor",
@@ -119,14 +130,17 @@ class LLMSecurityAuditor:
                 "objects with field, suggested_value, reason, rejection_code)."
             ),
             tx=tx,
+            tool_calls=tool_calls,
         )
 
 
 class LLMRiskAnalyst:
-    def __init__(self, llm: LLMClient):
+    def __init__(self, llm: LLMClient, tool_registry: AgentToolRegistry | None = None):
         self.llm = llm
+        self.tool_registry = tool_registry or AgentToolRegistry.default()
 
     def review(self, tx: TxProposal) -> AgentResult:
+        tool_calls = self.tool_registry.run_for_review("RiskAnalyst", tx)
         return _review_with_llm(
             llm=self.llm,
             agent_name="RiskAnalyst",
@@ -159,6 +173,7 @@ class LLMRiskAnalyst:
                 "objects with field, suggested_value, reason, rejection_code)."
             ),
             tx=tx,
+            tool_calls=tool_calls,
         )
 
 
@@ -167,6 +182,7 @@ def _review_with_llm(
     agent_name: str,
     system_prompt: str,
     tx: TxProposal,
+    tool_calls: list[ToolCallEvidence],
 ) -> AgentResult:
     try:
         raw = llm.complete_json(
@@ -174,6 +190,7 @@ def _review_with_llm(
             user_prompt=json.dumps(
                 {
                     "tx_proposal": asdict(tx),
+                    "tool_observations": tool_calls_to_dicts(tool_calls),
                     "required_schema": {
                         "passed": "boolean",
                         "risk_level": "low | medium | high",
@@ -192,7 +209,7 @@ def _review_with_llm(
                 sort_keys=True,
             ),
         )
-        return _agent_result_from_dict(agent_name, raw)
+        return _agent_result_from_dict(agent_name, raw, tool_calls=tool_calls)
     except Exception as exc:
         return AgentResult(
             agent_name=agent_name,
@@ -201,10 +218,15 @@ def _review_with_llm(
             findings=["LLM reviewer failed"],
             reasoning=f"LLM reviewer failed closed: {exc}",
             suggestions=[],
+            tool_calls=tool_calls,
         )
 
 
-def _agent_result_from_dict(agent_name: str, data: dict) -> AgentResult:
+def _agent_result_from_dict(
+    agent_name: str,
+    data: dict,
+    tool_calls: list[ToolCallEvidence] | None = None,
+) -> AgentResult:
     passed = data.get("passed")
     if not isinstance(passed, bool):
         raise ValueError("Invalid passed")
@@ -243,4 +265,5 @@ def _agent_result_from_dict(agent_name: str, data: dict) -> AgentResult:
         findings=findings,
         reasoning=reasoning,
         suggestions=suggestions,
+        tool_calls=tool_calls or [],
     )

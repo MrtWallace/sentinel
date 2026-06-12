@@ -19,11 +19,13 @@ from input_guard import (
 )
 from llm import build_default_llm_client
 from loop import AgenticLoop
-from models import AgentResult, Suggestion, TxProposal
+from memory import MemoryAnalyzer
+from models import AgentResult, DecisionResult, MemoryAnomaly, Suggestion, TxProposal
 from reproposal import LLMReproposalAgent
 from reviewers import LLMSecurityAuditor, LLMRiskAnalyst, MockSecurityAuditor
 from risk.pipeline import RiskPipeline
 from risk.rules import AmountRule, ApprovalRule, FrequencyRule, SlippageRule, WhitelistRule
+from tools import AgentToolRegistry
 from wallets import CawWalletService, UserWalletStore, WalletNotFoundError
 
 
@@ -113,6 +115,8 @@ def execute(request: ExecuteRequest):
 
     loop = _build_loop(request.user_address)
     result = loop.run(tx)
+    memory_anomalies = _memory_anomalies_for_result(request.user_address, result)
+    _apply_memory_anomalies(result, memory_anomalies)
     execution = _execute_if_allowed(result, tx_id, caw_status)
     final_decision, status, decision_reason = _final_response_decision(
         result,
@@ -134,8 +138,8 @@ def execute(request: ExecuteRequest):
         "decision_chain": _legacy_decision_chain(result),
         "execution": _execution_to_dict(execution, caw_status),
         "security": {"code": None, "reason": None},
-        "tool_calls": [],
-        "memory_anomalies": [],
+        "tool_calls": _collect_tool_calls(result),
+        "memory_anomalies": [asdict(anomaly) for anomaly in memory_anomalies],
     }
     build_audit_logger().write(response)
     return response
@@ -287,10 +291,11 @@ def _risk_config_for_user(user_address: str | None) -> dict[str, Any]:
 
 def _build_reviewers():
     reviewer_mode = os.getenv("REVIEWER_MODE", "mock").lower()
+    tool_registry = AgentToolRegistry.default()
     if reviewer_mode == "llm":
         llm = build_default_llm_client()
-        return LLMSecurityAuditor(llm), LLMRiskAnalyst(llm)
-    return MockSecurityAuditor(mode="safe"), DemoRiskAnalyst()
+        return LLMSecurityAuditor(llm, tool_registry), LLMRiskAnalyst(llm, tool_registry)
+    return MockSecurityAuditor(mode="safe", tool_registry=tool_registry), DemoRiskAnalyst(tool_registry)
 
 
 def _build_reproposal_agent():
@@ -615,6 +620,50 @@ def _attempt_to_dict(attempt) -> dict[str, Any]:
     }
 
 
+def _collect_tool_calls(result) -> list[dict[str, Any]]:
+    calls = []
+    for attempt in result.attempts:
+        for agent_result in [attempt.security_audit, attempt.risk_analysis]:
+            if agent_result:
+                calls.extend(asdict(call) for call in agent_result.tool_calls)
+    return calls
+
+
+def _memory_anomalies_for_result(
+    user_address: str | None,
+    result,
+) -> list[MemoryAnomaly]:
+    if not result.attempts:
+        return []
+    final_tx = result.attempts[-1].tx_proposal
+    return MemoryAnalyzer(build_audit_logger()).analyze(user_address, final_tx)
+
+
+def _apply_memory_anomalies(result, anomalies: list[MemoryAnomaly]) -> None:
+    if not anomalies:
+        return
+
+    final_attempt = result.attempts[-1]
+    if final_attempt.risk_analysis:
+        final_attempt.risk_analysis.findings.extend(
+            f"Memory anomaly: {anomaly.kind} — {anomaly.reason}"
+            for anomaly in anomalies
+        )
+        if final_attempt.risk_analysis.risk_level == "low":
+            final_attempt.risk_analysis.risk_level = "medium"
+        final_attempt.risk_analysis.reasoning = (
+            f"{final_attempt.risk_analysis.reasoning} Memory context requires operator confirmation."
+        )
+
+    if result.final_decision.decision == "execute":
+        result.final_decision = DecisionResult(
+            decision="confirm",
+            reason=f"Memory anomaly requires confirmation: {anomalies[0].reason}",
+            suggestions=[],
+        )
+        final_attempt.decision = result.final_decision
+
+
 def _legacy_decision_chain(result) -> dict[str, Any]:
     first_attempt = result.attempts[0]
     last_attempt = result.attempts[-1]
@@ -649,7 +698,11 @@ def _legacy_decision_chain(result) -> dict[str, Any]:
 
 
 class DemoRiskAnalyst:
+    def __init__(self, tool_registry: AgentToolRegistry | None = None):
+        self.tool_registry = tool_registry or AgentToolRegistry.default()
+
     def review(self, tx: TxProposal) -> AgentResult:
+        tool_calls = self.tool_registry.run_for_review("RiskAnalyst", tx)
         try:
             amount = Decimal(tx.amount)
         except InvalidOperation:
@@ -660,6 +713,7 @@ class DemoRiskAnalyst:
                 findings=["Invalid transaction amount"],
                 reasoning="Amount could not be parsed as a decimal.",
                 suggestions=[],
+                tool_calls=tool_calls,
             )
 
         if amount > Decimal("0.05"):
@@ -677,6 +731,7 @@ class DemoRiskAnalyst:
                         rejection_code="amount_too_high",
                     )
                 ],
+                tool_calls=tool_calls,
             )
 
         return AgentResult(
@@ -685,4 +740,5 @@ class DemoRiskAnalyst:
             risk_level="low",
             findings=[],
             reasoning="Amount is within autonomous execution limits.",
+            tool_calls=tool_calls,
         )

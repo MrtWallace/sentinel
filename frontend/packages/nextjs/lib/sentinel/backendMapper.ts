@@ -27,6 +27,7 @@ import type {
   RiskConfigResponse,
   RuleCheck,
   Suggestion,
+  ToolCall,
   ToolCallEvidence,
   TxProposal,
 } from "./types";
@@ -159,6 +160,7 @@ export function mapBackendAgent(agent: BackendAgentResult): AgentReview {
     findings: agent.findings,
     reasoning: agent.reasoning,
     suggestions: (agent.suggestions ?? []).map(mapBackendSuggestion),
+    toolCalls: (agent.tool_calls ?? []).map(mapBackendAgentToolCall),
   };
 }
 
@@ -201,6 +203,15 @@ export function mapBackendToolCall(toolCall: BackendToolCallEvidence): ToolCallE
     status: toolCall.status,
     result: toolCall.result,
     reason: toolCall.reason ?? undefined,
+  };
+}
+
+function mapBackendAgentToolCall(toolCall: BackendToolCallEvidence): ToolCall {
+  return {
+    name: toolCall.tool,
+    status: toolCall.status === "succeeded" ? "success" : toolCall.status,
+    inputSummary: toolCall.agent,
+    outputSummary: summarizeToolResult(toolCall.result),
   };
 }
 
@@ -265,6 +276,17 @@ function rawBoolean(raw: Record<string, unknown> | undefined, key: string): bool
   const value = raw?.[key];
 
   return typeof value === "boolean" ? value : null;
+}
+
+function summarizeToolResult(result: Record<string, unknown>): string {
+  const entries = Object.entries(result).filter(([, value]) => value !== null && value !== undefined);
+  if (entries.length === 0) {
+    return "No result payload returned.";
+  }
+  return entries
+    .slice(0, 3)
+    .map(([key, value]) => `${key}: ${String(value)}`)
+    .join(", ");
 }
 
 function mapBackendDecisionChain(dto: BackendExecuteResponse, attempts: AttemptRecord[]): DecisionChain {

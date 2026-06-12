@@ -5,8 +5,8 @@
 Any API shape/status/field change must be committed as a docs(contract) change and synced to both backend and frontend branches before implementation.
 
 > **Purpose:** Single source of truth for backend/frontend integration.
-> **Status:** Integration branch merged. Backend CP1-13 + Frontend CP0-12 complete. `tool_calls` and `memory_anomalies` fields are reserved (returns `[]`) until CP16/CP17 are implemented.
-> **Last updated:** 2026-06-07
+> **Status:** Integration branch merged. Backend CP1-14 + Frontend CP0-14 complete. `tool_calls` and `memory_anomalies` fields are implemented by backend CP16/CP17.
+> **Last updated:** 2026-06-12
 
 This document defines API shapes, status names, and frontend mapper rules shared by:
 
@@ -385,12 +385,14 @@ sentinel_decision, sentinel_decision_reason, caw, attempts, decision_chain,
 execution, security
 ```
 
-Reserved fields (returns `[]` until implemented):
+Agent evidence fields:
 
 ```text
-tool_calls        — planned: CP16 Agent Tool Calling
-memory_anomalies  — planned: CP17 Agent Memory + Anomaly Detection
+tool_calls        — CP16 Agent Tool Calling evidence, top-level flattened list
+memory_anomalies  — CP17 Agent Memory + Anomaly Detection evidence
 ```
+
+`attempts[].security_audit.tool_calls` and `attempts[].risk_analysis.tool_calls` may also be present. Frontend mappers should use those step-level fields for Decision Chain details and the top-level `tool_calls` list for audit/evidence summaries.
 
 Required `execution` fields:
 
@@ -399,6 +401,19 @@ backend, status, reason, request_id, caw_transaction_id, tx_hash,
 policy_reason, fallback_reason, pending_reason,
 caw_wallet_id, caw_wallet_address, pact_id
 ```
+
+For CAW `contract_call` Uniswap V3 swap execution, `execution.raw` must also include swap evidence fields when available:
+
+```text
+wrap_tx          — Sepolia tx hash for ETH -> WETH wrap
+approve_tx       — Sepolia tx hash for WETH approval to the Uniswap V3 router
+swap_tx          — Sepolia tx hash for the final exactInputSingle swap
+block_number     — block number for the final swap transaction
+usdc_received    — human-readable USDC amount received, e.g. "5.499668 USDC"
+real_tx_enabled  — boolean indicating whether the backend submitted live CAW transactions
+```
+
+If a swap step is not submitted or the value is unavailable, return `null` or omit only that raw evidence key. Do not invent tx hashes, block numbers, or received amounts.
 
 When a value is not applicable, return `null` rather than omitting the key. Do not return CAW API keys, pact scoped credentials, auth headers, or raw secret-like fields.
 

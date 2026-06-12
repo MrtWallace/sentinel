@@ -321,7 +321,17 @@ class CawExecutor:
                     kwargs["src_addr"] = self.config.src_address
                 raw = await pact_client.contract_call(**kwargs)
 
-            return self._result_from_caw_response(raw)
+            result = self._result_from_caw_response(raw)
+            result.raw = {
+                **raw,
+                "wrap_tx": wrap_result.tx_hash,
+                "approve_tx": approve_result.tx_hash,
+                "swap_tx": result.tx_hash,
+                "block_number": raw.get("block_number") or raw.get("block"),
+                "usdc_received": raw.get("usdc_received"),
+                "real_tx_enabled": True,
+            }
+            return result
         except Exception as exc:
             if self._is_policy_denied(exc):
                 return self._policy_denied_result(exc, request_id)

@@ -36,8 +36,8 @@
 | CP13 | SQLite Audit + CAW Evidence Query | 2-4h | 2026-06-07 03:24 | 2026-06-07 03:27 | Done | SQLite audit 主存储、per-user/status 分页过滤、CAW evidence query、敏感字段脱敏已完成 |
 | CP14 | CAW contract_call Demo Path | 2-4h | 2026-06-09 | 2026-06-09 | Done | 真实 Sepolia swap 已上链：wrap → approve → Uniswap V3 exactInputSingle；tx 0x6b29...66f4；USDC 5.499668 到账 |
 | CP15 | Read-only MCP Server | 1.5-3h | 待开始 | 待完成 | Planned | 只读 tools：evaluate_transaction、get_risk_config、get_audit_log；不开放写操作 |
-| CP16 | Basic Agent Tool Calling | 2-4h | 待开始 | 待完成 | Planned | 稳定可 mock 的工具调用 + audit evidence；外部不稳定工具后置 |
-| CP17 | Agent Memory + Anomaly Detection | 2-4h | 待开始 | 待完成 | Planned | 复用 SQLite audit 生成用户历史模式，异常时提升到 confirm 或 reject evidence |
+| CP16 | Basic Agent Tool Calling | 2-4h | 2026-06-12 14:50 | 2026-06-12 15:13 | Done / Full Tests Passed | AgentTool registry、reviewer/audit tool_calls evidence 和 swap raw evidence 聚合已完成 |
+| CP17 | Agent Memory + Anomaly Detection | 2-4h | 2026-06-12 14:50 | 2026-06-12 15:13 | Done / Full Tests + Browser QA Passed | 复用 SQLite audit 生成用户历史模式，异常时提升到 confirm；前端 live backend 展示已验证 |
 | CP18 | Minimal Auth + Rate Limit | 1-2h | 待开始 | 待完成 | Planned | MetaMask 签名登录 + JWT；per-user/IP 简单限流 |
 | CP19 | Deferred Advanced Agent | 暂不排期 | 待开始 | 待完成 | Deferred/P3 | Planner、Reflector、多步自治、write-capable MCP 后置；当前不作为 demo 门槛 |
 
@@ -52,13 +52,38 @@
 ## 当前阻塞
 
 - 无明确外部阻塞。
-- 当前进行：黑客松提交材料 polish；CP14 CAW contract_call Demo Path 已完成，CP15 Read-only MCP Server 仍为后续可选项。
+- 当前进行：黑客松提交材料 polish；CP14 CAW contract_call Demo Path、CP16 tool calling、CP17 memory anomaly 已完成，CP15 Read-only MCP Server 仍为后续可选项。
 - Cobo 赛道新增工作量约 10-16h；真实 CAW setup、`transfer_tokens` 和 CP14 `contract_call` swap 构成当前主证据，不能用 mock/simulator 替代。
 - agentic 优化当前只保留 MCP、tool calling、memory anomaly 作为证据层；Planner/Reflector/多步自治明确后置到 CP19 / P3。
 - 提交截止：2026-06-13 12:00。当前判断仍可完成；后续执行顺序调整为 CP10 input guard -> CP11 user-scoped CAW execution -> CP18 minimal auth/rate limit -> CP12 config/pact sync -> CP13 SQLite audit；CP15-CP17 作为 Agent 证据层穿插，CP14/CP19 后置。
 - 前端需要后续同步：DecisionChain 支持 attempts；状态栏从 SmartAccount 主视角调整为 CAW wallet / pact 主视角；Audit 展示 CAW request id、policy result、tx hash。
+- 前端 CP16/CP17 同步：DecisionChain 已能显示 live backend 返回的 Agent B/C tool calls 和 memory anomaly；dry-run 环境不会展示 wrap/approve/swap tx，真实 CAW submit 时按 shared contract 从 `execution.raw` 读取。
 
 ## 最近完成项
+
+### 2026-06-12 CP16/CP17 — Agent Tool Calling + Memory Anomaly Evidence
+
+- 已新增 `AgentToolRegistry` 和稳定本地工具：
+  - `check_contract_verified`
+  - `check_gas_price`
+  - `get_token_price`
+- Agent B / Agent C reviewer result 已返回 `tool_calls[]`，`/api/execute` 顶层也返回 flattened `tool_calls[]` 供 audit/evidence 使用。
+- 已新增 `MemoryAnalyzer`，复用 SQLite audit 计算用户历史模式：
+  - amount spike vs recent median
+  - new contract seen
+  - frequency spike in 24h
+- memory anomaly 出现时，原本 `execute` 的决策会提升为 `confirm_needed`，并跳过 CAW execution。
+- CAW real swap result 聚合三步证据到 `execution.raw`：
+  - `wrap_tx`
+  - `approve_tx`
+  - `swap_tx`
+  - `block_number`
+  - `usdc_received`
+  - `real_tx_enabled`
+- 验证结果：
+  - `python3 -m unittest discover -p 'test_*.py' -v` passed：318 tests OK。
+  - Frontend `check-types` / `lint` / `build` passed。
+  - Playwright live backend QA passed：Agent B/C tool calls、memory anomaly、confirm reason 均能在首页 Decision Chain 展开区显示。
 
 ### 2026-06-12 README / Submission Docs Polish
 

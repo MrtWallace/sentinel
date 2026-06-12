@@ -10,6 +10,20 @@ class Suggestion:
     rejection_code: Optional[str] = None
 
 @dataclass
+class ToolCallEvidence:
+    agent: str
+    tool: str
+    status: Literal["succeeded", "failed", "skipped"]
+    result: dict
+    reason: Optional[str] = None
+
+@dataclass
+class MemoryAnomaly:
+    kind: str
+    severity: Literal["info", "warning", "critical"]
+    reason: str
+
+@dataclass
 class TxProposal:
     action: Literal["swap", "transfer", "approve", "deposit", "withdraw", "unknown"]
     amount: str
@@ -39,6 +53,7 @@ class AgentResult:
     findings: list[str]
     reasoning: str
     suggestions: list[Suggestion] = field(default_factory=list)
+    tool_calls: list[ToolCallEvidence] = field(default_factory=list)
 
 @dataclass
 class DecisionResult:

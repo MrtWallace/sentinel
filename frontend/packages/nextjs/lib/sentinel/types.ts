@@ -309,6 +309,7 @@ export type BackendAgentResult = {
   findings: string[];
   reasoning: string;
   suggestions?: BackendSuggestion[];
+  tool_calls?: BackendToolCallEvidence[];
 };
 
 export type BackendDecisionResult = {

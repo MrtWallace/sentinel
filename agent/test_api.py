@@ -55,7 +55,14 @@ class ExecuteApiTest(unittest.TestCase):
         self.assertEqual(len(body["attempts"]), 1)
         self.assertEqual(body["execution"]["status"], "dry_run")
         self.assertEqual(body["security"], {"code": None, "reason": None})
-        self.assertEqual(body["tool_calls"], [])
+        self.assertGreaterEqual(len(body["tool_calls"]), 3)
+        self.assertEqual(body["tool_calls"][0]["tool"], "check_contract_verified")
+        self.assertIn("tool_calls", body["attempts"][0]["security_audit"])
+        self.assertIn("tool_calls", body["attempts"][0]["risk_analysis"])
+        self.assertEqual(
+            body["attempts"][0]["risk_analysis"]["tool_calls"][0]["tool"],
+            "check_gas_price",
+        )
         self.assertEqual(body["memory_anomalies"], [])
 
     def test_execute_dry_runs_safe_transfer(self):
@@ -304,6 +311,28 @@ class ExecuteApiTest(unittest.TestCase):
         self.assertEqual(body["status"], "rejected")
         self.assertEqual(body["sentinel_decision"], "reject")
         self.assertIn("0.003", body["sentinel_decision_reason"])
+
+    def test_memory_anomaly_elevates_execute_to_confirm(self):
+        self._seed_active_wallet()
+        execute(
+            ExecuteRequest(
+                user_address=self.user_address,
+                intent="Swap 0.001 ETH to USDC",
+            )
+        )
+
+        body = execute(
+            ExecuteRequest(
+                user_address=self.user_address,
+                intent="Swap 0.04 ETH to USDC",
+            )
+        )
+
+        self.assertEqual(body["status"], "confirm_needed")
+        self.assertEqual(body["decision"], "confirm")
+        self.assertEqual(body["execution"]["status"], "skipped")
+        self.assertEqual(body["memory_anomalies"][0]["kind"], "amount_spike_vs_recent_median")
+        self.assertIn("Memory anomaly", body["decision_reason"])
 
     def _seed_active_wallet(self):
         store = UserWalletStore.from_env()
