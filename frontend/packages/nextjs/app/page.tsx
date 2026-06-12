@@ -14,6 +14,7 @@ import { DecisionChain } from "~~/components/sentinel/DecisionChain";
 import { SentinelShell } from "~~/components/sentinel/SentinelShell";
 import { StatusBadge } from "~~/components/sentinel/StatusBadge";
 import { confirmExecution, executeIntent } from "~~/lib/sentinel/api";
+import { MOCK_EXECUTE_RESPONSES } from "~~/lib/sentinel/mockData";
 import type { ApiError, ExecuteResponse, ExecutionStatus } from "~~/lib/sentinel/types";
 
 // CP10: Frontend input validation — UX layer only, security boundary is the backend.
@@ -408,6 +409,15 @@ type EvidenceRowModel = {
   tone?: EvidenceRowTone;
 };
 
+type EvidenceViewModel = {
+  auditHref: string;
+  explorerTxHash: string | null;
+  rows: EvidenceRowModel[];
+  sourceLabel: string;
+  sourceTone: EvidenceRowTone;
+  subTransactions: EvidenceRowModel[];
+};
+
 const EvidenceRow = ({ label, tone = "default", value }: EvidenceRowModel) => {
   return (
     <div className={`rounded-md border px-3 py-2 ${evidenceRowClass(tone)}`}>
@@ -419,17 +429,7 @@ const EvidenceRow = ({ label, tone = "default", value }: EvidenceRowModel) => {
   );
 };
 
-function buildEvidenceView(
-  response: ExecuteResponse | null,
-  isExecuting: boolean,
-): {
-  auditHref: string;
-  explorerTxHash: string | null;
-  rows: EvidenceRowModel[];
-  sourceLabel: string;
-  sourceTone: EvidenceRowTone;
-  subTransactions: EvidenceRowModel[];
-} {
+function buildEvidenceView(response: ExecuteResponse | null, isExecuting: boolean): EvidenceViewModel {
   if (isExecuting) {
     return {
       auditHref: "/audit",
@@ -468,6 +468,10 @@ function buildEvidenceView(
         { label: "Audit ID", value: demoEvidence.auditId },
       ],
     };
+  }
+
+  if (shouldUseRecordedCawPactDenyEvidence(response)) {
+    return buildRecordedCawPactDenyEvidence(response);
   }
 
   const execution = response.execution;
@@ -539,6 +543,58 @@ function buildEvidenceView(
         value: displayUsdcReceived,
       },
       { label: "Audit ID", value: response.txId },
+    ].filter((row): row is EvidenceRowModel => row !== null),
+  };
+}
+
+function buildRecordedCawPactDenyEvidence(response: ExecuteResponse): EvidenceViewModel {
+  const recorded = MOCK_EXECUTE_RESPONSES.caw_pact_deny;
+  const execution = recorded.execution;
+  const pactStatus = rawString(execution.raw, "pact_status") ?? "active";
+  const policyId = rawString(execution.raw, "policy_id") ?? rawString(execution.raw, "policyId");
+  const policyReason = execution.reason ?? "matched_pact_transfer_deny_if";
+  const currentRunStatus = `${response.status} / ${response.execution.status}`;
+
+  return {
+    auditHref: "/audit",
+    explorerTxHash: null,
+    sourceLabel: "Demo Evidence — recorded CAW Pact denial",
+    sourceTone: "danger",
+    subTransactions: [],
+    rows: [
+      { label: "Execution Backend", value: execution.backend },
+      { label: "Execution Status", value: "policy_denied", tone: "danger" },
+      { label: "Reason", value: policyReason, tone: "danger" },
+      {
+        label: "Policy Reason",
+        value: execution.policyReason ?? "Not returned",
+        tone: execution.policyReason ? "danger" : "warning",
+      },
+      policyId ? { label: "Policy ID", value: policyId, tone: "danger" } : null,
+      {
+        label: "CAW Wallet",
+        value: execution.walletAddress ?? "Not returned",
+        tone: execution.walletAddress ? "success" : "warning",
+      },
+      {
+        label: "Pact ID / Status",
+        value: `${execution.pactId ?? "Not returned"} / ${pactStatus}`,
+        tone: "danger",
+      },
+      {
+        label: "CAW Pact Boundary",
+        value: "CAW Pact is the hard execution boundary; it can deny an operation even after Sentinel allows it.",
+        tone: "danger",
+      },
+      {
+        label: "Current Run",
+        value:
+          currentRunStatus === "rejected / policy_denied"
+            ? "Current run reached CAW policy denial."
+            : `Current run returned ${currentRunStatus}; showing recorded CAW Pact denial evidence for demo stability.`,
+        tone: currentRunStatus === "rejected / policy_denied" ? "danger" : "warning",
+      },
+      { label: "Audit ID", value: recorded.txId },
     ].filter((row): row is EvidenceRowModel => row !== null),
   };
 }
@@ -642,6 +698,10 @@ function shouldUseCp14DemoEvidence(
     !approveTx &&
     !swapTx
   );
+}
+
+function shouldUseRecordedCawPactDenyEvidence(response: ExecuteResponse): boolean {
+  return response.intent.trim().toLowerCase() === "send 0.005 eth to 0x1111111111111111111111111111111111111111";
 }
 
 function rawString(raw: Record<string, unknown> | undefined, key: string): string | null {

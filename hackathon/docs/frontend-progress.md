@@ -1,6 +1,6 @@
 # Sentinel 前端进度记录
 
-> 最后更新：2026-06-12 19:17
+> 最后更新：2026-06-12 20:29
 
 ## 进度记录约定
 
@@ -47,6 +47,22 @@
 - Backend evidence sync: CP16/CP17 live backend data now maps into Decision Chain details; browser QA verified Agent B/C tool calls and memory anomaly confirmation display.
 
 ## 当前进度详情
+
+### 2026-06-12 API user binding 与 CAW Pact Deny Demo Evidence 修复
+
+- 完成时间：2026-06-12 20:29。
+- 修复内容：
+  - README API 示例把 `user_address` 改为本地 demo bound user：`0x1111111111111111111111111111111111111111`。
+  - README 新增说明：`user_address` 是 Sentinel 本地 user/binding identifier；CAW wallet address 才是真实 Cobo Agentic Wallet 执行钱包。
+  - Demo Evidence 中继续保留真实 CAW wallet：`0x927f175c85d61237f817b499f739336b498384fe`，未改 tx hash 或 CAW evidence。
+  - 首页 `CAW Pact Deny` preset 在当前 live run 被 memory anomaly 截获为 `confirm_needed` 时，右栏改为展示已记录的 `Demo Evidence — recorded CAW Pact denial`，并明确显示 `execution backend: caw`、`execution status: policy_denied`、`matched_pact_transfer_deny_if` 和 CAW Pact hard boundary note。
+  - 未改真实 CAW 执行代码；Prompt Injection、Agentic Retry、Real CAW Swap 行为保持原状。
+- 验证结果：
+  - Playwright 回归通过：覆盖 Real CAW Swap、CAW Pact Deny recorded evidence、Prompt Injection、切回 Real CAW Swap、Manual review。
+  - `yarn workspace @se-2/nextjs check-types` passed。
+  - `yarn workspace @se-2/nextjs lint` passed。
+  - `yarn workspace @se-2/nextjs build` passed；保留既有 Wallet/RainbowKit dependency warnings。
+  - `git diff --check` passed。
 
 ### 2026-06-12 首页 Chain Evidence 右栏二次修复
 

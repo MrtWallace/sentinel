@@ -208,12 +208,14 @@ make build   # Frontend production build
 
 ## API
 
+`user_address` is the Sentinel local user/binding identifier used to look up the user's CAW binding in local storage. It is not the CAW wallet address. The CAW wallet address is the actual Cobo Agentic Wallet execution wallet shown in Demo Evidence.
+
 ```bash
 # Execute the real swap mainline
 curl -X POST http://127.0.0.1:8000/api/execute \
   -H "Content-Type: application/json" \
   -d '{
-    "user_address": "0xabc...",
+    "user_address": "0x1111111111111111111111111111111111111111",
     "intent": "Swap 0.0005 ETH to USDC"
   }'
 
