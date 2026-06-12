@@ -643,22 +643,28 @@ def _apply_memory_anomalies(result, anomalies: list[MemoryAnomaly]) -> None:
     if not anomalies:
         return
 
+    confirmation_anomalies = [
+        anomaly
+        for anomaly in anomalies
+        if anomaly.kind in {"amount_spike_vs_recent_median", "new_contract_seen"}
+    ]
     final_attempt = result.attempts[-1]
     if final_attempt.risk_analysis:
         final_attempt.risk_analysis.findings.extend(
             f"Memory anomaly: {anomaly.kind} — {anomaly.reason}"
             for anomaly in anomalies
         )
-        if final_attempt.risk_analysis.risk_level == "low":
+        if confirmation_anomalies and final_attempt.risk_analysis.risk_level == "low":
             final_attempt.risk_analysis.risk_level = "medium"
-        final_attempt.risk_analysis.reasoning = (
-            f"{final_attempt.risk_analysis.reasoning} Memory context requires operator confirmation."
-        )
+        if confirmation_anomalies:
+            final_attempt.risk_analysis.reasoning = (
+                f"{final_attempt.risk_analysis.reasoning} Memory context requires operator confirmation."
+            )
 
-    if result.final_decision.decision == "execute":
+    if confirmation_anomalies and result.final_decision.decision == "execute":
         result.final_decision = DecisionResult(
             decision="confirm",
-            reason=f"Memory anomaly requires confirmation: {anomalies[0].reason}",
+            reason=f"Memory anomaly requires confirmation: {confirmation_anomalies[0].reason}",
             suggestions=[],
         )
         final_attempt.decision = result.final_decision

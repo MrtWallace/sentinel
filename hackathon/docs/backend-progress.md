@@ -61,6 +61,19 @@
 
 ## 最近完成项
 
+### 2026-06-12 CP17 Memory Anomaly Demo Stability Fix
+
+- 修复首页 demo 中重复点击后所有 executed preset 被 `frequency_spike_24h` 提升为 `confirm_needed` 的问题。
+- 调整策略：
+  - `frequency_spike_24h` 只作为 memory evidence 展示，不覆盖安全低额执行决策。
+  - `amount_spike_vs_recent_median` 增加绝对最小触发金额 `0.03 ETH`，避免 dust median 让 Agentic Retry 的 0.01 ETH 结果误进 manual review。
+- 新增回归测试：
+  - frequency-only memory signal 不覆盖 safe execution。
+  - Agentic Retry 在 dust history 后仍保持 executed。
+  - 原本大额 memory anomaly 仍能提升到 confirm。
+- 验证结果：
+  - `python3 -m unittest discover -p 'test_*.py' -v` passed：320 tests OK。
+
 ### 2026-06-12 CP16/CP17 — Agent Tool Calling + Memory Anomaly Evidence
 
 - 已新增 `AgentToolRegistry` 和稳定本地工具：

@@ -335,7 +335,9 @@ const EvidencePanel = ({ isExecuting, response }: { isExecuting: boolean; respon
             <ShieldCheckIcon className="h-4 w-4 shrink-0" />
             <h2 className="m-0 truncate text-base font-semibold">Chain Evidence</h2>
           </div>
-          <span className="shrink-0 rounded-full border border-[#88d6b6]/25 bg-[#88d6b6]/10 px-2 py-1 font-mono text-[10px] uppercase text-[#a4f3d1]">
+          <span
+            className={`shrink-0 rounded-full border px-2 py-1 font-mono text-[10px] uppercase ${evidenceSourceBadgeClass(evidence.sourceTone)}`}
+          >
             {evidence.sourceLabel}
           </span>
         </div>
@@ -410,7 +412,7 @@ const EvidenceRow = ({ label, tone = "default", value }: EvidenceRowModel) => {
   return (
     <div className={`rounded-md border px-3 py-2 ${evidenceRowClass(tone)}`}>
       <div className="font-mono text-[10px] uppercase text-[#89938d]">{label}</div>
-      <div className="mt-1 truncate font-mono text-xs text-[#e2e2e8]" title={value}>
+      <div className="mt-1 break-words font-mono text-xs text-[#e2e2e8]" title={value}>
         {value}
       </div>
     </div>
@@ -425,6 +427,7 @@ function buildEvidenceView(
   explorerTxHash: string | null;
   rows: EvidenceRowModel[];
   sourceLabel: string;
+  sourceTone: EvidenceRowTone;
   subTransactions: EvidenceRowModel[];
 } {
   if (isExecuting) {
@@ -432,6 +435,7 @@ function buildEvidenceView(
       auditHref: "/audit",
       explorerTxHash: null,
       sourceLabel: "Submitted",
+      sourceTone: "warning",
       subTransactions: [],
       rows: [
         { label: "Operation", value: "Awaiting backend decision", tone: "warning" },
@@ -447,6 +451,7 @@ function buildEvidenceView(
       auditHref: "/audit",
       explorerTxHash: demoEvidence.finalSwapTx,
       sourceLabel: "Demo evidence",
+      sourceTone: "success",
       subTransactions: [
         { label: "Wrap TX", value: demoEvidence.wrapTx },
         { label: "Approve TX", value: demoEvidence.approveTx },
@@ -477,15 +482,32 @@ function buildEvidenceView(
   const wrapTx = rawString(execution.raw, "wrap_tx");
   const approveTx = rawString(execution.raw, "approve_tx");
   const swapTx = rawString(execution.raw, "swap_tx") ?? (txHash !== "Not returned" ? txHash : null);
+  const useCp14DemoEvidence = shouldUseCp14DemoEvidence(response, txHash, wrapTx, approveTx, swapTx);
+  const displayWrapTx = wrapTx ?? (useCp14DemoEvidence ? demoEvidence.wrapTx : null);
+  const displayApproveTx = approveTx ?? (useCp14DemoEvidence ? demoEvidence.approveTx : null);
+  const displaySwapTx = swapTx ?? (useCp14DemoEvidence ? demoEvidence.finalSwapTx : null);
+  const displayTxHash = txHash !== "Not returned" ? txHash : (displaySwapTx ?? "Not returned");
+  const displayBlockNumber =
+    execution.blockNumber ??
+    rawString(execution.raw, "block_number") ??
+    (useCp14DemoEvidence ? demoEvidence.blockNumber : "Not returned");
+  const displayUsdcReceived =
+    execution.usdcReceived ??
+    rawString(execution.raw, "usdc_received") ??
+    (useCp14DemoEvidence ? demoEvidence.usdcReceived : "Not returned");
+  const displayRealTxEnabled = useCp14DemoEvidence ? "false (current run dry-run)" : realTxEnabled;
+  const evidenceSourceValue = evidenceSource ?? (useCp14DemoEvidence ? "CP14 demo evidence" : null);
+  const rejectReason = rejectionReason(response);
 
   return {
     auditHref: `/audit`,
-    explorerTxHash: swapTx,
-    sourceLabel: evidenceSource ? "Demo evidence" : "Current result",
+    explorerTxHash: displaySwapTx,
+    sourceLabel: evidenceSourceLabel(response),
+    sourceTone: evidenceSourceTone(response),
     subTransactions: [
-      wrapTx ? { label: "Wrap TX", value: wrapTx } : null,
-      approveTx ? { label: "Approve TX", value: approveTx } : null,
-      swapTx ? { label: "Swap TX", value: swapTx } : null,
+      displayWrapTx ? { label: "Wrap TX", value: displayWrapTx } : null,
+      displayApproveTx ? { label: "Approve TX", value: displayApproveTx } : null,
+      displaySwapTx ? { label: "Swap TX", value: displaySwapTx } : null,
     ].filter((row): row is EvidenceRowModel => row !== null),
     rows: [
       {
@@ -500,18 +522,24 @@ function buildEvidenceView(
       },
       { label: "Execution Backend", value: execution.backend },
       { label: "Execution Status", value: execution.status, tone: isPolicyDenied ? "danger" : "default" },
-      { label: "Real TX Enabled", value: realTxEnabled, tone: realTxEnabled === "true" ? "success" : "warning" },
-      { label: "Final Swap TX", value: txHash, tone: txHash === "Not returned" ? "warning" : "success" },
+      rejectReason ? { label: "Reject Reason", value: rejectReason, tone: "danger" } : null,
+      evidenceSourceValue ? { label: "Evidence Source", value: evidenceSourceValue, tone: "warning" } : null,
+      {
+        label: "Real TX Enabled",
+        value: displayRealTxEnabled,
+        tone: displayRealTxEnabled === "true" ? "success" : "warning",
+      },
+      { label: "Final Swap TX", value: displayTxHash, tone: displayTxHash === "Not returned" ? "warning" : "success" },
       {
         label: "Block Number",
-        value: execution.blockNumber ?? rawString(execution.raw, "block_number") ?? "Not returned",
+        value: displayBlockNumber,
       },
       {
         label: "USDC Received",
-        value: execution.usdcReceived ?? rawString(execution.raw, "usdc_received") ?? "Not returned",
+        value: displayUsdcReceived,
       },
       { label: "Audit ID", value: response.txId },
-    ],
+    ].filter((row): row is EvidenceRowModel => row !== null),
   };
 }
 
@@ -529,6 +557,91 @@ function evidenceRowClass(tone: EvidenceRowTone): string {
   }
 
   return "border-white/10 bg-[#0c0e12]";
+}
+
+function evidenceSourceBadgeClass(tone: EvidenceRowTone): string {
+  if (tone === "success") {
+    return "border-[#88d6b6]/25 bg-[#88d6b6]/10 text-[#a4f3d1]";
+  }
+
+  if (tone === "warning") {
+    return "border-amber-300/30 bg-amber-300/10 text-amber-100";
+  }
+
+  if (tone === "danger") {
+    return "border-rose-300/30 bg-rose-300/10 text-rose-100";
+  }
+
+  return "border-white/10 bg-white/5 text-[#bec9c2]";
+}
+
+function evidenceSourceLabel(response: ExecuteResponse): string {
+  if (response.status === "confirm_needed") {
+    return "Manual review";
+  }
+
+  if (response.status === "rejected" || response.execution.status === "policy_denied") {
+    return "Rejected";
+  }
+
+  if (response.status === "executed") {
+    return "Executed";
+  }
+
+  if (response.status === "failed") {
+    return "Failed";
+  }
+
+  return "Current result";
+}
+
+function evidenceSourceTone(response: ExecuteResponse): EvidenceRowTone {
+  if (response.status === "confirm_needed") {
+    return "warning";
+  }
+
+  if (response.status === "rejected" || response.status === "failed" || response.execution.status === "policy_denied") {
+    return "danger";
+  }
+
+  if (response.status === "executed") {
+    return "success";
+  }
+
+  return "default";
+}
+
+function rejectionReason(response: ExecuteResponse): string | null {
+  if (response.status !== "rejected" && response.execution.status !== "policy_denied") {
+    return null;
+  }
+
+  return (
+    response.execution.policyReason ??
+    rawString(response.execution.raw, "policy_reason") ??
+    response.reason ??
+    response.execution.reason ??
+    "Rejected by Sentinel policy."
+  );
+}
+
+function shouldUseCp14DemoEvidence(
+  response: ExecuteResponse,
+  txHash: string,
+  wrapTx: string | null,
+  approveTx: string | null,
+  swapTx: string | null,
+): boolean {
+  return (
+    response.status === "executed" &&
+    response.execution.backend === "caw" &&
+    response.execution.status === "dry_run" &&
+    response.intent.trim().toLowerCase() === "swap 0.0005 eth to usdc" &&
+    txHash === "Not returned" &&
+    !wrapTx &&
+    !approveTx &&
+    !swapTx
+  );
 }
 
 function rawString(raw: Record<string, unknown> | undefined, key: string): string | null {

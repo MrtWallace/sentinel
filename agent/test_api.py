@@ -334,6 +334,48 @@ class ExecuteApiTest(unittest.TestCase):
         self.assertEqual(body["memory_anomalies"][0]["kind"], "amount_spike_vs_recent_median")
         self.assertIn("Memory anomaly", body["decision_reason"])
 
+    def test_frequency_only_memory_signal_does_not_override_safe_execution(self):
+        self._seed_active_wallet()
+        for _ in range(3):
+            execute(
+                ExecuteRequest(
+                    user_address=self.user_address,
+                    intent="Swap 0.0005 ETH to USDC",
+                )
+            )
+
+        body = execute(
+            ExecuteRequest(
+                user_address=self.user_address,
+                intent="Swap 0.0005 ETH to USDC",
+            )
+        )
+
+        self.assertEqual(body["status"], "executed")
+        self.assertEqual(body["decision"], "execute")
+        self.assertEqual(body["execution"]["status"], "dry_run")
+        self.assertEqual(body["memory_anomalies"][0]["kind"], "frequency_spike_24h")
+
+    def test_agentic_retry_remains_executed_after_dust_history(self):
+        self._seed_active_wallet()
+        execute(
+            ExecuteRequest(
+                user_address=self.user_address,
+                intent="Swap 0.0005 ETH to USDC",
+            )
+        )
+
+        body = execute(
+            ExecuteRequest(
+                user_address=self.user_address,
+                intent="Swap 0.2 ETH to USDC",
+            )
+        )
+
+        self.assertEqual(body["status"], "executed")
+        self.assertEqual(body["decision"], "execute")
+        self.assertEqual(body["attempts"][-1]["proposal"]["amount"], "0.01")
+
     def _seed_active_wallet(self):
         store = UserWalletStore.from_env()
         store.connect_existing(

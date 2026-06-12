@@ -12,10 +12,12 @@ class MemoryAnalyzer:
         self,
         audit_logger: AuditLogger | None = None,
         spike_multiplier: Decimal | str = "5",
+        minimum_spike_amount: Decimal | str = "0.03",
         frequency_limit: int = 3,
     ):
         self.audit_logger = audit_logger or AuditLogger()
         self.spike_multiplier = Decimal(str(spike_multiplier))
+        self.minimum_spike_amount = Decimal(str(minimum_spike_amount))
         self.frequency_limit = frequency_limit
 
     def analyze(self, user_address: str | None, tx: TxProposal) -> list[MemoryAnomaly]:
@@ -71,7 +73,7 @@ class MemoryAnalyzer:
         if recent_median <= 0:
             return None
 
-        if current >= recent_median * self.spike_multiplier:
+        if current >= self.minimum_spike_amount and current >= recent_median * self.spike_multiplier:
             multiple = (current / recent_median).quantize(Decimal("0.1"))
             return MemoryAnomaly(
                 kind="amount_spike_vs_recent_median",

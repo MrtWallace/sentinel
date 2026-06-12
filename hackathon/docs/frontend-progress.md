@@ -1,6 +1,6 @@
 # Sentinel 前端进度记录
 
-> ?????2026-06-12 06:04
+> 最后更新：2026-06-12 19:17
 
 ## 进度记录约定
 
@@ -47,6 +47,34 @@
 - Backend evidence sync: CP16/CP17 live backend data now maps into Decision Chain details; browser QA verified Agent B/C tool calls and memory anomaly confirmation display.
 
 ## 当前进度详情
+
+### 2026-06-12 首页 Chain Evidence 右栏二次修复
+
+- 完成时间：2026-06-12 19:17。
+- 修复内容：
+  - 右侧 `Chain Evidence` 状态 badge 不再固定使用绿色；`Executed` 使用成功色，`Rejected` 使用红色，`Manual review` 使用 amber。
+  - `Rejected` 场景新增 `Reject Reason` 行，直接展示 Sentinel / CAW 返回的拒绝原因。
+  - `Real CAW Swap` 在当前后端 `ENABLE_REAL_TX=false` 的 dry-run 响应下，仍显示 CP14 已记录的真实 demo evidence，并新增 `Evidence Source: CP14 demo evidence`，避免把 demo tx 伪装成当前 live tx。
+  - 右栏长地址、tx hash 和拒绝原因改为可换行显示，避免窄栏截断关键信息。
+- 验证结果：
+  - Playwright 回归通过：验证 `Executed` / `Rejected` / `Manual review` 三种右栏状态切换、rejected reason、以及从 rejected 切回 `Real CAW Swap` 后 demo evidence 不丢失。
+  - `yarn workspace @se-2/nextjs check-types` passed。
+  - `yarn workspace @se-2/nextjs lint` passed。
+  - `yarn workspace @se-2/nextjs build` passed；保留既有 Wallet/RainbowKit dependency warnings。
+  - `python3 -m unittest discover -v` in `agent/` passed：320 tests OK。
+
+### 2026-06-12 首页 Chain Evidence 状态切换修复
+
+- 完成时间：2026-06-12 18:49。
+- 修复内容：
+  - 右侧 `Chain Evidence` badge 不再固定显示 `Current result`，会根据当前响应显示 `Executed`、`Rejected`、`Manual review`、`Failed`。
+  - 配合后端修复，`Real CAW Swap` 和 `Agentic Retry` 不再因为 frequency-only memory evidence 被误显示为 `Manual review`。
+- 验证结果：
+  - Next proxy 验证：`Swap 0.0005 ETH to USDC` 与 `Swap 0.2 ETH to USDC` 返回 `status=executed / decision=execute / execution=dry_run`。
+  - Playwright 验证右侧栏三种状态：`Executed`、`Rejected`、`Manual review`。
+  - `yarn workspace @se-2/nextjs check-types` passed。
+  - `yarn workspace @se-2/nextjs lint` passed。
+  - `yarn workspace @se-2/nextjs build` passed；保留既有 Wallet/RainbowKit dependency warnings。
 
 ### 2026-06-12 前端 Checkpoint 14：Decision Chain Expandable Details
 
