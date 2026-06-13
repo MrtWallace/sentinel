@@ -4,7 +4,7 @@
 
 ## Demo Video
 
-[![Sentinel Demo](https://cdn.loom.com/sessions/thumbnails/40a7046329fd420086694951f5081570.jpg)](https://www.loom.com/share/40a7046329fd420086694951f5081570)
+[![Sentinel Demo](https://cdn.loom.com/sessions/thumbnails/40a7046329fd420086694951f5081570-f91a1bc24afa9e03.jpg)](https://www.loom.com/share/40a7046329fd420086694951f5081570)
 
 Sentinel is a CAW-governed autonomous trading execution agent built on Cobo Agentic Wallet.
 
