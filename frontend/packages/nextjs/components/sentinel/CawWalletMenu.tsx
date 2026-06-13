@@ -96,11 +96,21 @@ export const CawWalletMenu = () => {
               />
               <StatusCell label="wallet_status" value={isLoading ? "Loading" : summary.statusItems.wallet_status} />
               <StatusCell label="pairing_status" value={isLoading ? "Loading" : summary.statusItems.pairing_status} />
+              <StatusCell label="wallet_paired" value={isLoading ? "Loading" : summary.statusItems.wallet_paired} />
+              <StatusCell label="caw_healthy" value={isLoading ? "Loading" : summary.statusItems.caw_healthy} />
               <StatusCell label="pact_status" value={isLoading ? "Loading" : summary.statusItems.pact_status} />
               <StatusCell label="config_status" value={isLoading ? "Loading" : summary.statusItems.config_status} />
+              <StatusCell label="pending_txs" value={isLoading ? "Loading" : summary.statusItems.pending_txs_count} />
               <StatusCell label="pact_id" value={shortValue(walletBinding?.pactId)} />
               <StatusCell label="wallet_id" value={shortValue(walletBinding?.cawWalletId)} />
             </div>
+
+            {walletBinding?.walletPaired === false && (
+              <div className="rounded-md border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-xs leading-5 text-amber-100">
+                CAW wallet_paired is false. Generate a pairing code in Settings, complete pairing in Cobo Agentic
+                Wallet, then refresh status.
+              </div>
+            )}
 
             {summary.statusItems.config_status === "needs_pact_update" && (
               <div className="rounded-md border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-xs leading-5 text-amber-100">

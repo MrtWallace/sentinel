@@ -8,10 +8,13 @@ from api import (
     ExecuteRequest,
     ExistingWalletRequest,
     PactRequest,
+    PairWalletRequest,
     RefreshWalletStatusRequest,
     RiskConfigRequest,
+    build_audit_logger,
     confirm,
     connect_existing_wallet,
+    create_wallet_pairing_code,
     create_wallet,
     execute,
     get_config,
@@ -113,6 +116,76 @@ class ExecuteApiTest(unittest.TestCase):
         self.assertEqual(records["items"][0]["tx_id"], body["tx_id"])
         self.assertEqual(records["items"][0]["caw_wallet_id"], "wallet_active")
 
+    def test_audit_detail_refreshes_timeout_failed_caw_record_to_pending(self):
+        build_audit_logger().write(
+            {
+                "tx_id": "audit-timeout-wrap",
+                "intent": "Swap 0.0005 ETH to USDC",
+                "status": "failed",
+                "decision": "execute",
+                "decision_reason": "Execution failed: Wrap ETH transaction failed or timed out.",
+                "execution": {
+                    "backend": "caw",
+                    "status": "failed",
+                    "tx_id": "caw-wrap",
+                    "caw_transaction_id": "caw-wrap",
+                    "reason": "Wrap ETH transaction failed or timed out.",
+                    "raw": {"step": "wrap", "timed_out": True},
+                },
+                "attempts": [],
+            }
+        )
+
+        with patch("api._fetch_caw_transaction") as fetch_tx:
+            fetch_tx.return_value = {
+                "id": "caw-wrap",
+                "request_id": "sentinel-audit-timeout-wrap-wrap",
+                "status": "Processing",
+                "sub_status": "signing",
+                "transaction_hash": "",
+            }
+
+            record = get_audit_log("audit-timeout-wrap")
+
+        self.assertEqual(record["status"], "pending")
+        self.assertEqual(record["execution"]["status"], "pending")
+        self.assertIn("signing", record["execution"]["reason"])
+
+    def test_audit_list_refreshes_pending_final_caw_swap_to_executed(self):
+        build_audit_logger().write(
+            {
+                "tx_id": "audit-pending-swap",
+                "intent": "Swap 0.0005 ETH to USDC",
+                "status": "pending",
+                "decision": "execute",
+                "decision_reason": "CAW execution pending: swap transaction is still processing.",
+                "execution": {
+                    "backend": "caw",
+                    "status": "pending",
+                    "tx_id": "caw-swap",
+                    "caw_transaction_id": "caw-swap",
+                    "reason": "Swap transaction is still processing.",
+                    "raw": {"step": "swap", "timed_out": True},
+                },
+                "attempts": [],
+            }
+        )
+
+        with patch("api._fetch_caw_transaction") as fetch_tx:
+            fetch_tx.return_value = {
+                "id": "caw-swap",
+                "request_id": "sentinel-audit-pending-swap-swap",
+                "status": "Success",
+                "transaction_hash": "0xabc123",
+            }
+
+            records = list_audit_log(status="executed")
+
+        self.assertEqual(records["total"], 1)
+        self.assertEqual(records["items"][0]["tx_id"], "audit-pending-swap")
+        self.assertEqual(records["items"][0]["execution_status"], "succeeded")
+        self.assertEqual(records["items"][0]["tx_hash"], "0xabc123")
+
     def test_confirm_records_user_approval(self):
         body = execute(ExecuteRequest(intent="Send 0.001 ETH to 0x1111111111111111111111111111111111111111"))
 
@@ -156,6 +229,30 @@ class ExecuteApiTest(unittest.TestCase):
         self.assertEqual(body["sentinel_decision"], "execute")
         self.assertEqual(body["execution"]["status"], "policy_denied")
         self.assertIn("CAW policy denied", body["decision_reason"])
+
+    def test_execute_returns_failed_when_allowed_execution_fails(self):
+        with patch("api.build_execution_backend") as build_backend:
+            build_backend.return_value = FailedExecutionBackend()
+
+            body = execute(ExecuteRequest(intent="Swap 0.0005 ETH to USDC"))
+
+        self.assertEqual(body["status"], "failed")
+        self.assertEqual(body["decision"], "execute")
+        self.assertEqual(body["sentinel_decision"], "execute")
+        self.assertEqual(body["execution"]["status"], "failed")
+        self.assertIn("Execution failed", body["decision_reason"])
+
+    def test_execute_returns_pending_when_caw_execution_is_processing(self):
+        with patch("api.build_execution_backend") as build_backend:
+            build_backend.return_value = PendingExecutionBackend()
+
+            body = execute(ExecuteRequest(intent="Swap 0.0005 ETH to USDC"))
+
+        self.assertEqual(body["status"], "pending")
+        self.assertEqual(body["decision"], "execute")
+        self.assertEqual(body["sentinel_decision"], "execute")
+        self.assertEqual(body["execution"]["status"], "pending")
+        self.assertIn("CAW execution pending", body["decision_reason"])
 
     def test_execute_can_use_llm_reproposal_mode(self):
         with patch.dict("os.environ", {"REPROPOSAL_MODE": "llm"}):
@@ -256,6 +353,42 @@ class ExecuteApiTest(unittest.TestCase):
         self.assertEqual(body["decision"], "reject")
         self.assertEqual(body["caw"]["readiness"], "pact_required")
         self.assertEqual(body["execution"]["pact_id"], None)
+
+    def test_execute_blocks_before_backend_when_caw_wallet_is_not_paired(self):
+        self._seed_active_wallet()
+
+        class UnpairedWalletService:
+            def get_status(self, user_address):
+                return {
+                    "user_address": user_address,
+                    "wallet_status": "active",
+                    "pairing_status": "paired",
+                    "pact_status": "active",
+                    "config_status": "synced",
+                    "caw_wallet_id": "wallet_active",
+                    "caw_wallet_address": "0xCAWactive",
+                    "pact_id": "pact_active",
+                    "caw_healthy": True,
+                    "wallet_paired": False,
+                    "pending_txs_count": 0,
+                }
+
+        with patch("api.build_wallet_service", return_value=UnpairedWalletService()):
+            with patch("api.build_execution_backend") as build_backend:
+                body = execute(
+                    ExecuteRequest(
+                        user_address=self.user_address,
+                        intent="Swap 0.0005 ETH to USDC",
+                    )
+                )
+
+        build_backend.assert_not_called()
+        self.assertEqual(body["status"], "failed")
+        self.assertEqual(body["decision"], "reject")
+        self.assertEqual(body["caw"]["readiness"], "pairing_required")
+        self.assertFalse(body["caw"]["wallet_paired"])
+        self.assertIn("wallet_paired", body["decision_reason"])
+        self.assertEqual(body["execution"]["status"], "failed")
 
     def test_execute_routes_active_user_to_caw_wallet(self):
         self._seed_active_wallet()
@@ -489,6 +622,22 @@ class WalletApiTest(unittest.TestCase):
         self.assertEqual(body["wallet_status"], "pairing_pending")
         self.assertEqual(body["pairing_status"], "pending")
 
+    def test_create_wallet_pairing_code_returns_code_for_bound_wallet(self):
+        create_wallet(
+            CreateWalletRequest(
+                user_address="0xabc0000000000000000000000000000000000000"
+            )
+        )
+
+        body = create_wallet_pairing_code(
+            PairWalletRequest(
+                user_address="0xabc0000000000000000000000000000000000000"
+            )
+        )
+
+        self.assertEqual(body["pairing_code"], "12345678")
+        self.assertIn("caw_wallet_id", body)
+
 
 class ConfigApiTest(unittest.TestCase):
     def setUp(self):
@@ -544,6 +693,30 @@ class PolicyDeniedBackend:
             request_id=f"sentinel-{tx_id}",
             reason="Operation denied by the pact's policy.",
             policy_reason="matched_pact_transfer_deny_if",
+        )
+
+
+class FailedExecutionBackend:
+    def execute(self, tx, tx_id):
+        return ExecutionResult(
+            backend="caw",
+            status="failed",
+            request_id=f"sentinel-{tx_id}-wrap",
+            reason="Wrap ETH transaction failed or timed out.",
+            tx_id="caw-wrap-tx-id",
+            raw={"step": "wrap"},
+        )
+
+
+class PendingExecutionBackend:
+    def execute(self, tx, tx_id):
+        return ExecutionResult(
+            backend="caw",
+            status="pending",
+            request_id=f"sentinel-{tx_id}-wrap",
+            reason="Wrap ETH transaction is still processing after the wait window.",
+            tx_id="caw-wrap-tx-id",
+            raw={"step": "wrap", "timed_out": True},
         )
 
 

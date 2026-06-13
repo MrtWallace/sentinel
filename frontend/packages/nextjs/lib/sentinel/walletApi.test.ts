@@ -1,6 +1,7 @@
 import {
   connectExistingCawWallet,
   createCawWallet,
+  createPairingCode,
   getRiskConfig,
   getWalletStatus,
   refreshWalletStatus,
@@ -11,6 +12,7 @@ import type {
   CawWalletBinding,
   ConfigStatus,
   PactStatus,
+  PairCawWalletResponse,
   PairingStatus,
   RiskConfigResponse,
   WalletStatus,
@@ -18,10 +20,10 @@ import type {
 
 const walletStatuses: WalletStatus[] = ["none", "pairing_pending", "paired", "active", "revoked", "expired"];
 const pairingStatuses: PairingStatus[] = ["none", "pending", "paired", "failed"];
-const pactStatuses: PactStatus[] = ["none", "pending_approval", "active", "expired", "revoked"];
+const pactStatuses: PactStatus[] = ["none", "pending_approval", "active", "expired", "revoked", "completed"];
 const configStatuses: ConfigStatus[] = ["synced", "needs_pact_update"];
 
-if (walletStatuses.length !== 6 || pairingStatuses.length !== 4 || pactStatuses.length !== 5) {
+if (walletStatuses.length !== 6 || pairingStatuses.length !== 4 || pactStatuses.length !== 6) {
   throw new Error("Expected wallet lifecycle status unions to match shared-api-contract.md.");
 }
 
@@ -35,6 +37,10 @@ const riskConfig = MOCK_RISK_CONFIG satisfies RiskConfigResponse;
 
 if (activeWallet.walletStatus !== "active" || activeWallet.pairingStatus !== "paired") {
   throw new Error("Expected active CAW mock to expose paired active status.");
+}
+
+if (activeWallet.walletPaired !== true || activeWallet.cawHealthy !== true || activeWallet.pendingTxsCount !== 0) {
+  throw new Error("Expected active CAW mock to expose realtime CAW status fields.");
 }
 
 if (unboundWallet.walletStatus !== "none" || unboundWallet.pactStatus !== "none") {
@@ -51,6 +57,7 @@ expectPromise<CawWalletBinding>(
 );
 expectPromise<CawWalletBinding>(createCawWallet({ userAddress: DEMO_USER_ADDRESS }));
 expectPromise<CawWalletBinding>(refreshWalletStatus({ userAddress: DEMO_USER_ADDRESS }));
+expectPromise<PairCawWalletResponse>(createPairingCode({ userAddress: DEMO_USER_ADDRESS }));
 expectPromise<RiskConfigResponse>(getRiskConfig(DEMO_USER_ADDRESS));
 expectPromise<RiskConfigResponse>(updateRiskConfig({ userAddress: DEMO_USER_ADDRESS, config: { frequencyLimit: 2 } }));
 

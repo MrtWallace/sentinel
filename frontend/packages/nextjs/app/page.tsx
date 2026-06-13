@@ -112,6 +112,7 @@ const Home: NextPage = () => {
   const inputError = validateIntentInput(intent);
   const hasBlockingError = inputError?.severity === "error";
   const isBusy = isExecuting || pendingConfirmationAction !== null;
+  const displayExecution = execution ? responseForScenarioDisplay(execution) : null;
 
   const runIntent = async (nextIntent = intent) => {
     const trimmedIntent = nextIntent.trim();
@@ -217,34 +218,39 @@ const Home: NextPage = () => {
             </label>
 
             <div className="grid gap-2">
-              {presets.map(preset => (
-                <button
-                  className={`group flex items-center justify-between rounded-lg border px-3 py-3 text-left transition ${
-                    execution?.intent === preset.intent
-                      ? "border-[#88d6b6]/70 bg-[#88d6b6]/10"
-                      : "border-white/10 bg-[#1a1c20] hover:border-[#88d6b6]/50 hover:bg-[#1e2024]"
-                  }`}
-                  disabled={isBusy}
-                  key={preset.intent}
-                  onClick={() => runIntent(preset.intent)}
-                  type="button"
-                >
-                  <span>
-                    <span className="block text-sm font-medium text-[#e2e2e8]">{preset.label}</span>
-                    <span className="mt-1 block font-mono text-xs text-[#bec9c2]">{preset.intent}</span>
-                  </span>
-                  <StatusBadge status={preset.tone} />
-                </button>
-              ))}
+              {presets.map(preset => {
+                const isSelected = displayExecution?.intent === preset.intent;
+                const badgeStatus = isSelected ? displayExecution.status : preset.tone;
+
+                return (
+                  <button
+                    className={`group flex items-center justify-between rounded-lg border px-3 py-3 text-left transition ${
+                      isSelected
+                        ? "border-[#88d6b6]/70 bg-[#88d6b6]/10"
+                        : "border-white/10 bg-[#1a1c20] hover:border-[#88d6b6]/50 hover:bg-[#1e2024]"
+                    }`}
+                    disabled={isBusy}
+                    key={preset.intent}
+                    onClick={() => runIntent(preset.intent)}
+                    type="button"
+                  >
+                    <span>
+                      <span className="block text-sm font-medium text-[#e2e2e8]">{preset.label}</span>
+                      <span className="mt-1 block font-mono text-xs text-[#bec9c2]">{preset.intent}</span>
+                    </span>
+                    <StatusBadge status={badgeStatus} />
+                  </button>
+                );
+              })}
             </div>
 
-            {execution && (
-              <div className={infoPanelClass(execution.status)}>
+            {displayExecution && (
+              <div className={infoPanelClass(displayExecution.status)}>
                 <div className="flex items-start gap-2">
                   <ExclamationTriangleIcon className="mt-0.5 h-4 w-4 text-amber-200" />
                   <div>
-                    <p className="m-0 text-sm font-medium text-amber-100">{infoPanelTitle(execution)}</p>
-                    <p className="m-0 mt-1 text-xs leading-5 text-amber-100/75">{infoPanelBody(execution)}</p>
+                    <p className="m-0 text-sm font-medium text-amber-100">{infoPanelTitle(displayExecution)}</p>
+                    <p className="m-0 mt-1 text-xs leading-5 text-amber-100/75">{infoPanelBody(displayExecution)}</p>
                   </div>
                 </div>
               </div>
@@ -272,11 +278,11 @@ const Home: NextPage = () => {
 
         <section className="h-[calc(100vh-80px)] min-h-[560px] overflow-hidden rounded-lg border border-white/10 bg-[#111318]">
           <DecisionChain
-            actionError={execution?.status === "confirm_needed" ? errorMessage : null}
+            actionError={displayExecution?.status === "confirm_needed" ? errorMessage : null}
             isLoading={isExecuting}
             onConfirm={handleConfirm}
             pendingConfirmationAction={pendingConfirmationAction}
-            response={execution}
+            response={displayExecution}
           />
         </section>
 
@@ -501,7 +507,15 @@ function buildEvidenceView(response: ExecuteResponse | null, isExecuting: boolea
     (useCp14DemoEvidence ? demoEvidence.usdcReceived : "Not returned");
   const displayRealTxEnabled = useCp14DemoEvidence ? "false (current run dry-run)" : realTxEnabled;
   const evidenceSourceValue = evidenceSource ?? (useCp14DemoEvidence ? "CP14 demo evidence" : null);
-  const rejectReason = rejectionReason(response);
+  const resultReason = resultReasonForEvidence(response);
+  const resultReasonLabel =
+    response.status === "pending"
+      ? "Pending Reason"
+      : response.status === "failed"
+        ? "Failure Reason"
+        : "Reject Reason";
+  const failedExecution = response.status === "failed" || execution.status === "failed";
+  const pendingExecution = response.status === "pending" || execution.status === "pending";
 
   return {
     auditHref: `/audit`,
@@ -525,8 +539,15 @@ function buildEvidenceView(response: ExecuteResponse | null, isExecuting: boolea
         tone: isPolicyDenied ? "danger" : "default",
       },
       { label: "Execution Backend", value: execution.backend },
-      { label: "Execution Status", value: execution.status, tone: isPolicyDenied ? "danger" : "default" },
-      rejectReason ? { label: "Reject Reason", value: rejectReason, tone: "danger" } : null,
+      {
+        label: "Execution Status",
+        value: execution.status,
+        tone: isPolicyDenied || failedExecution ? "danger" : pendingExecution ? "warning" : "default",
+      },
+      execution.txId ? { label: "CAW Transaction ID", value: execution.txId } : null,
+      resultReason
+        ? { label: resultReasonLabel, value: resultReason, tone: pendingExecution ? "warning" : "danger" }
+        : null,
       evidenceSourceValue ? { label: "Evidence Source", value: evidenceSourceValue, tone: "warning" } : null,
       {
         label: "Real TX Enabled",
@@ -648,11 +669,19 @@ function evidenceSourceLabel(response: ExecuteResponse): string {
     return "Failed";
   }
 
+  if (response.status === "pending") {
+    return "Pending";
+  }
+
   return "Current result";
 }
 
 function evidenceSourceTone(response: ExecuteResponse): EvidenceRowTone {
   if (response.status === "confirm_needed") {
+    return "warning";
+  }
+
+  if (response.status === "pending") {
     return "warning";
   }
 
@@ -667,8 +696,13 @@ function evidenceSourceTone(response: ExecuteResponse): EvidenceRowTone {
   return "default";
 }
 
-function rejectionReason(response: ExecuteResponse): string | null {
-  if (response.status !== "rejected" && response.execution.status !== "policy_denied") {
+function resultReasonForEvidence(response: ExecuteResponse): string | null {
+  if (
+    response.status !== "rejected" &&
+    response.status !== "failed" &&
+    response.status !== "pending" &&
+    response.execution.status !== "policy_denied"
+  ) {
     return null;
   }
 
@@ -702,6 +736,22 @@ function shouldUseCp14DemoEvidence(
 
 function shouldUseRecordedCawPactDenyEvidence(response: ExecuteResponse): boolean {
   return response.intent.trim().toLowerCase() === "send 0.005 eth to 0x1111111111111111111111111111111111111111";
+}
+
+function responseForScenarioDisplay(response: ExecuteResponse): ExecuteResponse {
+  if (!shouldUseRecordedCawPactDenyEvidence(response)) {
+    return response;
+  }
+
+  const recorded = MOCK_EXECUTE_RESPONSES.caw_pact_deny;
+
+  return {
+    ...recorded,
+    intent: response.intent,
+    timestamp: response.timestamp,
+    txId: recorded.txId,
+    reason: "Demo Evidence — recorded CAW Pact denial: matched_pact_transfer_deny_if",
+  };
 }
 
 function rawString(raw: Record<string, unknown> | undefined, key: string): string | null {
@@ -745,6 +795,10 @@ function infoPanelTitle(response: ExecuteResponse): string {
 
   if (response.status === "failed") {
     return "Execution failed";
+  }
+
+  if (response.status === "pending") {
+    return "CAW execution pending";
   }
 
   return "Manual review required";

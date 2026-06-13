@@ -1,6 +1,6 @@
 # Sentinel 前端进度记录
 
-> 最后更新：2026-06-12 20:29
+> 最后更新：2026-06-13 14:45
 
 ## 进度记录约定
 
@@ -47,6 +47,71 @@
 - Backend evidence sync: CP16/CP17 live backend data now maps into Decision Chain details; browser QA verified Agent B/C tool calls and memory anomaly confirmation display.
 
 ## 当前进度详情
+
+### 2026-06-13 CAW Pact Deny recorded evidence 状态修复
+
+- 完成时间：2026-06-13 14:45。
+- 背景：
+  - `CAW Pact Deny` 的右侧 evidence 已经会显示 recorded CAW Pact denial，但中间 Decision Chain 和左侧 preset badge 仍使用 live backend response。
+  - 当前 live run 可能先被 memory anomaly 拦成 `confirm_needed`，导致页面主状态显示 `MANUAL REVIEW`，和该 preset 的演示目标冲突。
+- 修复内容：
+  - 首页新增展示用 response normalization：`CAW Pact Deny` preset 在 UI 主状态中稳定使用 recorded `rejected / policy_denied` demo response。
+  - 右侧 Chain Evidence 继续使用真实当前 run，以便显示“current run returned confirm_needed; showing recorded CAW Pact denial evidence for demo stability”。
+- 验证结果：
+  - `yarn workspace @se-2/nextjs check-types` passed。
+  - `yarn workspace @se-2/nextjs lint` passed。
+  - `git diff --check` passed。
+
+### 2026-06-13 CAW realtime pairing status UI 最小修复
+
+- 开始时间：2026-06-13 14:30。
+- 修复内容：
+  - 前端 wallet 类型、mapper、mock 数据新增 `cawHealthy`、`walletPaired`、`pendingTxsCount`。
+  - CAW 顶部状态栏和菜单显示 `PAIR` / `wallet_paired`，区分 Sentinel 本地 `pairing_status=paired` 与 CAW CLI/app 真实 `wallet_paired=false`。
+  - Settings 页面新增 CAW wallet pairing 区块，可调用 `POST /api/wallet/pair-code` 生成一次性 pairing code，并提供刷新状态按钮。
+  - CAW 菜单在 `wallet_paired=false` 时显示显式 warning，提示先完成 CAW owner pairing。
+- 验证结果：
+  - `yarn workspace @se-2/nextjs check-types` passed。
+  - `yarn workspace @se-2/nextjs lint` passed（初次有 Prettier warning，已格式化本次改动文件）。
+  - `git diff --check` passed。
+
+### 2026-06-13 Audit CAW refresh 展示对齐
+
+- 完成时间：2026-06-13 14:03。
+- 修复内容：
+  - 前端 Audit 页不需要额外组件改动；后端 `/api/audit-log` 和 `/api/audit-log/{tx_id}` 现在会在读取时刷新 CAW pending / timeout 记录。
+  - Audit list/detail 将通过既有 mapper 自动显示刷新后的 `pending` / `executed` / `failed` 状态、tx hash 或失败原因。
+  - 对 3 步 swap 的 wrap / approve 中间步骤，若该步骤后来成功但后续步骤未提交，Audit 会保持整体 `pending`，避免误称完整 swap 已执行。
+- 验证结果：
+  - `yarn workspace @se-2/nextjs check-types` passed。
+  - `yarn workspace @se-2/nextjs lint` passed。
+  - 后端 `GET /api/audit-log/85fe1ad7-c44f-4fa2-ab62-4e0d526be5ff` 已返回 `status=pending`、`execution.status=pending`、`CAW wrap transaction is still signing.`。
+
+### 2026-06-13 CAW pending / realtime status UI 对齐
+
+- 完成时间：2026-06-13 09:48。
+- 修复内容：
+  - 前端状态类型新增 `pending` execution status，首页、Audit filter、Decision Chain 和 Evidence Panel 均可展示等待中 CAW execution。
+  - 首页 `Chain Evidence` 对 pending 使用 warning tone 和 `Pending Reason`，不再把 CAW wait-window timeout 误显示成失败或拒绝。
+  - CAW account/status view model 支持 `pact_status=completed`、`expires_at`、`has_pact_api_key`，用于展示真实 Pact 生命周期和 Pact key 是否已配置。
+  - 后端 mapper 透传 `has_pact_api_key`，避免右侧/顶部状态栏继续依赖 mock 本地状态。
+- 验证结果：
+  - `yarn workspace @se-2/nextjs check-types` passed。
+  - `yarn workspace @se-2/nextjs lint` passed。
+  - `git diff --check` passed。
+  - 后端 `/api/wallet/status` 已返回真实 `expires_at=2026-06-14T01:23:58.039163Z`、`has_pact_api_key=true`。
+
+### 2026-06-13 Real CAW Swap 失败态显示修复
+
+- 完成时间：2026-06-13 08:34。
+- 修复内容：
+  - 左侧 demo preset 在未运行时继续显示预设期望状态；选中并运行后改为显示当前 live result，避免 `Real CAW Swap` 左侧仍显示 `EXECUTED`、中/右栏显示失败的矛盾画面。
+  - 右侧 `Chain Evidence` 对 `status=failed` 使用 danger tone，并显示 `Failure Reason`，不再复用 `Reject Reason`。
+  - 右侧在后端返回 CAW transaction id 时展示 `CAW Transaction ID`，便于 wrap/approve 超时后继续追踪。
+- 验证结果：
+  - `yarn workspace @se-2/nextjs check-types` passed。
+  - `yarn workspace @se-2/nextjs lint` passed。
+  - Playwright 无真实交易验证通过：拦截 `/api/sentinel/execute` 返回 `failed/execute` mock，页面显示 `FAILED`、`Failure Reason`、`Wrap ETH transaction failed or timed out.` 和 `caw-wrap-tx-id`。
 
 ### 2026-06-12 API user binding 与 CAW Pact Deny Demo Evidence 修复
 

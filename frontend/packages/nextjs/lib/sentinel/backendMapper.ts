@@ -88,6 +88,10 @@ export function mapBackendWalletBinding(dto: BackendCawWalletBinding): CawWallet
     pactId: dto.pact_id ?? undefined,
     pairingUrl: dto.pairing_url ?? undefined,
     expiresAt: dto.expires_at ?? undefined,
+    hasPactApiKey: dto.has_pact_api_key,
+    cawHealthy: dto.caw_healthy ?? undefined,
+    walletPaired: dto.wallet_paired ?? undefined,
+    pendingTxsCount: dto.pending_txs_count ?? undefined,
     pactLimits: dto.pact_limits ? mapBackendPactLimits(dto.pact_limits) : undefined,
   };
 }

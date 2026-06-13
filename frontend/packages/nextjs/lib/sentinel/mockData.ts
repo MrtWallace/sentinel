@@ -57,6 +57,9 @@ export const MOCK_WALLET_BINDINGS = {
     cawWalletId: "wallet_active_demo",
     cawWalletAddress: "0xCAFE00000000000000000000000000000000CAFE",
     pactId: "pact_active_demo",
+    cawHealthy: true,
+    walletPaired: true,
+    pendingTxsCount: 0,
     pactLimits: {
       transferAmountThresholdConfirm: "0.1",
       swapAmountThresholdConfirm: "0.2",

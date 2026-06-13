@@ -44,6 +44,19 @@ if (activeSummary.statusItems.pairing_status !== "paired" || activeSummary.statu
   throw new Error("Expected active summary to expose pairing and config status.");
 }
 
+if (activeSummary.statusItems.wallet_paired !== "true" || activeSummary.statusItems.pending_txs_count !== "0") {
+  throw new Error("Expected active summary to expose realtime CAW pairing and pending tx status.");
+}
+
+const unpairedActive = {
+  ...MOCK_WALLET_BINDINGS.active,
+  walletPaired: false,
+};
+
+if (getCawLifecycleStage(unpairedActive) !== "pairing_pending") {
+  throw new Error("Expected CAW wallet_paired=false to require pairing before execution.");
+}
+
 if (getCawMenuButtonLabel(MOCK_WALLET_BINDINGS.none) !== "Connect CAW") {
   throw new Error("Expected empty wallet state to invite CAW connection.");
 }
@@ -55,10 +68,14 @@ if (getCawMenuButtonLabel(MOCK_WALLET_BINDINGS.active) !== "CAW active") {
 const headerItems = getCawHeaderStatusItems(MOCK_WALLET_BINDINGS.active);
 const headerLabels = headerItems.map(item => item.label);
 
-if (headerLabels.join(",") !== "PACT") {
+if (headerLabels.join(",") !== "PACT,KEY,PAIR") {
   throw new Error("Expected header CAW items to stay compact and leave lifecycle details inside the menu.");
 }
 
 if (headerItems[0]?.value !== "active") {
   throw new Error("Expected header Pact item to expose only the short active state.");
+}
+
+if (headerItems[2]?.value !== "true") {
+  throw new Error("Expected header CAW pairing item to expose realtime wallet_paired status.");
 }

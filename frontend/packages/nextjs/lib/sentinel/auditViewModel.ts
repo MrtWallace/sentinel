@@ -85,6 +85,10 @@ function statusToBackendDecision(status: AuditLogItem["status"]): BackendDecisio
     return "execute";
   }
 
+  if (status === "pending") {
+    return "execute";
+  }
+
   return "reject";
 }
 
@@ -99,6 +103,10 @@ function statusToExecutionStatus(status: AuditLogItem["status"], txHash: string 
 
   if (status === "failed") {
     return "failed";
+  }
+
+  if (status === "pending") {
+    return "pending";
   }
 
   return "policy_denied";

@@ -1,7 +1,9 @@
 import asyncio
 import json
 import os
+import shutil
 import sqlite3
+import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,6 +39,9 @@ class CawWalletClient(Protocol):
         wallet: dict[str, Any],
         limits: dict[str, Any],
     ) -> PactProvisioningResult:
+        ...
+
+    def create_pairing_code(self, wallet: dict[str, Any]) -> dict[str, Any]:
         ...
 
     def refresh_status(self, wallet: dict[str, Any]) -> dict[str, Any]:
@@ -266,7 +271,15 @@ class CawWalletService:
         self.client = client or build_caw_wallet_client()
 
     def get_status(self, user_address: str) -> dict[str, Any]:
-        return self.store.get_status(user_address)
+        wallet = self.store.get_wallet(user_address)
+        if wallet is None:
+            return self.store.get_status(user_address)
+        try:
+            status = self.client.refresh_status(wallet)
+        except Exception:
+            return self.store.get_status(user_address)
+        refreshed = self.store.update_status(user_address, status)
+        return _merge_realtime_status(refreshed, status)
 
     def connect_existing(
         self,
@@ -294,10 +307,21 @@ class CawWalletService:
         result = self.client.submit_pact(wallet, limits)
         return self.store.update_pact(user_address, result)
 
+    def create_pairing_code(self, user_address: str) -> dict[str, Any]:
+        wallet = self.store._require_wallet(user_address)
+        result = self.client.create_pairing_code(wallet)
+        return {
+            "user_address": wallet["user_address"],
+            "caw_wallet_id": wallet["caw_wallet_id"],
+            "caw_wallet_address": wallet.get("caw_wallet_address"),
+            **result,
+        }
+
     def refresh_status(self, user_address: str) -> dict[str, Any]:
         wallet = self.store._require_wallet(user_address)
         status = self.client.refresh_status(wallet)
-        return self.store.update_status(user_address, status)
+        refreshed = self.store.update_status(user_address, status)
+        return _merge_realtime_status(refreshed, status)
 
 
 class MockCawWalletClient:
@@ -322,6 +346,12 @@ class MockCawWalletClient:
             pact_limits=limits,
         )
 
+    def create_pairing_code(self, wallet: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "caw_wallet_id": wallet["caw_wallet_id"],
+            "pairing_code": "12345678",
+        }
+
     def refresh_status(self, wallet: dict[str, Any]) -> dict[str, Any]:
         return {
             "wallet_status": wallet["wallet_status"],
@@ -345,6 +375,15 @@ class CawSdkWalletClient:
         limits: dict[str, Any],
     ) -> PactProvisioningResult:
         return asyncio.run(self._submit_pact(wallet, limits))
+
+    def create_pairing_code(self, wallet: dict[str, Any]) -> dict[str, Any]:
+        code = self._run_caw_cli_text(["wallet", "pair", "--code-only"]).strip()
+        if not code:
+            raise RuntimeError("CAW CLI did not return a pairing code.")
+        return {
+            "caw_wallet_id": wallet["caw_wallet_id"],
+            "pairing_code": code,
+        }
 
     def refresh_status(self, wallet: dict[str, Any]) -> dict[str, Any]:
         return asyncio.run(self._refresh_status(wallet))
@@ -392,14 +431,55 @@ class CawSdkWalletClient:
             pact_status = _normalize_pact_status(
                 _first_present(raw_pact, "pact_status", "status")
             )
+            expires_at = _first_present(raw_pact, "expires_at", "expire_at")
+            if _is_past_timestamp(expires_at) and pact_status == "active":
+                pact_status = "expired"
+            has_pact_api_key = bool(_first_present(raw_pact, "api_key", "pact_api_key"))
+        else:
+            expires_at = wallet.get("expires_at")
+            has_pact_api_key = bool(os.getenv("COBO_PACT_API_KEY"))
         wallet_status = "active" if pairing_status == "paired" and pact_status == "active" else wallet["wallet_status"]
+        cli_status = self._read_cli_status()
         return {
             "wallet_status": wallet_status,
             "pairing_status": pairing_status,
             "pact_status": pact_status,
             "config_status": "synced" if pact_status == "active" else wallet["config_status"],
             "caw_wallet_address": _first_present(raw_wallet, "address", "wallet_address"),
+            "expires_at": expires_at,
+            "has_pact_api_key": has_pact_api_key,
+            "caw_healthy": _first_present(cli_status, "healthy"),
+            "wallet_paired": _first_present(cli_status, "wallet_paired"),
+            "pending_txs_count": _first_present(cli_status, "pending_txs_count"),
         }
+
+    def _read_cli_status(self) -> dict[str, Any]:
+        try:
+            output = self._run_caw_cli_text(["status"])
+            parsed = json.loads(output)
+        except Exception:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+
+    def _run_caw_cli_text(self, args: list[str]) -> str:
+        binary = shutil.which("caw")
+        if binary is None:
+            candidate = Path.home() / ".local" / "bin" / "caw"
+            if candidate.exists():
+                binary = str(candidate)
+        if binary is None:
+            raise RuntimeError("CAW CLI is not installed or not on PATH.")
+
+        result = subprocess.run(
+            [binary, *args],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            raise RuntimeError("CAW CLI command failed.")
+        return result.stdout
 
     def _client(self):
         if not self.api_url or not self.api_key:
@@ -414,8 +494,14 @@ class CawSdkWalletClient:
 
 
 def build_caw_wallet_client() -> CawWalletClient:
-    mode = os.getenv("CAW_WALLET_SETUP_MODE", "mock").lower()
-    if mode == "real":
+    mode = os.getenv("CAW_WALLET_SETUP_MODE")
+    if mode:
+        if mode.lower() == "real":
+            return CawSdkWalletClient()
+        return MockCawWalletClient()
+
+    has_caw_credentials = bool(os.getenv("AGENT_WALLET_API_URL") and os.getenv("AGENT_WALLET_API_KEY"))
+    if os.getenv("EXECUTION_BACKEND", "").lower() == "caw" and has_caw_credentials:
         return CawSdkWalletClient()
     return MockCawWalletClient()
 
@@ -443,6 +529,22 @@ def _public_status(wallet: dict[str, Any]) -> dict[str, Any]:
     if wallet.get("pact_limits_json"):
         status["pact_limits"] = json.loads(wallet["pact_limits_json"])
     return status
+
+
+def _merge_realtime_status(
+    persisted_status: dict[str, Any],
+    realtime_status: dict[str, Any],
+) -> dict[str, Any]:
+    merged = dict(persisted_status)
+    for key in [
+        "has_pact_api_key",
+        "caw_healthy",
+        "wallet_paired",
+        "pending_txs_count",
+    ]:
+        if key in realtime_status and realtime_status[key] is not None:
+            merged[key] = realtime_status[key]
+    return merged
 
 
 def _default_wallet_db_path() -> Path:
@@ -485,8 +587,21 @@ def _normalize_pairing_status(status: Any) -> str:
 
 def _normalize_pact_status(status: Any) -> str:
     value = str(status or "").lower()
-    if value in {"active", "pending_approval", "expired", "revoked"}:
+    if value in {"active", "pending_approval", "expired", "revoked", "completed"}:
         return value
     if value in {"success", "approved"}:
         return "active"
     return "pending_approval"
+
+
+def _is_past_timestamp(timestamp: Any) -> bool:
+    if not timestamp:
+        return False
+    value = str(timestamp).replace("Z", "+00:00")
+    try:
+        expires_at = datetime.fromisoformat(value)
+    except ValueError:
+        return False
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return expires_at <= datetime.now(timezone.utc)

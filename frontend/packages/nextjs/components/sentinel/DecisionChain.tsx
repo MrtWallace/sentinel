@@ -942,6 +942,10 @@ function getRiskLabel(response: ExecuteResponse): string {
     return "Medium";
   }
 
+  if (response.status === "pending") {
+    return "Low";
+  }
+
   return response.status === "failed" ? "Unknown" : "High";
 }
 
@@ -966,6 +970,10 @@ function getNextAction(response: ExecuteResponse): string {
     return "Retry request";
   }
 
+  if (response.status === "pending") {
+    return "Poll CAW transaction status";
+  }
+
   return "Review audit reason";
 }
 
@@ -984,6 +992,10 @@ function getActionBarText(response: ExecuteResponse): string {
 
   if (response.status === "failed") {
     return "The failed request can be retried after reviewing the error.";
+  }
+
+  if (response.status === "pending") {
+    return "CAW accepted the request and is still processing it. Poll the audit trail for final on-chain evidence.";
   }
 
   return "Execution skipped and audit reason recorded.";

@@ -11,7 +11,7 @@ import { DEMO_USER_ADDRESS } from "~~/lib/sentinel/mockData";
 import type { AuditLogItem, ExecuteResponse, ExecutionStatus } from "~~/lib/sentinel/types";
 
 const PAGE_SIZE = 8;
-const statusFilters = ["all", "executed", "rejected", "confirm_needed", "failed"] as const;
+const statusFilters = ["all", "executed", "rejected", "confirm_needed", "pending", "failed"] as const;
 
 type StatusFilter = (typeof statusFilters)[number];
 

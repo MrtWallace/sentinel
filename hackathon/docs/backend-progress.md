@@ -1,7 +1,7 @@
 # Sentinel Hackathon — 后端 & 合约进度
 
 > 目的：只记录短期状态，包括 checkpoint 进度表、当前阻塞、最近完成项。
-> 最后更新：2026-06-12 04:16
+> 最后更新：2026-06-13 14:30
 > 稳定方向和 checkpoint 定义见 `hackathon/docs/backend-plan.md`。
 
 ## 更新约定
@@ -60,6 +60,83 @@
 - 前端 CP16/CP17 同步：DecisionChain 已能显示 live backend 返回的 Agent B/C tool calls 和 memory anomaly；dry-run 环境不会展示 wrap/approve/swap tx，真实 CAW submit 时按 shared contract 从 `execution.raw` 读取。
 
 ## 最近完成项
+
+### 2026-06-13 CAW realtime pairing preflight 最小修复
+
+- 开始时间：2026-06-13 14:30。
+- 背景：
+  - CAW CLI `caw status` 返回 `wallet_paired=false`，但前端原先只展示 Sentinel 本地 `pairing_status=paired`，容易误判为 TSS/CAW owner pairing 已可用。
+  - 两笔录制前触发的真实 swap 只完成 `wrap`：同步请求在等待 wrap 终态时结束，后续 approve/swap 没有提交；后来 CAW 把 wrap 签完上链后，Audit 只能刷新已提交的 wrap tx，不能自动补交剩余步骤。
+- 修复内容：
+  - `/api/wallet/status` 合并真实 CAW CLI 字段：`caw_healthy`、`wallet_paired`、`pending_txs_count`。
+  - `/api/execute` 在进入 CAW execution 前增加 preflight：`caw_healthy=false` 或 `wallet_paired=false` 时直接返回失败/阻断，不再提交真实交易。
+  - 新增 `POST /api/wallet/pair-code`，通过 `caw wallet pair --code-only` 生成一次性 pairing code；用户仍需在 Cobo Agentic Wallet 侧输入后刷新状态。
+- 验证结果：
+  - `cd agent && python3 -m unittest test_wallets.py -v` passed。
+  - `cd agent && python3 -m unittest test_api.py -v` passed。
+  - `cd agent && python3 -m unittest discover -v` passed，337 tests OK。
+  - `git diff --check` passed。
+
+### 2026-06-13 Audit CAW transaction refresh 修复
+
+- 完成时间：2026-06-13 14:03。
+- 背景：
+  - Audit 原本只展示 `/api/execute` 返回当刻的快照；如果 CAW transaction 当时还在 `Processing/signing`，旧记录可能停留在 `failed` 或 `pending`，不会随 CAW 后续终态更新。
+  - 真实 3 步 swap 如果停在 wrap / approve pending，不能直接标为完整 swap executed，因为后续步骤还未提交。
+- 修复内容：
+  - `/api/audit-log` 和 `/api/audit-log/{tx_id}` 读取时，会对最近 CAW pending / submitted / pending_approval 记录，以及 timeout 导致的 failed 记录，使用 CAW transaction id 做一次只读刷新。
+  - CAW 仍为 `Processing/signing` 时，Audit 纠正为 `status=pending`、`execution.status=pending`，并显示当前 pending reason。
+  - CAW 明确失败时，Audit 更新为 `failed` 并显示失败原因。
+  - CAW 最终 swap / transfer 成功时，Audit 更新为 `executed`、`execution.status=succeeded`，并显示 tx hash。
+  - 如果只是 wrap / approve 步骤后来成功，Audit 会显示该步骤 tx hash，但整体仍保持 `pending`，因为剩余 swap 步骤没有由该同步请求继续提交。
+- 验证结果：
+  - `cd agent && python3 -m unittest test_api.py -v` passed：36 tests OK。
+  - `cd agent && python3 -m unittest discover -v` passed：331 tests OK。
+  - `cd frontend && yarn workspace @se-2/nextjs check-types && yarn workspace @se-2/nextjs lint` passed。
+  - `git diff --check` passed。
+  - 后端已重启；`GET /api/audit-log/85fe1ad7-c44f-4fa2-ab62-4e0d526be5ff` 已从旧 `failed` 刷新为 `pending`，当前 CAW raw status 仍为 `signing`，tx hash 尚未返回。
+
+### 2026-06-13 CAW pending 状态与实时 Pact status 修复
+
+- 完成时间：2026-06-13 09:48。
+- 背景：
+  - CAW wrap transaction 返回 `Processing/signing` 时，旧逻辑在 120 秒等待窗口后错误记录为 `failed`。
+  - `/api/wallet/status` 仍走 mock wallet status client，因此只显示本地 SQLite 状态，不能反映真实 Pact `expires_at` / API key 可用性。
+- 修复内容：
+  - CAW transaction 未明确进入 `Failed/Rejected/Cancelled` 等终态前，后端返回 `status=pending`、`execution.status=pending`，并保留 CAW transaction id、request id、raw status 和 `timed_out=true`。
+  - 明确失败仍返回 `failed`；CAW `policy_denied` 仍返回 `rejected/reject`，保持安全边界语义不变。
+  - wallet status 刷新在 `EXECUTION_BACKEND=caw` 且 CAW URL/key 已配置时自动使用真实 CAW client，不再依赖额外设置 `CAW_WALLET_SETUP_MODE=real`。
+  - `/api/wallet/status` 现在可返回真实 `expires_at` 和 `has_pact_api_key`，并能识别过期/完成态 Pact。
+  - 后端已重启；当前 demo user status 返回 `pact_status=active`、`expires_at=2026-06-14T01:23:58.039163Z`、`has_pact_api_key=true`。
+- 验证结果：
+  - `cd agent && python3 -m unittest discover -v` passed：329 tests OK。
+  - `cd frontend && yarn workspace @se-2/nextjs check-types` passed。
+  - `cd frontend && yarn workspace @se-2/nextjs lint` passed。
+  - `git diff --check` passed。
+  - `/health` 返回 `execution_backend=caw`、`real_tx_enabled=true`。
+  - `/api/wallet/status?user_address=0x1111111111111111111111111111111111111111` 返回真实 Pact 过期时间和 `has_pact_api_key=true`。
+
+### 2026-06-13 Real CAW Swap 录制前失败态修复
+
+- 完成时间：2026-06-13 09:25。
+- 背景：
+  - 本地 demo user 已绑定真实 CAW wallet / Pact 后，`Real CAW Swap` 不再是 UUID 配置错误，而是进入真实 `contract_call` swap。
+  - 最新失败点为第一步 wrap ETH：后端记录 `sentinel_decision=execute`、5/5 hard rules passed、`execution_status=failed`，原因是 `Wrap ETH transaction failed or timed out.`。
+- 修复内容：
+  - `/api/execute` 对普通 CAW execution failure 返回 `status=failed`、`decision=execute`，不再误映射成 `rejected/reject`。
+  - CAW `policy_denied` 仍保持 `status=rejected`、`decision=reject`，继续作为硬执行边界 demo。
+  - wrap / approve 等待超时时保留已拿到的 CAW transaction id、request id 和 raw 状态，并标记 `timed_out=true`、`step=wrap|approve`。
+  - 新增显式 `COBO_PACT_API_KEY` 支持；真实 CAW `transfer_tokens` / `contract_call` 优先使用 pact API key，不再静默退回 wallet API key。
+  - 如果 CAW 返回 `INSUFFICIENT_PERMISSION`，后端会直接映射为明确的 `failed` 原因，例如缺少 `can_call_contract` 权限。
+  - `.env.example` 新增 `COBO_PACT_API_KEY` 占位符，未写入任何真实 secret。
+  - 为现有 CAW wallet 创建新的 active Pact：`9d985ece-e554-48b1-9f20-9bd6d93d9473`，过期时间 `2026-06-14T01:23:58.039163Z`。
+  - 本地 `agent/.env` 已更新为新 `COBO_PACT_ID` 和新 pact-scoped API key；本地 demo user SQLite binding 已更新为新 Pact ID。
+  - 含 pact API key 的临时文件 `/tmp/sentinel-new-pact.json` 已删除。
+- 验证结果：
+  - `cd agent && python3 -m unittest test_execution.py test_api.py` passed：42 tests OK。
+  - `cd agent && python3 -m unittest discover -v` passed：325 tests OK。
+  - 后端已重启；`/health` 返回 `execution_backend=caw`、`real_tx_enabled=true`。
+  - `/api/wallet/status?user_address=0x1111111111111111111111111111111111111111` 返回 `pact_status=active`、`pact_id=9d985ece-e554-48b1-9f20-9bd6d93d9473`。
 
 ### 2026-06-12 CP17 Memory Anomaly Demo Stability Fix
 

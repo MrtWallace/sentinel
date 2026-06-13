@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from execution import CawConfig, CawExecutor, MockExecutionBackend
 from models import TxProposal
@@ -152,6 +153,70 @@ class ExecutionBackendTest(unittest.TestCase):
         self.assertEqual(result.policy_reason, "matched_pact_transfer_deny_if")
         self.assertIn("policy", result.reason)
 
+    def test_caw_executor_fails_fast_without_pact_api_key(self):
+        tx = TxProposal(
+            action="transfer",
+            amount="0.001",
+            recipient="0x1111111111111111111111111111111111111111",
+        )
+        config = CawConfig(
+            api_url="https://api.agenticwallet.cobo.com",
+            api_key="agent-key",
+            wallet_id="wallet-id",
+            pact_id="pact-id",
+            src_address="0x927f175c85d61237f817b499f739336b498384fe",
+            enable_real_tx=True,
+        )
+        factory = FakeNoPactKeyCawClientFactory()
+
+        result = CawExecutor(config=config, client_factory=factory).execute(tx, "tx-1")
+
+        self.assertEqual(result.status, "failed")
+        self.assertIn("Missing CAW pact API key", result.reason)
+        self.assertEqual(result.raw["code"], "MISSING_PACT_API_KEY")
+
+    def test_caw_executor_uses_configured_pact_api_key(self):
+        tx = TxProposal(
+            action="transfer",
+            amount="0.001",
+            recipient="0x1111111111111111111111111111111111111111",
+        )
+        config = CawConfig(
+            api_url="https://api.agenticwallet.cobo.com",
+            api_key="agent-key",
+            wallet_id="wallet-id",
+            pact_id="pact-id",
+            src_address="0x927f175c85d61237f817b499f739336b498384fe",
+            pact_api_key="explicit-pact-key",
+            enable_real_tx=True,
+        )
+        factory = FakeCawClientFactory(
+            transfer_response={
+                "id": "caw-tx-id",
+                "request_id": "sentinel-tx-1",
+                "status": "Success",
+                "transaction_hash": "0xabc",
+            }
+        )
+
+        result = CawExecutor(config=config, client_factory=factory).execute(tx, "tx-1")
+
+        self.assertEqual(result.status, "succeeded")
+        self.assertEqual(factory.api_keys, ["explicit-pact-key"])
+
+    def test_caw_executor_maps_caw_error_code_as_failed(self):
+        executor = CawExecutor(config=CawConfig("", "", "", ""))
+
+        result = executor._result_from_caw_response(
+            {
+                "code": "INSUFFICIENT_PERMISSION",
+                "details": {"required_permission": "can_call_contract"},
+            }
+        )
+
+        self.assertEqual(result.status, "failed")
+        self.assertIn("can_call_contract", result.reason)
+
     def test_caw_executor_real_swap_aggregates_step_evidence(self):
         tx = TxProposal(
             action="swap",
@@ -183,6 +248,50 @@ class ExecutionBackendTest(unittest.TestCase):
         self.assertEqual(result.raw["usdc_received"], "5.499668 USDC")
         self.assertTrue(result.raw["real_tx_enabled"])
 
+    def test_caw_executor_returns_pending_when_wrap_is_still_processing(self):
+        tx = TxProposal(
+            action="swap",
+            amount="0.0005",
+            from_token="ETH",
+            to_token="USDC",
+            to_contract="0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E",
+            calldata="0x414bf389",
+            value="0x1c6bf52634000",
+        )
+        config = CawConfig(
+            api_url="https://api.agenticwallet.cobo.com",
+            api_key="agent-key",
+            wallet_id="wallet-id",
+            pact_id="pact-id",
+            src_address="0x927f175c85d61237f817b499f739336b498384fe",
+            enable_real_tx=True,
+        )
+        factory = FakePendingWrapCawClientFactory()
+        executor = CawExecutor(config=config, client_factory=factory)
+
+        async def timed_out(tx_id, step_name, timeout=120):
+            return {
+                "status": "pending",
+                "raw": {
+                    "id": "caw-wrap",
+                    "request_id": "sentinel-tx-1-wrap",
+                    "status_display": "Processing",
+                    "transaction_hash": None,
+                },
+                "timed_out": True,
+            }
+
+        with patch.object(executor, "_wait_for_tx", timed_out):
+            result = executor.execute(tx, "tx-1")
+
+        self.assertEqual(result.status, "pending")
+        self.assertEqual(result.request_id, "sentinel-tx-1-wrap")
+        self.assertEqual(result.tx_id, "caw-wrap")
+        self.assertEqual(result.reason, "Wrap ETH transaction is still processing after the wait window.")
+        self.assertEqual(result.raw["status_display"], "Processing")
+        self.assertEqual(result.raw["step"], "wrap")
+        self.assertTrue(result.raw["timed_out"])
+
 
 class ExplodingClientFactory:
     def __call__(self, base_url, api_key):
@@ -194,8 +303,10 @@ class FakeCawClientFactory:
         self.transfer_response = transfer_response or {}
         self.transfer_error = transfer_error
         self.transfer_kwargs = None
+        self.api_keys = []
 
     def __call__(self, base_url, api_key):
+        self.api_keys.append(api_key)
         return FakeCawClient(
             transfer_response=self.transfer_response,
             transfer_error=self.transfer_error,
@@ -223,6 +334,22 @@ class FakeCawClient:
         if self.transfer_error:
             raise self.transfer_error
         return self.transfer_response
+
+
+class FakeNoPactKeyCawClientFactory:
+    def __call__(self, base_url, api_key):
+        return FakeNoPactKeyCawClient()
+
+
+class FakeNoPactKeyCawClient:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def get_pact(self, pact_id):
+        return {"id": pact_id, "status": "active"}
 
 
 class FakeSwapCawClientFactory:
@@ -270,6 +397,30 @@ class FakeSwapCawClient:
             "transaction_hash": "0xswap",
             "block_number": "11018833",
             "usdc_received": "5.499668 USDC",
+        }
+
+
+class FakePendingWrapCawClientFactory:
+    def __call__(self, base_url, api_key):
+        return FakePendingWrapCawClient()
+
+
+class FakePendingWrapCawClient:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def get_pact(self, pact_id):
+        return {"id": pact_id, "status": "active", "api_key": "pact-key"}
+
+    async def contract_call(self, **kwargs):
+        return {
+            "id": "caw-wrap",
+            "request_id": kwargs["request_id"],
+            "status_display": "Processing",
+            "transaction_hash": None,
         }
 
 

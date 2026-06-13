@@ -1,4 +1,4 @@
-export type ExecutionStatus = "executed" | "rejected" | "confirm_needed" | "failed";
+export type ExecutionStatus = "executed" | "rejected" | "confirm_needed" | "failed" | "pending";
 
 export type RiskLevel = "low" | "medium" | "high";
 
@@ -22,7 +22,7 @@ export type WalletStatus = "none" | "pairing_pending" | "paired" | "active" | "r
 
 export type PairingStatus = "none" | "pending" | "paired" | "failed";
 
-export type PactStatus = "none" | "pending_approval" | "active" | "expired" | "revoked";
+export type PactStatus = "none" | "pending_approval" | "active" | "expired" | "revoked" | "completed";
 
 export type ConfigStatus = "synced" | "needs_pact_update";
 
@@ -43,6 +43,10 @@ export type CawWalletBinding = {
   pactId?: string | null;
   pairingUrl?: string | null;
   expiresAt?: string | null;
+  hasPactApiKey?: boolean;
+  cawHealthy?: boolean | null;
+  walletPaired?: boolean | null;
+  pendingTxsCount?: number | null;
   pactLimits?: CawPactLimits;
 };
 
@@ -57,6 +61,18 @@ export type CreateCawWalletRequest = {
 
 export type RefreshWalletStatusRequest = {
   userAddress: string;
+};
+
+export type PairCawWalletRequest = {
+  userAddress: string;
+};
+
+export type PairCawWalletResponse = {
+  userAddress: string;
+  cawWalletId?: string | null;
+  cawWalletAddress?: string | null;
+  pairingCode: string;
+  expiresAt?: string | null;
 };
 
 export type RiskConfig = {
@@ -361,7 +377,19 @@ export type BackendCawWalletBinding = {
   pact_id?: string | null;
   pairing_url?: string | null;
   expires_at?: string | null;
+  has_pact_api_key?: boolean;
+  caw_healthy?: boolean | null;
+  wallet_paired?: boolean | null;
+  pending_txs_count?: number | null;
   pact_limits?: BackendCawPactLimits;
+};
+
+export type BackendPairCawWalletResponse = {
+  user_address: string;
+  caw_wallet_id?: string | null;
+  caw_wallet_address?: string | null;
+  pairing_code: string;
+  expires_at?: string | null;
 };
 
 export type BackendRiskConfig = {

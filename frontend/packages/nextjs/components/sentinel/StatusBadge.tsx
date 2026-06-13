@@ -1,5 +1,5 @@
 type StatusBadgeProps = {
-  status: "executed" | "rejected" | "confirm_needed" | "failed" | "passed" | "review";
+  status: "executed" | "rejected" | "confirm_needed" | "failed" | "pending" | "passed" | "review";
   label?: string;
 };
 
@@ -9,6 +9,7 @@ const statusStyles: Record<StatusBadgeProps["status"], string> = {
   rejected: "border-[#ffb4ab]/40 bg-[#ffb4ab]/10 text-[#ffdad6]",
   confirm_needed: "border-amber-300/40 bg-amber-300/10 text-amber-100",
   failed: "border-rose-300/40 bg-rose-300/10 text-rose-100",
+  pending: "border-amber-300/40 bg-amber-300/10 text-amber-100",
   review: "border-[#bcc7de]/40 bg-[#bcc7de]/10 text-[#d8e3fb]",
 };
 
@@ -18,6 +19,7 @@ const statusLabels: Record<StatusBadgeProps["status"], string> = {
   rejected: "REJECTED",
   confirm_needed: "MANUAL REVIEW",
   failed: "FAILED",
+  pending: "PENDING",
   review: "MANUAL REVIEW",
 };
 

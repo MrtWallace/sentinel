@@ -32,7 +32,7 @@ Implementation details stay in `backend-plan.md` and `frontend-plan.md`. This fi
 ```text
 wallet_status: none | pairing_pending | paired | active | revoked | expired
 pairing_status: none | pending | paired | failed
-pact_status: none | pending_approval | active | expired | revoked
+pact_status: none | pending_approval | active | expired | revoked | completed
 config_status: synced | needs_pact_update
 caw_readiness: ready | wallet_required | pairing_required | pact_required | pact_pending | unavailable
 ```
@@ -62,6 +62,11 @@ Use this nested shape inside `/api/execute` responses. Wallet APIs may keep retu
   "caw_wallet_id": "wallet_123",
   "caw_wallet_address": "0xCAW...",
   "pact_id": "pact_123",
+  "expires_at": "2026-06-14T01:23:58.039163Z",
+  "has_pact_api_key": true,
+  "caw_healthy": true,
+  "wallet_paired": true,
+  "pending_txs_count": 0,
   "pact_limits": {
     "transfer_amount_threshold_confirm": "0.1",
     "swap_amount_threshold_confirm": "0.2",
@@ -71,6 +76,8 @@ Use this nested shape inside `/api/execute` responses. Wallet APIs may keep retu
   "last_refreshed_at": "2026-06-06T12:00:00Z"
 }
 ```
+
+`pairing_status` is Sentinel's local user-to-CAW binding lifecycle. `wallet_paired` is the realtime CAW CLI/app pairing boolean from `caw status`; real CAW execution must treat `wallet_paired=false` as a preflight blocker.
 
 Readiness mapping:
 
@@ -119,6 +126,9 @@ Response examples:
   "pact_id": "pact_123",
   "pact_status": "active",
   "config_status": "synced",
+  "caw_healthy": true,
+  "wallet_paired": true,
+  "pending_txs_count": 0,
   "pact_limits": {
     "transfer_amount_threshold_confirm": "0.1",
     "swap_amount_threshold_confirm": "0.2",
@@ -126,6 +136,30 @@ Response examples:
   }
 }
 ```
+
+### POST `/api/wallet/pair-code`
+
+Generates a one-time CAW wallet pairing code through `caw wallet pair --code-only`. The user must enter the code in Cobo Agentic Wallet, then refresh wallet status.
+
+Request:
+
+```json
+{ "user_address": "0xabc..." }
+```
+
+Response:
+
+```json
+{
+  "user_address": "0xabc...",
+  "caw_wallet_id": "wallet_123",
+  "caw_wallet_address": "0xCAW...",
+  "pairing_code": "12345678",
+  "expires_at": null
+}
+```
+
+The pairing code is a short-lived operational token. It is displayed to the local operator and must not be stored as an API key or Pact credential.
 
 ### POST `/api/wallet/connect-existing`
 

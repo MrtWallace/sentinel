@@ -23,6 +23,7 @@ import type {
   BackendAuditLogSummary,
   BackendCawWalletBinding,
   BackendExecuteResponse,
+  BackendPairCawWalletResponse,
   BackendRiskConfig,
   BackendRiskConfigResponse,
   CawWalletBinding,
@@ -31,6 +32,8 @@ import type {
   CreateCawWalletRequest,
   ExecuteResponse,
   IntentScenario,
+  PairCawWalletRequest,
+  PairCawWalletResponse,
   RefreshWalletStatusRequest,
   RiskConfig,
   RiskConfigResponse,
@@ -45,6 +48,7 @@ const WALLET_STATUS_PROXY_PATH = "/api/sentinel/wallet/status";
 const WALLET_CONNECT_EXISTING_PROXY_PATH = "/api/sentinel/wallet/connect-existing";
 const WALLET_CREATE_PROXY_PATH = "/api/sentinel/wallet/create";
 const WALLET_REFRESH_STATUS_PROXY_PATH = "/api/sentinel/wallet/refresh-status";
+const WALLET_PAIR_CODE_PROXY_PATH = "/api/sentinel/wallet/pair-code";
 const WALLET_PACT_PROXY_PATH = "/api/sentinel/wallet/pact";
 const CONFIG_PROXY_PATH = "/api/sentinel/config";
 
@@ -150,6 +154,22 @@ export async function refreshWalletStatus(request: RefreshWalletStatusRequest): 
   return {
     ...cloneWalletBinding(MOCK_WALLET_BINDINGS.active),
     userAddress: request.userAddress,
+  };
+}
+
+export async function createPairingCode(request: PairCawWalletRequest): Promise<PairCawWalletResponse> {
+  const backendResponse = await createPairingCodeViaBackend(request);
+
+  if (backendResponse) {
+    return backendResponse;
+  }
+
+  await waitForMockLatency();
+
+  return {
+    userAddress: request.userAddress,
+    cawWalletId: "mock-wallet",
+    pairingCode: "12345678",
   };
 }
 
@@ -352,6 +372,34 @@ async function postWalletAction(path: string, body: Record<string, unknown>): Pr
     const responseBody = (await response.json()) as BackendCawWalletBinding;
 
     return mapBackendWalletBinding(responseBody);
+  } catch {
+    return null;
+  }
+}
+
+async function createPairingCodeViaBackend(request: PairCawWalletRequest): Promise<PairCawWalletResponse | null> {
+  try {
+    const response = await fetch(WALLET_PAIR_CODE_PROXY_PATH, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ user_address: request.userAddress }),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const body = (await response.json()) as BackendPairCawWalletResponse;
+
+    return {
+      userAddress: body.user_address,
+      cawWalletId: body.caw_wallet_id ?? undefined,
+      cawWalletAddress: body.caw_wallet_address ?? undefined,
+      pairingCode: body.pairing_code,
+      expiresAt: body.expires_at ?? undefined,
+    };
   } catch {
     return null;
   }

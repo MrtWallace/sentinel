@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import asdict
 from decimal import Decimal, InvalidOperation
 import os
@@ -10,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from audit import AuditLogger
 from config_store import UserConfigStore
-from execution import ExecutionResult, build_execution_backend
+from execution import CawConfig, CawExecutor, ExecutionResult, build_execution_backend
 from input_guard import (
     InputGuardError,
     detect_intent_proposal_anomaly,
@@ -53,6 +54,10 @@ class ExistingWalletRequest(BaseModel):
 
 
 class CreateWalletRequest(BaseModel):
+    user_address: str
+
+
+class PairWalletRequest(BaseModel):
     user_address: str
 
 
@@ -152,7 +157,19 @@ def list_audit_log(
     limit: int = 20,
     offset: int = 0,
 ):
-    return build_audit_logger().list(
+    logger = build_audit_logger()
+    refresh_page = logger.list(
+        user_address=user_address,
+        status=None,
+        limit=limit,
+        offset=0,
+    )
+    for item in refresh_page["items"]:
+        record = logger.get(item["tx_id"])
+        if record is None:
+            continue
+        _refresh_caw_audit_record(record, logger)
+    return logger.list(
         user_address=user_address,
         status=status,
         limit=limit,
@@ -162,9 +179,11 @@ def list_audit_log(
 
 @app.get("/api/audit-log/{tx_id}")
 def get_audit_log(tx_id: str):
-    record = build_audit_logger().get(tx_id)
+    logger = build_audit_logger()
+    record = logger.get(tx_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Audit record not found")
+    record, _ = _refresh_caw_audit_record(record, logger)
     return record
 
 
@@ -205,6 +224,16 @@ def connect_existing_wallet(request: ExistingWalletRequest):
 @app.post("/api/wallet/create")
 def create_wallet(request: CreateWalletRequest):
     return build_wallet_service().create_wallet(request.user_address)
+
+
+@app.post("/api/wallet/pair-code")
+def create_wallet_pairing_code(request: PairWalletRequest):
+    try:
+        return build_wallet_service().create_pairing_code(request.user_address)
+    except WalletNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post("/api/wallet/pact")
@@ -283,6 +312,152 @@ def build_config_store() -> UserConfigStore:
     return UserConfigStore.from_env()
 
 
+def _refresh_caw_audit_record(record: dict[str, Any], logger: AuditLogger) -> tuple[dict[str, Any], bool]:
+    execution = record.get("execution") or {}
+    if not _should_refresh_caw_execution(record, execution):
+        return record, False
+
+    caw_tx_id = (
+        execution.get("tx_id")
+        or execution.get("caw_transaction_id")
+        or (execution.get("raw") or {}).get("id")
+        or (execution.get("raw") or {}).get("cobo_transaction_id")
+    )
+    if not caw_tx_id:
+        return record, False
+
+    raw = _fetch_caw_transaction(caw_tx_id)
+    if not raw:
+        return record, False
+
+    refreshed = _apply_caw_transaction_refresh(record, raw)
+    logger.write(refreshed)
+    return refreshed, True
+
+
+def _should_refresh_caw_execution(record: dict[str, Any], execution: dict[str, Any]) -> bool:
+    if execution.get("backend") != "caw":
+        return False
+    status = execution.get("status")
+    if status in {"pending", "submitted", "pending_approval"}:
+        return True
+    if status != "failed":
+        return False
+
+    raw = execution.get("raw") or {}
+    reason = " ".join(
+        str(value or "")
+        for value in [
+            execution.get("reason"),
+            record.get("decision_reason"),
+            raw.get("status_display"),
+        ]
+    ).lower()
+    return bool(raw.get("timed_out") or "timed out" in reason or "processing" in reason)
+
+
+def _fetch_caw_transaction(caw_tx_id: str) -> dict[str, Any] | None:
+    config = CawConfig.from_env()
+    if not config.api_url or not config.api_key:
+        return None
+
+    executor = CawExecutor(config=config)
+
+    async def _fetch():
+        async with executor.client_factory(
+            base_url=config.api_url,
+            api_key=config.api_key,
+        ) as client:
+            return await client.get_user_transaction_by_uuid(caw_tx_id)
+
+    try:
+        return asyncio.run(_fetch())
+    except Exception:
+        return None
+
+
+def _apply_caw_transaction_refresh(record: dict[str, Any], raw: dict[str, Any]) -> dict[str, Any]:
+    execution = dict(record.get("execution") or {})
+    previous_raw = execution.get("raw") or {}
+    executor = CawExecutor(config=CawConfig.from_env())
+    raw_status = executor._raw_caw_status(raw)
+    status = executor._normalize_caw_status(raw_status)
+    step = previous_raw.get("step") or raw.get("step") or _step_from_request_id(raw.get("request_id"))
+    tx_hash = raw.get("transaction_hash") or execution.get("tx_hash")
+
+    execution.update(
+        {
+            "tx_id": raw.get("id") or raw.get("cobo_transaction_id") or execution.get("tx_id"),
+            "caw_transaction_id": raw.get("id") or raw.get("cobo_transaction_id") or execution.get("caw_transaction_id"),
+            "request_id": raw.get("request_id") or execution.get("request_id"),
+            "tx_hash": tx_hash,
+            "raw": {
+                **previous_raw,
+                **raw,
+                "step": step,
+                "refreshed_from_caw": True,
+            },
+        }
+    )
+
+    if status == "failed":
+        reason = _caw_failure_reason(raw, step)
+        execution["status"] = "failed"
+        execution["reason"] = reason
+        record["status"] = "failed"
+        record["decision"] = record.get("decision") or "execute"
+        record["decision_reason"] = f"Execution failed: {reason}"
+    elif status == "succeeded":
+        if step in {"wrap", "approve"}:
+            reason = f"CAW {step} transaction succeeded; remaining swap steps were not submitted by this synchronous request."
+            execution["status"] = "pending"
+            execution["reason"] = reason
+            record["status"] = "pending"
+            record["decision"] = record.get("decision") or "execute"
+            record["decision_reason"] = f"CAW execution pending: {reason}"
+        else:
+            reason = "CAW transaction succeeded."
+            execution["status"] = "succeeded"
+            execution["reason"] = reason
+            record["status"] = "executed"
+            record["decision"] = "execute"
+            record["decision_reason"] = reason
+    else:
+        reason = _caw_pending_reason(raw, step)
+        execution["status"] = status
+        execution["reason"] = reason
+        record["status"] = "pending"
+        record["decision"] = record.get("decision") or "execute"
+        record["decision_reason"] = f"CAW execution pending: {reason}"
+
+    record["execution"] = execution
+    return record
+
+
+def _step_from_request_id(request_id: Any) -> str | None:
+    value = str(request_id or "")
+    for step in ("wrap", "approve", "swap"):
+        if value.endswith(f"-{step}") or f"-{step}-" in value:
+            return step
+    return None
+
+
+def _caw_pending_reason(raw: dict[str, Any], step: str | None) -> str:
+    label = f"{step} transaction" if step else "transaction"
+    status = raw.get("sub_status") or raw.get("status_display") or raw.get("status") or "processing"
+    return f"CAW {label} is still {status}."
+
+
+def _caw_failure_reason(raw: dict[str, Any], step: str | None) -> str:
+    label = f"{step} transaction" if step else "transaction"
+    return str(
+        raw.get("failed_reason")
+        or raw.get("reason")
+        or raw.get("error")
+        or f"CAW {label} failed."
+    )
+
+
 def _risk_config_for_user(user_address: str | None) -> dict[str, Any]:
     if not user_address:
         return build_config_store().get_config("default")["config"]
@@ -340,9 +515,16 @@ def _final_response_decision(result, execution):
 
     if execution.status == "failed":
         return (
-            "reject",
-            "rejected",
+            result.final_decision.decision,
+            "failed",
             f"Execution failed: {execution.reason}",
+        )
+
+    if execution.status in {"pending", "submitted", "pending_approval"}:
+        return (
+            result.final_decision.decision,
+            "pending",
+            f"CAW execution pending: {execution.reason}",
         )
 
     decision = result.final_decision.decision
@@ -443,6 +625,13 @@ def _caw_readiness(status: dict[str, Any]) -> tuple[str, str | None]:
         return "wallet_required", "No CAW wallet is bound to this user."
     if status["pairing_status"] != "paired":
         return "pairing_required", f"Pairing status is {status['pairing_status']}."
+    if status.get("caw_healthy") is False:
+        return "unavailable", "CAW CLI status reports healthy=false."
+    if status.get("wallet_paired") is False:
+        return (
+            "pairing_required",
+            "CAW wallet_paired is false. Generate a pairing code, complete CAW wallet pairing, then refresh status.",
+        )
     if status["pact_status"] == "pending_approval":
         return "pact_pending", "Pact status is pending_approval."
     if status["pact_status"] != "active":
@@ -457,12 +646,20 @@ def _caw_not_ready_response(
     tx_id: str,
     caw_status: dict[str, Any],
 ) -> dict[str, Any]:
-    status = "no_wallet" if caw_status["readiness"] == "wallet_required" else "pact_not_active"
-    reason = (
-        "Please bind or create a CAW wallet before execution."
-        if status == "no_wallet"
-        else "CAW Pact is not active."
-    )
+    readiness = caw_status["readiness"]
+    if readiness == "wallet_required":
+        status = "no_wallet"
+        reason = "Please bind or create a CAW wallet before execution."
+        execution_status = "skipped"
+    elif readiness in {"pairing_required", "unavailable"}:
+        status = "failed"
+        reason = f"CAW preflight blocked execution: {caw_status['blocking_reason']}"
+        execution_status = "failed"
+    else:
+        status = "pact_not_active"
+        reason = "CAW Pact is not active."
+        execution_status = "skipped"
+
     return {
         "tx_id": tx_id,
         "user_address": request.user_address,
@@ -479,7 +676,7 @@ def _caw_not_ready_response(
         "execution": _execution_to_dict(
             ExecutionResult(
                 backend="caw",
-                status="skipped",
+                status=execution_status,
                 reason=caw_status["blocking_reason"] or reason,
             ),
             caw_status,
@@ -502,6 +699,7 @@ def _caw_config_from_status(caw_status: dict[str, Any]):
         chain_id=env_config.chain_id,
         token_id=env_config.token_id,
         src_address=caw_status.get("caw_wallet_address") or env_config.src_address,
+        pact_api_key=env_config.pact_api_key,
         enable_real_tx=env_config.enable_real_tx,
     )
 

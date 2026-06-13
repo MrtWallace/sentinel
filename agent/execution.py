@@ -50,6 +50,7 @@ class CawConfig:
     chain_id: str = "SETH"
     token_id: str = "SETH"
     src_address: str | None = None
+    pact_api_key: str | None = None
     enable_real_tx: bool = False
 
     @classmethod
@@ -62,6 +63,7 @@ class CawConfig:
             chain_id=os.getenv("COBO_CHAIN_ID", "SETH"),
             token_id=os.getenv("COBO_TOKEN_ID", "SETH"),
             src_address=os.getenv("COBO_SRC_ADDRESS") or None,
+            pact_api_key=os.getenv("COBO_PACT_API_KEY") or None,
             enable_real_tx=os.getenv("ENABLE_REAL_TX", "false").lower() == "true",
         )
 
@@ -190,13 +192,10 @@ class CawExecutor:
         request_id: str,
     ) -> ExecutionResult:
         try:
-            async with self.client_factory(
-                base_url=self.config.api_url,
-                api_key=self.config.api_key,
-            ) as client:
-                pact = await client.get_pact(self.config.pact_id)
+            pact_api_key = await self._resolve_pact_api_key()
+            if not pact_api_key:
+                return self._missing_pact_api_key_result(request_id)
 
-            pact_api_key = pact.get("api_key") or self.config.api_key
             async with self.client_factory(
                 base_url=self.config.api_url,
                 api_key=pact_api_key,
@@ -266,13 +265,9 @@ class CawExecutor:
         import asyncio
 
         try:
-            async with self.client_factory(
-                base_url=self.config.api_url,
-                api_key=self.config.api_key,
-            ) as client:
-                pact = await client.get_pact(self.config.pact_id)
-
-            pact_api_key = pact.get("api_key") or self.config.api_key
+            pact_api_key = await self._resolve_pact_api_key()
+            if not pact_api_key:
+                return self._missing_pact_api_key_result(request_id)
 
             # Step 1: Wrap ETH to WETH
             wrap_result = await self._wrap_eth_to_weth(pact_api_key, tx, request_id)
@@ -281,13 +276,19 @@ class CawExecutor:
 
             # Wait for wrap to complete
             wrap_tx_id = wrap_result.tx_id
-            if wrap_result.status != "succeeded" and not await self._wait_for_tx(wrap_tx_id, "Wrap ETH"):
-                return ExecutionResult(
-                    backend="caw",
-                    status="failed",
-                    request_id=f"{request_id}-wrap",
-                    reason="Wrap ETH transaction failed or timed out.",
-                )
+            if wrap_result.status != "succeeded":
+                wrap_wait = await self._wait_for_tx(wrap_tx_id, "Wrap ETH")
+                if wrap_wait["status"] == "succeeded":
+                    wrap_result = self._result_from_caw_response(wrap_wait["raw"] or wrap_result.raw)
+                else:
+                    return self._incomplete_step_result(
+                        wrap_result,
+                        wait_result=wrap_wait,
+                        request_id=f"{request_id}-wrap",
+                        step="wrap",
+                        timeout_reason="Wrap ETH transaction is still processing after the wait window.",
+                        failed_reason="Wrap ETH transaction failed.",
+                    )
 
             # Step 2: Approve router to spend WETH
             approve_result = await self._approve_router(pact_api_key, tx, request_id)
@@ -296,13 +297,19 @@ class CawExecutor:
 
             # Wait for approve to complete
             approve_tx_id = approve_result.tx_id
-            if approve_result.status != "succeeded" and not await self._wait_for_tx(approve_tx_id, "Approve router"):
-                return ExecutionResult(
-                    backend="caw",
-                    status="failed",
-                    request_id=f"{request_id}-approve",
-                    reason="Approve router transaction failed or timed out.",
-                )
+            if approve_result.status != "succeeded":
+                approve_wait = await self._wait_for_tx(approve_tx_id, "Approve router")
+                if approve_wait["status"] == "succeeded":
+                    approve_result = self._result_from_caw_response(approve_wait["raw"] or approve_result.raw)
+                else:
+                    return self._incomplete_step_result(
+                        approve_result,
+                        wait_result=approve_wait,
+                        request_id=f"{request_id}-approve",
+                        step="approve",
+                        timeout_reason="Approve router transaction is still processing after the wait window.",
+                        failed_reason="Approve router transaction failed.",
+                    )
 
             # Step 3: Execute swap
             async with self.client_factory(
@@ -342,30 +349,34 @@ class CawExecutor:
                 reason=str(exc),
             )
 
-    async def _wait_for_tx(self, tx_id: str | None, step_name: str, timeout: int = 120) -> bool:
-        """Wait for a transaction to complete. Returns True if successful."""
+    async def _wait_for_tx(self, tx_id: str | None, step_name: str, timeout: int = 120) -> dict[str, Any]:
+        """Wait for a transaction to reach a terminal state."""
         import asyncio
 
         if not tx_id:
-            return False
+            return {"status": "missing", "raw": None}
 
+        latest = None
+        latest_status = "submitted"
         for i in range(timeout // 5):
             async with self.client_factory(
                 base_url=self.config.api_url,
                 api_key=self.config.api_key,
             ) as client:
                 tx = await client.get_user_transaction_by_uuid(tx_id)
+                latest = tx
                 status = self._raw_caw_status(tx)
                 normalized = self._normalize_caw_status(status)
+                latest_status = normalized
 
                 if normalized == "succeeded":
-                    return True
+                    return {"status": "succeeded", "raw": tx}
                 elif normalized == "failed":
-                    return False
+                    return {"status": "failed", "raw": tx}
 
             await asyncio.sleep(5)
 
-        return False  # Timeout
+        return {"status": latest_status, "raw": latest, "timed_out": True}
 
     async def _wrap_eth_to_weth(
         self,
@@ -446,10 +457,78 @@ class CawExecutor:
                 reason=f"Approve router failed: {exc}",
             )
 
+    async def _resolve_pact_api_key(self) -> str | None:
+        if self.config.pact_api_key:
+            return self.config.pact_api_key
+
+        async with self.client_factory(
+            base_url=self.config.api_url,
+            api_key=self.config.api_key,
+        ) as client:
+            pact = await client.get_pact(self.config.pact_id)
+
+        return pact.get("api_key")
+
+    def _missing_pact_api_key_result(self, request_id: str) -> ExecutionResult:
+        return ExecutionResult(
+            backend="caw",
+            status="failed",
+            request_id=request_id,
+            reason=(
+                "Missing CAW pact API key for real execution. Set COBO_PACT_API_KEY "
+                "or use a CAW API response that returns pact api_key."
+            ),
+            raw={
+                "code": "MISSING_PACT_API_KEY",
+                "pact_id": self.config.pact_id,
+                "real_tx_enabled": True,
+            },
+        )
+
+    def _incomplete_step_result(
+        self,
+        result: ExecutionResult,
+        wait_result: dict[str, Any],
+        request_id: str,
+        step: str,
+        timeout_reason: str,
+        failed_reason: str,
+    ) -> ExecutionResult:
+        wait_raw = wait_result.get("raw") or {}
+        status = wait_result.get("status")
+        is_failed = status == "failed"
+        raw = {
+            **(result.raw or {}),
+            **wait_raw,
+            "step": step,
+            "timed_out": bool(wait_result.get("timed_out")),
+            "real_tx_enabled": True,
+        }
+        return ExecutionResult(
+            backend="caw",
+            status="failed" if is_failed else "pending",
+            request_id=(
+                wait_raw.get("request_id")
+                or result.request_id
+                or request_id
+            ),
+            tx_id=(
+                wait_raw.get("id")
+                or wait_raw.get("cobo_transaction_id")
+                or result.tx_id
+            ),
+            tx_hash=wait_raw.get("transaction_hash") or result.tx_hash,
+            reason=failed_reason if is_failed else timeout_reason,
+            raw=raw,
+        )
+
 
     def _result_from_caw_response(self, raw: dict[str, Any]) -> ExecutionResult:
         status = self._raw_caw_status(raw)
         normalized_status = self._normalize_caw_status(status)
+        caw_error_code = raw.get("code")
+        if caw_error_code and normalized_status == "submitted":
+            normalized_status = "failed"
 
         return ExecutionResult(
             backend="caw",
@@ -457,9 +536,20 @@ class CawExecutor:
             request_id=raw.get("request_id"),
             tx_id=raw.get("id") or raw.get("cobo_transaction_id"),
             tx_hash=raw.get("transaction_hash"),
-            reason=f"CAW status: {status or 'submitted'}",
+            reason=self._caw_response_reason(raw, status),
             raw=raw,
         )
+
+    def _caw_response_reason(self, raw: dict[str, Any], status: Any) -> str:
+        code = raw.get("code")
+        if code:
+            details = raw.get("details") if isinstance(raw.get("details"), dict) else {}
+            required_permission = details.get("required_permission")
+            if required_permission:
+                return f"CAW error: {code}; missing permission {required_permission}."
+            return f"CAW error: {code}."
+
+        return f"CAW status: {status or 'submitted'}"
 
     def _raw_caw_status(self, raw: dict[str, Any]) -> Any:
         return (

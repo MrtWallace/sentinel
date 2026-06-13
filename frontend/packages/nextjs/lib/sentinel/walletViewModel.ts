@@ -7,7 +7,8 @@ export type CawLifecycleStage =
   | "pact_pending"
   | "active"
   | "revoked"
-  | "expired";
+  | "expired"
+  | "completed";
 
 export type CawStatusSummary = {
   primary: string;
@@ -18,6 +19,9 @@ export type CawStatusSummary = {
     pairing_status: PairingStatus;
     pact_status: PactStatus;
     config_status: ConfigStatus;
+    caw_healthy: string;
+    wallet_paired: string;
+    pending_txs_count: string;
   };
 };
 
@@ -28,7 +32,7 @@ export type CawSetupAvailability = {
 };
 
 export type CawHeaderStatusItem = {
-  label: "PACT";
+  label: "PACT" | "KEY" | "PAIR";
   value: string;
 };
 
@@ -41,11 +45,19 @@ export function getCawLifecycleStage(binding: CawWalletBinding | null | undefine
     return "revoked";
   }
 
+  if (binding.pactStatus === "completed") {
+    return "completed";
+  }
+
   if (binding.walletStatus === "expired" || binding.pactStatus === "expired") {
     return "expired";
   }
 
   if (binding.walletStatus === "pairing_pending" || binding.pairingStatus === "pending") {
+    return "pairing_pending";
+  }
+
+  if (binding.walletPaired === false) {
     return "pairing_pending";
   }
 
@@ -101,6 +113,17 @@ export function getCawHeaderStatusItems(binding: CawWalletBinding | null | undef
       label: "PACT",
       value: summary.statusItems.pact_status,
     },
+    {
+      label: "KEY",
+      value: binding?.hasPactApiKey ? "configured" : "missing",
+    },
+    {
+      label: "PAIR",
+      value:
+        binding?.walletPaired === undefined || binding?.walletPaired === null
+          ? "unknown"
+          : String(binding.walletPaired),
+    },
   ];
 }
 
@@ -110,6 +133,12 @@ export function getCawStatusSummary(binding: CawWalletBinding | null | undefined
     pairing_status: binding?.pairingStatus ?? "none",
     pact_status: binding?.pactStatus ?? "none",
     config_status: binding?.configStatus ?? "synced",
+    caw_healthy: formatNullableBoolean(binding?.cawHealthy),
+    wallet_paired: formatNullableBoolean(binding?.walletPaired),
+    pending_txs_count:
+      binding?.pendingTxsCount === undefined || binding?.pendingTxsCount === null
+        ? "unknown"
+        : String(binding.pendingTxsCount),
   };
 
   switch (getCawLifecycleStage(binding)) {
@@ -123,7 +152,10 @@ export function getCawStatusSummary(binding: CawWalletBinding | null | undefined
     case "pairing_pending":
       return {
         primary: "Pairing pending",
-        detail: "CAW wallet exists, but pairing still needs approval.",
+        detail:
+          binding?.walletPaired === false
+            ? "CAW wallet exists, but CAW owner pairing is not complete."
+            : "CAW wallet exists, but pairing still needs approval.",
         tone: "pending",
         statusItems,
       };
@@ -155,6 +187,13 @@ export function getCawStatusSummary(binding: CawWalletBinding | null | undefined
         tone: "blocked",
         statusItems,
       };
+    case "completed":
+      return {
+        primary: "Pact completed",
+        detail: "CAW Pact reached a terminal state. Create a new Pact before execution.",
+        tone: "blocked",
+        statusItems,
+      };
     case "none":
     default:
       return {
@@ -164,4 +203,11 @@ export function getCawStatusSummary(binding: CawWalletBinding | null | undefined
         statusItems,
       };
   }
+}
+
+function formatNullableBoolean(value: boolean | null | undefined): string {
+  if (value === undefined || value === null) {
+    return "unknown";
+  }
+  return value ? "true" : "false";
 }
