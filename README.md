@@ -2,6 +2,10 @@
 
 [![CI](https://github.com/MrtWallace/sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/MrtWallace/sentinel/actions/workflows/ci.yml)
 
+## Demo Video
+
+[![Sentinel Demo](https://cdn.loom.com/sessions/thumbnails/40a7046329fd420086694951f5081570.jpg)](https://www.loom.com/share/40a7046329fd420086694951f5081570)
+
 Sentinel is a CAW-governed autonomous trading execution agent built on Cobo Agentic Wallet.
 
 It converts natural-language trading and payment intents into bounded on-chain actions, evaluates them through deterministic risk rules and LLM reviewers, and executes approved actions through CAW with Pact policy enforcement.
