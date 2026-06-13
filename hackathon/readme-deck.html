@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sentinel Project Deck</title>
+    <style>
+      :root {
+        --bg: #0a0d0f;
+        --panel: #11171b;
+        --panel-2: #161e23;
+        --line: #29353d;
+        --text: #f4f8f5;
+        --muted: #a8b8af;
+        --soft: #dce7e0;
+        --green: #82e3bd;
+        --green-dim: rgba(130, 227, 189, 0.12);
+        --amber: #f2cb6b;
+        --amber-dim: rgba(242, 203, 107, 0.13);
+        --red: #ff9b91;
+        --red-dim: rgba(255, 155, 145, 0.12);
+        --blue: #8eb7ff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background:
+          linear-gradient(135deg, rgba(130, 227, 189, 0.08), transparent 30%),
+          radial-gradient(circle at 88% 12%, rgba(242, 203, 107, 0.08), transparent 28%),
+          var(--bg);
+        color: var(--text);
+        font-family:
+          "Microsoft YaHei",
+          "Noto Sans CJK SC",
+          "PingFang SC",
+          sans-serif;
+      }
+
+      .deck {
+        height: 100vh;
+        overflow-y: auto;
+        scroll-snap-type: y mandatory;
+      }
+
+      .slide {
+        position: relative;
+        min-height: 100vh;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        gap: 24px;
+        padding: 48px 62px 40px;
+        scroll-snap-align: start;
+      }
+
+      .slide::before {
+        content: "";
+        position: absolute;
+        inset: 24px;
+        z-index: -1;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 38%),
+          rgba(17, 23, 27, 0.82);
+        box-shadow: 0 30px 90px rgba(0, 0, 0, 0.42);
+      }
+
+      header,
+      footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        color: var(--muted);
+        font: 700 12px "Consolas", "SFMono-Regular", monospace;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .brand {
+        color: var(--green);
+      }
+
+      .content {
+        display: grid;
+        align-content: center;
+        gap: 24px;
+      }
+
+      .split {
+        grid-template-columns: minmax(0, 1.03fr) minmax(360px, 0.9fr);
+        align-items: center;
+        gap: 32px;
+      }
+
+      .kicker {
+        color: var(--green);
+        font: 700 13px "Consolas", "SFMono-Regular", monospace;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        max-width: 1020px;
+        font-size: clamp(44px, 6vw, 82px);
+        line-height: 0.98;
+        letter-spacing: 0;
+      }
+
+      h2 {
+        max-width: 980px;
+        font-size: clamp(34px, 4.6vw, 62px);
+        line-height: 1.05;
+        letter-spacing: 0;
+      }
+
+      h3 {
+        color: var(--green);
+        font-size: 24px;
+      }
+
+      .lead {
+        max-width: 930px;
+        color: var(--soft);
+        font-size: clamp(21px, 2vw, 30px);
+        line-height: 1.45;
+      }
+
+      .mono {
+        font-family: "Consolas", "SFMono-Regular", monospace;
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .cards.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        padding: 18px;
+      }
+
+      .card.warning {
+        border-color: rgba(242, 203, 107, 0.34);
+        background: var(--amber-dim);
+      }
+
+      .card.danger {
+        border-color: rgba(255, 155, 145, 0.3);
+        background: var(--red-dim);
+      }
+
+      .card strong {
+        display: block;
+        color: var(--text);
+        font-size: 21px;
+        line-height: 1.25;
+      }
+
+      .card span,
+      .card p {
+        display: block;
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.45;
+      }
+
+      .bullets {
+        display: grid;
+        gap: 12px;
+        padding: 0;
+        margin: 0;
+        list-style: none;
+      }
+
+      .bullets li {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.035);
+        padding: 14px 16px;
+        color: var(--soft);
+        font-size: 21px;
+        line-height: 1.34;
+      }
+
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .flow-step {
+        min-height: 148px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        padding: 16px;
+      }
+
+      .flow-step .num {
+        color: var(--green);
+        font: 700 13px "Consolas", "SFMono-Regular", monospace;
+      }
+
+      .flow-step strong {
+        display: block;
+        margin-top: 16px;
+        font-size: 21px;
+        line-height: 1.18;
+      }
+
+      .flow-step span {
+        display: block;
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.35;
+      }
+
+      .evidence {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .row {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        padding: 14px 16px;
+      }
+
+      .row.wide {
+        grid-column: 1 / -1;
+      }
+
+      .label {
+        color: var(--muted);
+        font: 700 11px "Consolas", "SFMono-Regular", monospace;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .value {
+        margin-top: 8px;
+        overflow-wrap: anywhere;
+        color: var(--text);
+        font: 500 clamp(14px, 1.2vw, 18px) "Consolas", "SFMono-Regular", monospace;
+        line-height: 1.35;
+      }
+
+      .terminal {
+        border: 1px solid rgba(130, 227, 189, 0.25);
+        background:
+          linear-gradient(180deg, rgba(130, 227, 189, 0.08), transparent),
+          #090d0f;
+        padding: 18px;
+      }
+
+      .terminal .line {
+        display: grid;
+        grid-template-columns: 164px minmax(0, 1fr);
+        gap: 14px;
+        padding: 9px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        font-family: "Consolas", "SFMono-Regular", monospace;
+        font-size: 15px;
+      }
+
+      .terminal .line:last-child {
+        border-bottom: 0;
+      }
+
+      .key {
+        color: var(--green);
+      }
+
+      .val {
+        overflow-wrap: anywhere;
+        color: var(--soft);
+      }
+
+      .callout {
+        border: 1px solid rgba(242, 203, 107, 0.35);
+        background: var(--amber-dim);
+        padding: 18px 20px;
+        color: #ffe8a6;
+        font-size: 23px;
+        line-height: 1.42;
+      }
+
+      .nav {
+        position: fixed;
+        top: 18px;
+        right: 24px;
+        z-index: 10;
+        display: flex;
+        gap: 8px;
+      }
+
+      .nav a {
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(17, 23, 27, 0.92);
+        color: var(--muted);
+        padding: 7px 9px;
+        text-decoration: none;
+        font: 700 11px "Consolas", "SFMono-Regular", monospace;
+      }
+
+      .nav a:hover {
+        border-color: rgba(130, 227, 189, 0.55);
+        color: var(--green);
+      }
+
+      @media (max-width: 920px) {
+        .deck {
+          scroll-snap-type: none;
+        }
+
+        .slide {
+          padding: 34px 22px 62px;
+        }
+
+        .slide::before {
+          inset: 10px;
+        }
+
+        .split,
+        .cards,
+        .cards.two,
+        .flow,
+        .evidence {
+          grid-template-columns: 1fr;
+        }
+
+        .terminal .line {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media print {
+        body {
+          background: #fff;
+          color: #111;
+        }
+
+        .deck {
+          height: auto;
+          overflow: visible;
+        }
+
+        .slide {
+          page-break-after: always;
+        }
+
+        .slide::before {
+          border-color: #ddd;
+          background: #fff;
+          box-shadow: none;
+        }
+
+        .nav {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="nav" aria-label="slide index">
+      <a href="#s1">01</a>
+      <a href="#s2">02</a>
+      <a href="#s3">03</a>
+      <a href="#s4">04</a>
+      <a href="#s5">05</a>
+      <a href="#s6">06</a>
+      <a href="#s7">07</a>
+      <a href="#s8">08</a>
+      <a href="#s9">09</a>
+      <a href="#s10">10</a>
+      <a href="#s11">11</a>
+      <a href="#s12">12</a>
+    </nav>
+
+    <main class="deck">
+      <section class="slide" id="s1">
+        <header><span class="brand">Sentinel</span><span>01 / 12</span></header>
+        <div class="content">
+          <div class="kicker">one-liner</div>
+          <h1>CAW 治理的自主交易执行代理</h1>
+          <p class="lead">
+            Sentinel 把自然语言交易意图转成受限资金操作，由 Sentinel 做执行前风险判断，由
+            <span class="mono">CAW Pact</span> 保持最终执行边界。
+          </p>
+        </div>
+        <footer><span>project deck</span><span>CAW-governed autonomous trading execution agent</span></footer>
+      </section>
+
+      <section class="slide" id="s2">
+        <header><span class="brand">Problem</span><span>02 / 12</span></header>
+        <div class="content split">
+          <div>
+            <div class="kicker">AI controls funds</div>
+            <h2>AI Agent 直接控制钱包，风险不是“体验问题”，是资金边界问题。</h2>
+          </div>
+          <ul class="bullets">
+            <li>Prompt injection 可能诱导模型绕过安全规则。</li>
+            <li>模型可能幻觉出错误金额、错误合约或错误收款方。</li>
+            <li>无限授权和不安全 swap 会放大损失。</li>
+            <li>没有审计链路，事后无法解释每一步为什么发生。</li>
+          </ul>
+        </div>
+        <footer><span>核心风险</span><span>AI 判断不能等于最终资金执行权</span></footer>
+      </section>
+
+      <section class="slide" id="s3">
+        <header><span class="brand">Core Idea</span><span>03 / 12</span></header>
+        <div class="content">
+          <div class="kicker">final authority</div>
+          <h2>AI 可以提出操作，Sentinel 可以批准，但最终执行权必须在 CAW Pact。</h2>
+          <div class="cards three">
+            <div class="card">
+              <strong>Agent 提出操作</strong>
+              <span>自然语言 intent 被解析为结构化交易 proposal。</span>
+            </div>
+            <div class="card">
+              <strong>Sentinel 判断风险</strong>
+              <span>硬规则、Agent review、记忆异常共同决定 execute / reject / confirm。</span>
+            </div>
+            <div class="card warning">
+              <strong>CAW Pact 兜底</strong>
+              <span>即使 Sentinel 通过，超出 Pact 的操作仍会被拒绝。</span>
+            </div>
+          </div>
+        </div>
+        <footer><span>设计原则</span><span>Sentinel approved ≠ CAW must execute</span></footer>
+      </section>
+
+      <section class="slide" id="s4">
+        <header><span class="brand">Why CAW</span><span>04 / 12</span></header>
+        <div class="content split">
+          <div>
+            <div class="kicker">Cobo Agentic Wallet</div>
+            <h2>CAW 不是装饰，它是资金执行和策略强制层。</h2>
+          </div>
+          <div class="terminal">
+            <div class="line"><span class="key">Wallet</span><span class="val">CAW 持有测试网资金，不把私钥交给 Agent。</span></div>
+            <div class="line"><span class="key">Pact</span><span class="val">限制金额、策略、执行范围。</span></div>
+            <div class="line"><span class="key">Policy Deny</span><span class="val">超出 Pact 时基础设施直接拒绝。</span></div>
+            <div class="line"><span class="key">Evidence</span><span class="val">CAW transaction / tx hash 可进入 audit trail。</span></div>
+          </div>
+        </div>
+        <footer><span>关键差异</span><span>不是普通 EOA，不是 mock wallet</span></footer>
+      </section>
+
+      <section class="slide" id="s5">
+        <header><span class="brand">Architecture</span><span>05 / 12</span></header>
+        <div class="content">
+          <div class="kicker">solution architecture</div>
+          <h2>一条统一链路处理 transfer 和 swap。</h2>
+          <div class="flow">
+            <div class="flow-step"><div class="num">01</div><strong>Intent</strong><span>自然语言交易或转账意图。</span></div>
+            <div class="flow-step"><div class="num">02</div><strong>Risk</strong><span>Amount、Slippage、Whitelist、Approval、Frequency。</span></div>
+            <div class="flow-step"><div class="num">03</div><strong>Agent Review</strong><span>Security Auditor + Risk Analyst。</span></div>
+            <div class="flow-step"><div class="num">04</div><strong>CAW Execution</strong><span>transfer_tokens 或 contract_call。</span></div>
+            <div class="flow-step"><div class="num">05</div><strong>Audit</strong><span>完整 decision chain 和执行证据。</span></div>
+          </div>
+        </div>
+        <footer><span>架构</span><span>Intent → Risk → CAW → Audit</span></footer>
+      </section>
+
+      <section class="slide" id="s6">
+        <header><span class="brand">Real Swap</span><span>06 / 12</span></header>
+        <div class="content">
+          <div class="kicker">CAW contract_call</div>
+          <h2>真实 Sepolia swap 已通过 CAW 三步完成。</h2>
+          <div class="evidence">
+            <div class="row wide"><div class="label">Input</div><div class="value">Swap 0.0005 ETH to USDC</div></div>
+            <div class="row wide"><div class="label">Flow</div><div class="value">wrap ETH → approve WETH → Uniswap V3 exactInputSingle</div></div>
+            <div class="row"><div class="label">Wrap TX</div><div class="value">0x4d9c59ece554a869305334212e39733062a0552317be88a9aec5aaa8c3fa4104</div></div>
+            <div class="row"><div class="label">Approve TX</div><div class="value">0x22d6cbf36b0e5b9e9f0ceee639f5b11ec4a8dede0cf0d565b8a808fecbee83e0</div></div>
+            <div class="row wide"><div class="label">Final Swap TX</div><div class="value">0x6b2940e1810b39d5a0e08f47344038fd052e015b1c82939147c87e55ffdb66f4</div></div>
+            <div class="row"><div class="label">Block</div><div class="value">11018833</div></div>
+            <div class="row"><div class="label">USDC Received</div><div class="value">5.499668 USDC</div></div>
+          </div>
+        </div>
+        <footer><span>真实执行</span><span>contract_call, not mock swap</span></footer>
+      </section>
+
+      <section class="slide" id="s7">
+        <header><span class="brand">Policy Deny</span><span>07 / 12</span></header>
+        <div class="content split">
+          <div>
+            <div class="kicker">CAW Pact boundary</div>
+            <h2>Sentinel 可以批准，CAW Pact 仍然可以拒绝。</h2>
+            <p class="lead">这证明资金边界不依赖模型自律，而由 CAW 策略强制执行。</p>
+          </div>
+          <div class="terminal">
+            <div class="line"><span class="key">Intent</span><span class="val">Send 0.005 ETH to 0x1111...1111</span></div>
+            <div class="line"><span class="key">Sentinel</span><span class="val">execute</span></div>
+            <div class="line"><span class="key">CAW</span><span class="val">policy_denied</span></div>
+            <div class="line"><span class="key">Reason</span><span class="val">matched_pact_transfer_deny_if</span></div>
+            <div class="line"><span class="key">Final API</span><span class="val">reject</span></div>
+          </div>
+        </div>
+        <footer><span>双层防护</span><span>AI judgment + infrastructure enforcement</span></footer>
+      </section>
+
+      <section class="slide" id="s8">
+        <header><span class="brand">Audit Trail</span><span>08 / 12</span></header>
+        <div class="content">
+          <div class="kicker">explainable execution</div>
+          <h2>每一次执行、拒绝、确认，都进入可展开的审计链路。</h2>
+          <div class="cards">
+            <div class="card"><strong>Decision Chain</strong><span>Agent A proposal、5 个硬规则、Agent B/C review、最终决策。</span></div>
+            <div class="card"><strong>Execution Evidence</strong><span>CAW wallet、Pact ID、request id、CAW transaction id、tx hash。</span></div>
+            <div class="card"><strong>Sensitive Redaction</strong><span>API key、Pact credential、authorization header 不写入 audit。</span></div>
+          </div>
+          <div class="callout">评委可以从首页进入结果，也可以在 <span class="mono">/audit</span> 页面复盘每条记录。</div>
+        </div>
+        <footer><span>审计</span><span>explainable, replayable, redact sensitive fields</span></footer>
+      </section>
+
+      <section class="slide" id="s9">
+        <header><span class="brand">Agent Evidence</span><span>09 / 12</span></header>
+        <div class="content split">
+          <div>
+            <div class="kicker">not just if-else</div>
+            <h2>Agent 能力作为证据层，不抢 CAW 主线。</h2>
+          </div>
+          <ul class="bullets">
+            <li>Tool-use：合约验证、gas、token price 等只读工具证据。</li>
+            <li>Memory anomaly：结合用户历史交易模式，异常时提升到 confirm。</li>
+            <li>Agentic retry：风险过高时有限重提案，不做无限自治。</li>
+          </ul>
+        </div>
+        <footer><span>Agent 证据</span><span>bounded, explainable, CAW-first</span></footer>
+      </section>
+
+      <section class="slide" id="s10">
+        <header><span class="brand">Evaluation</span><span>10 / 12</span></header>
+        <div class="content">
+          <div class="kicker">tests and checks</div>
+          <h2>提交前使用自动化测试和 smoke tests 控制回归风险。</h2>
+          <div class="cards two">
+            <div class="card"><strong>Evaluation Framework</strong><span>108 / 109 cases passed：E2E、trajectory、safety、reference、fuzz。</span></div>
+            <div class="card"><strong>Backend Unit Tests</strong><span>当前后端 unittest suite 已验证 337 tests OK。</span></div>
+            <div class="card"><strong>Frontend Checks</strong><span>Next.js typecheck、lint、页面状态和证据映射已验证。</span></div>
+            <div class="card"><strong>CAW Smoke</strong><span>真实 transfer、真实 contract_call swap、policy deny 均有仓库证据。</span></div>
+          </div>
+        </div>
+        <footer><span>验证</span><span>automated tests + live CAW evidence</span></footer>
+      </section>
+
+      <section class="slide" id="s11">
+        <header><span class="brand">Boundary</span><span>11 / 12</span></header>
+        <div class="content split">
+          <div>
+            <div class="kicker">security boundary</div>
+            <h2>这是黑客松原型，不是生产托管系统。</h2>
+          </div>
+          <ul class="bullets">
+            <li>演示范围是 Sepolia testnet 上的受限资金操作。</li>
+            <li>不是 mainnet trading product，不承诺收益或生产级 custody。</li>
+            <li>生产化需要正式安全审计、更多模拟、严格 policy templates、监控和运维控制。</li>
+            <li>当前 async recovery 仍需后续增强：半程 wrap/approve 不能伪装成完整 swap 成功。</li>
+          </ul>
+        </div>
+        <footer><span>边界</span><span>prototype / reference implementation</span></footer>
+      </section>
+
+      <section class="slide" id="s12">
+        <header><span class="brand">Roadmap</span><span>12 / 12</span></header>
+        <div class="content">
+          <div class="kicker">next steps</div>
+          <h2>下一步是把参考实现推向更稳定的执行平台。</h2>
+          <div class="cards">
+            <div class="card"><strong>Async Recovery</strong><span>CAW webhook / worker 继续追踪和恢复多步 swap。</span></div>
+            <div class="card"><strong>Policy Templates</strong><span>更严格的 contract_call 模板、参数匹配和限额策略。</span></div>
+            <div class="card"><strong>Monitoring</strong><span>pending tx、TSS pairing、Pact expiry、policy deny 监控。</span></div>
+            <div class="card"><strong>Auth</strong><span>签名登录、rate limit、per-user CAW credential 边界。</span></div>
+            <div class="card"><strong>MCP Read-only</strong><span>让外部 Agent 可调用 Sentinel 风控能力，但不开放写操作。</span></div>
+            <div class="card"><strong>Formal Review</strong><span>生产前安全审计和更完整 simulation。</span></div>
+          </div>
+        </div>
+        <footer><span>路线图</span><span>safe execution layer for autonomous trading agents</span></footer>
+      </section>
+    </main>
+  </body>
+</html>
