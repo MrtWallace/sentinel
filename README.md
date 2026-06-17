@@ -11,6 +11,13 @@
 - [Open the judge-ready HTML deck](https://htmlpreview.github.io/?https://github.com/MrtWallace/sentinel/blob/main/hackathon/readme-deck.html)
 - [View the deck source](hackathon/readme-deck.html)
 
+## Case Study & Interview Materials
+
+- [Technical case study](docs/case-study-sentinel.md)
+- [Demo evidence checklist](docs/evidence/sentinel-evidence.md)
+- [Interview scripts](docs/interview/sentinel-pitches.md)
+- [Resume bullets](docs/resume/sentinel-bullets.md)
+
 Sentinel is a CAW-governed autonomous trading execution agent built on Cobo Agentic Wallet.
 
 It converts natural-language trading and payment intents into bounded on-chain actions, evaluates them through deterministic risk rules and LLM reviewers, and executes approved actions through CAW with Pact policy enforcement.

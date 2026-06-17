@@ -1,24 +1,25 @@
-# AGENTS.md — Persistent Instructions for Codex
+# AGENTS.md - Sentinel Instructions For Codex
 
 ## Read Order
 
 When working on this project, always read:
 
-1. `PROJECT_CONTEXT.md`
-2. The task-specific document under `hackathon/docs/` when the task is part of the hackathon extension:
-   - Frontend: `hackathon/docs/frontend-plan.md` and `hackathon/docs/frontend-progress.md`
-   - Backend: `hackathon/docs/backend-plan.md` and `hackathon/docs/backend-progress.md`
-   - Shared API work: `hackathon/docs/shared-api-contract.md`
-3. Local package instructions when editing inside a nested project, especially `frontend/AGENTS.md`
+1. `docs/current-progress.md`
+2. `docs/agent-contract.md`
+3. `docs/development-guidelines.md`
+4. When present locally, `docs/private/career/active_learning_contract_zh.md`
+5. The task-specific spec or current checkpoint
+6. Local package instructions when editing inside a nested project, especially `frontend/AGENTS.md`
 
 ## Project Mode
 
-Sentinel currently has two layers:
+Sentinel is now in completed-project assetization and staged learning mode.
 
-- **Baseline Sentinel**: Solidity SmartAccount, Python CLI agent, DeepSeek intent parsing, guardrails, Uniswap/Sepolia execution, simple Scaffold-ETH status dashboard.
-- **Hackathon extension**: multi-agent risk-control demo surface, decision-chain API shape, audit log UI, and frontend learning/explainer layer.
+Current priority:
 
-Do not mix these states. If a document says "frontend done", verify whether it means the simple dashboard or the planned risk-control console.
+- Maintain Sentinel as a completed flagship project asset.
+- Keep README, case study, evidence, interview scripts, and resume bullets clear.
+- Start future work only from the current private career checkpoint or an explicitly approved product checkpoint.
 
 ## Collaboration Rules
 
@@ -31,47 +32,24 @@ Do not mix these states. If a document says "frontend done", verify whether it m
 - Ask before refactoring code outside the requested scope.
 - Push back on scope creep or planning loops. Use the project docs as the boundary.
 - Use Chinese for project discussion, planning, review, and internal docs by default. Code identifiers, APIs, and commit messages can remain English.
-- Integration branch `integration/caw-demo` has been merged. Post-MVP development continues on `main`.
+- Development continues on `main`.
 
 ## Checkpoint Tracking
 
-For both frontend and backend work:
+For future work:
 
-- Work checkpoint by checkpoint in coach mode: explain the target, let the user write suitable core logic when appropriate, then review and test.
-- At the start of each checkpoint, update the relevant progress-tracking document with status, start time, and notes.
-- At the end of each checkpoint or before committing, update completion time, status, test result, and progress details in the relevant progress-tracking document.
-- Use Asia/Shanghai timestamps accurate to the minute in `YYYY-MM-DD HH:MM` format.
-- The user should not need to repeat "update progress details" or "record timestamp"; do this by default unless asked to skip.
-- Keep stable plan/spec documents separate from high-frequency progress updates to reduce context and token usage.
-
-Tracking file mapping:
-
-- Backend/contracts: update `hackathon/docs/backend-progress.md` for checkpoint status. Only update `hackathon/docs/backend-plan.md` when the stable plan or checkpoint definitions change.
-- Frontend: update `hackathon/docs/frontend-progress.md` by default. Update `hackathon/docs/frontend-plan.md` only when the plan, scope, checkpoint definitions, or architecture decisions change.
-
-## Backend-Specific Workflow
-
-For backend and contract work:
-
-- Follow `hackathon/docs/backend-plan.md`, `hackathon/docs/backend-progress.md`, and `hackathon/docs/shared-api-contract.md`.
-- Backend work continues on `main` after integration merge.
-
-## Frontend-Specific Workflow
-
-For the current frontend work:
-
-- Follow `hackathon/docs/frontend-plan.md`.
-- Use `hackathon/docs/frontend-progress.md` for checkpoint status, timestamps, latest test results, and current blockers.
-- Implement by checkpoint, not as one large diff.
-- Frontend work continues on `main` after integration merge.
-- After each checkpoint, report:
-  - Files changed
-  - What the code/data does
-  - What the user should review
-  - Next checkpoint
-- Frontend UI copy should be English for external demo.
-- Internal docs and explanations for the user should be Chinese.
-- Do not add wallet connect, auth, Redux/Zustand, i18n, charts, mobile polish, or chain-event audit reads unless the plan is explicitly updated.
+- Work checkpoint by checkpoint.
+- At the start of a checkpoint, update `docs/current-progress.md` with status,
+  start time, scope, and intended validation.
+- At the end of a checkpoint, update `docs/current-progress.md` with completion
+  time, files changed, validation result, remaining issues, and next action.
+- Update `docs/private/career/long_term_stage_plan_zh.md` only when stage definitions change.
+- Update only the current/next file under `docs/private/career/checkpoints/` for execution changes.
+- Add to `docs/logs/dev-log.md` only for meaningful historical notes.
+- Create or update `docs/decisions/ADR-*.md` when a technical decision affects
+  future implementation.
+- Use Asia/Shanghai timestamps accurate to the minute in `YYYY-MM-DD HH:MM`
+  format.
 
 ## User Context
 
@@ -84,8 +62,11 @@ For the current frontend work:
 
 ## Current Documentation Notes
 
-- `PROJECT_CONTEXT.md` is the root source of truth.
 - `README.md` is the external-facing project summary.
-- `hackathon/docs/frontend-plan.md` is the current frontend implementation plan.
-- `hackathon/docs/frontend-progress.md` is the short, frequently updated frontend checkpoint tracker.
-- `hackathon/docs/frontend-checkpoint-0.md` records the current frontend baseline before implementation.
+- `docs/README.md` is the current documentation map.
+- `docs/current-progress.md` is the short current handoff file.
+- `docs/agent-contract.md` is the active execution contract for future Codex work.
+- `docs/development-guidelines.md` stores collaboration style, technical constraints, and default validation rules.
+- `docs/publishing-policy.md` defines what is public-safe vs private/ignored.
+- `docs/case-study-sentinel.md`, `docs/evidence/sentinel-evidence.md`, `docs/interview/sentinel-pitches.md`, and `docs/resume/sentinel-bullets.md` are the Stage 0 assetization outputs.
+- `docs/private/career/` is the local, ignored source of truth for personal requirements, stages, checkpoints, policies, JD analysis, and mastery notes.

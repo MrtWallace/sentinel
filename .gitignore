@@ -6,6 +6,7 @@ __pycache__/
 *.pyc
 .env
 .claude/
+.hermes/
 
 # OS
 .DS_Store
@@ -20,6 +21,21 @@ Thumbs.db
 
 # Private demo evidence
 hackathon/evidence/
+
+# Private post-hackathon docs and job-search materials
+docs/private/**
+!docs/private/
+!docs/private/README.md
+docs/evidence/private/
+docs/evidence/raw/
+docs/evidence/screenshots/
+docs/evidence/recordings/
+docs/interview/private/
+docs/interview/recordings/
+docs/resume/private/
+docs/resume/generated/
+docs/resume/*.pdf
+docs/resume/*.docx
 
 # Node / Next.js
 node_modules/
